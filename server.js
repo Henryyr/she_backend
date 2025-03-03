@@ -18,9 +18,14 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/layanan', require('./routes/layananRoutes'));
 app.use('/api/layanankategori', require('./routes/layanankategoriRoutes'));
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/layanan', require('./routes/layananRoutes'));
+app.use('/api/transaksi', require('./routes/transaksiRoutes'));
 
 // Jalankan server
-app.listen(PORT, () => {
-    console.log(`🚀 Server berjalan di http://localhost:${PORT}`);
+app.listen(PORT, async () => {
+    try {
+        await db.connect();
+        console.log(`🚀 Server berjalan di http://localhost:${PORT}`);
+    } catch (error) {
+        console.error('Gagal menghubungkan ke database:', error);
+    }
 });
