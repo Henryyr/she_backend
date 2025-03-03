@@ -5,7 +5,7 @@ const router = express.Router();
 
 // Buat Transaksi Baru
 router.post('/', authenticate, async (req, res) => {
-    const { booking_id, total_harga, kategori_transaksi_id } = req.body;
+    const { booking_id, total_harga, kategori_transaksi_id, qris_provider_id } = req.body;
     const user_id = req.user.id; // Dari token user
 
     if (!booking_id || !total_harga || !kategori_transaksi_id) {
@@ -20,6 +20,11 @@ router.post('/', authenticate, async (req, res) => {
     // Validate total_harga
     if (total_harga <= 0) {
         return res.status(400).json({ error: "Total harga harus lebih dari 0" });
+    }
+
+    // Validate qris_provider_id if kategori_transaksi_id is 2
+    if (kategori_transaksi_id === 2 && !qris_provider_id) {
+        return res.status(400).json({ error: "QRIS provider harus dipilih untuk transaksi QRIS" });
     }
 
     // Check if booking_id exists and validate total_harga
@@ -39,10 +44,10 @@ router.post('/', authenticate, async (req, res) => {
 
     let status = "pending"; // Default status
 
-    const sql = `INSERT INTO transaksi (user_id, booking_id, total_harga, kategori_transaksi_id, status) VALUES (?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO transaksi (user_id, booking_id, total_harga, kategori_transaksi_id, qris_provider_id, status) VALUES (?, ?, ?, ?, ?, ?)`;
 
     try {
-        const [result] = await db.promise().query(sql, [user_id, booking_id, total_harga, kategori_transaksi_id, status]);
+        const [result] = await db.promise().query(sql, [user_id, booking_id, total_harga, kategori_transaksi_id, qris_provider_id || null, status]);
         res.json({ message: "Transaksi berhasil dibuat", transaksi_id: result.insertId, status });
     } catch (err) {
         res.status(500).json({ error: err.message });
