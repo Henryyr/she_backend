@@ -5,7 +5,12 @@ const db = require('../db'); // Import koneksi database
 const { authenticate, isAdmin } = require('../middleware/auth'); // Import middleware
 const router = express.Router();
 
-const SECRET_KEY = process.env.JWT_SECRET; // Ganti dengan key rahasia yang aman
+const SECRET_KEY = process.env.JWT_SECRET; // Ambil secret key dari .env
+
+const validatePassword = (password) => {
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+    return passwordRegex.test(password);
+};
 
 // REGISTER (Membuat User Baru)
 router.post('/register', async (req, res) => {
@@ -13,6 +18,10 @@ router.post('/register', async (req, res) => {
 
     if (!fullname || !email || !username || !password) {
         return res.status(400).json({ error: "Semua data wajib diisi" });
+    }
+
+    if (!validatePassword(password)) {
+        return res.status(400).json({ error: "Password harus minimal 8 karakter, mengandung huruf dan angka" });
     }
 
     try {
