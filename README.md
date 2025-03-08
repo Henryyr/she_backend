@@ -202,6 +202,130 @@ POST /api/layanan
 }
 ```
 
+# Dokumentasi API Admin Dashboard
+
+## **Pendahuluan**
+Admin Dashboard dalam sistem web salon ini memungkinkan admin untuk mengelola pengguna. API ini mencakup fitur CRUD untuk pengguna serta autentikasi berbasis JWT.
+
+---
+## **Autentikasi**
+Setiap endpoint dalam dashboard admin memerlukan autentikasi menggunakan JWT. Pastikan setiap permintaan mengirimkan header:
+```
+Authorization: Bearer <token>
+```
+
+---
+## **1. Mendapatkan Daftar Pengguna**
+### **Endpoint:**
+```
+GET /api/admin/dashboard
+```
+### **Deskripsi:**
+Mengambil daftar semua pengguna dalam sistem.
+### **Headers:**
+- `Authorization: Bearer <token>` (Wajib, hanya admin)
+### **Response:**
+#### **Berhasil (200 OK)**
+```json
+{
+    "message": "Dashboard Admin - Daftar Pengguna",
+    "users": [
+        {
+            "id": 1,
+            "fullname": "John Doe",
+            "email": "john@example.com",
+            "phone_number": "08123456789",
+            "username": "johndoe",
+            "address": "Jl. Example No. 1",
+            "role": "admin"
+        }
+    ]
+}
+```
+
+---
+## **2. Menambahkan Pengguna Baru**
+### **Endpoint:**
+```
+POST /api/admin/users
+```
+### **Deskripsi:**
+Admin dapat menambahkan pengguna baru.
+### **Headers:**
+- `Authorization: Bearer <token>` (Wajib, hanya admin)
+### **Body (JSON):**
+```json
+{
+    "fullname": "Jane Doe",
+    "email": "jane@example.com",
+    "phone_number": "08129876543",
+    "username": "janedoe",
+    "password": "password123",
+    "address": "Jl. Contoh No. 2",
+    "role": "pelanggan"
+}
+```
+### **Response:**
+#### **Berhasil (201 Created)**
+```json
+{
+    "message": "User berhasil ditambahkan",
+    "userId": 2
+}
+```
+
+---
+## **3. Mengedit Data Pengguna**
+### **Endpoint:**
+```
+PUT /api/admin/users/:id
+```
+### **Deskripsi:**
+Admin dapat memperbarui informasi pengguna.
+### **Headers:**
+- `Authorization: Bearer <token>` (Wajib, hanya admin)
+### **Body (JSON):**
+```json
+{
+    "fullname": "Jane Doe Updated",
+    "email": "jane_updated@example.com",
+    "phone_number": "08129876543",
+    "username": "janedoe",
+    "address": "Jl. Contoh Baru No. 3",
+    "role": "pelanggan"
+}
+```
+### **Response:**
+#### **Berhasil (200 OK)**
+```json
+{
+    "message": "User berhasil diperbarui"
+}
+```
+
+---
+## **4. Menghapus Pengguna**
+### **Endpoint:**
+```
+DELETE /api/admin/users/:id
+```
+### **Deskripsi:**
+Admin dapat menghapus pengguna berdasarkan ID.
+### **Headers:**
+- `Authorization: Bearer <token>` (Wajib, hanya admin)
+### **Response:**
+#### **Berhasil (200 OK)**
+```json
+{
+    "message": "User berhasil dihapus"
+}
+```
+#### **Gagal (404 Not Found - Jika ID tidak ditemukan)**
+```json
+{
+    "message": "User tidak ditemukan"
+}
+```
 ---
 
 ## Autentikasi dengan Token JWT
