@@ -6,7 +6,7 @@ const router = express.Router();
 
 // ==================== DASHBOARD ADMIN ====================
 // (Hanya bisa diakses oleh admin)
-router.get('/admin/dashboard', authenticate, isAdmin, (req, res) => {
+router.get('/dashboard', authenticate, isAdmin, (req, res) => {
     const sql = "SELECT id, fullname, email, phone_number, username, address, role FROM users";
     
     db.query(sql, (err, results) => {
@@ -22,7 +22,7 @@ router.get('/admin/dashboard', authenticate, isAdmin, (req, res) => {
 // ==================== CRUD USER ====================
 
 // **1️⃣ Tambah User (Admin Bisa Tambah User)**
-router.post('/admin/users', authenticate, isAdmin, (req, res) => {
+router.post('/users', authenticate, isAdmin, (req, res) => {
     const { fullname, email, phone_number, username, password, address, role } = req.body;
 
     if (!fullname || !email || !username || !password) {
@@ -39,7 +39,7 @@ router.post('/admin/users', authenticate, isAdmin, (req, res) => {
 });
 
 // **2️⃣ Edit User (Admin Bisa Edit User)**
-router.put('/admin/users/:id', authenticate, isAdmin, (req, res) => {
+router.put('/users/:id', authenticate, isAdmin, (req, res) => {
     const { id } = req.params;
     const { fullname, email, phone_number, username, address, role } = req.body;
 
@@ -54,7 +54,7 @@ router.put('/admin/users/:id', authenticate, isAdmin, (req, res) => {
 });
 
 // **3️⃣ Hapus User (Admin Bisa Hapus User)**
-router.delete('/admin/users/:id', authenticate, isAdmin, (req, res) => {
+router.delete('/users/:id', authenticate, isAdmin, (req, res) => {
     const { id } = req.params;
 
     const sql = "DELETE FROM users WHERE id = ?";
