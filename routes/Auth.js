@@ -56,8 +56,12 @@ router.post('/login', (req, res) => {
             return res.status(401).json({ error: "Username atau password salah" });
         }
 
-        // Generate JWT Token
-        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '1h' });
+        // Generate JWT Token dengan masa berlaku 3 jam
+        const token = jwt.sign(
+            { id: user.id, username: user.username, role: user.role },
+            SECRET_KEY,
+            { expiresIn: '3h' }
+        );
 
         res.json({ message: "Login berhasil", token });
     });
@@ -71,11 +75,6 @@ router.post('/logout', (req, res) => {
 // ROUTE TERPROTEKSI (Hanya bisa diakses oleh user yang sudah login)
 router.get('/profile', authenticate, (req, res) => {
     res.json({ message: "Profil user", user: req.user });
-});
-
-// ROUTE DASHBOARD ADMIN (Hanya bisa diakses oleh admin)
-router.get('/admin/dashboard', authenticate, isAdmin, (req, res) => {
-    res.json({ message: "Selamat datang di dashboard admin!", user: req.user });
 });
 
 module.exports = router;
