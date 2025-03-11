@@ -328,6 +328,160 @@ Admin dapat menghapus pengguna berdasarkan ID.
 ```
 ---
 
+# **Dokumentasi API User Authentication**  
+API ini digunakan untuk registrasi, login, dan pengelolaan user dalam sistem web salon.  
+
+## **Base URL**  
+```
+http://localhost:3000/api/auth
+```
+
+## **Endpoints**  
+
+### **1. Register User Baru**  
+**Endpoint:**  
+```
+POST /register
+```
+**Deskripsi:**  
+Mendaftarkan user baru ke dalam sistem.  
+
+**Request Body:**  
+| Parameter            | Tipe   | Wajib | Deskripsi |
+|----------------------|--------|-------|-----------|
+| fullname            | String | ✅     | Nama lengkap pengguna |
+| email              | String | ✅     | Email pengguna |
+| phone_number       | String | ❌     | Nomor telepon pengguna (opsional) |
+| username           | String | ✅     | Nama pengguna untuk login |
+| password           | String | ✅     | Password minimal 8 karakter, kombinasi huruf dan angka |
+| confirmation_password | String | ✅     | Konfirmasi password harus sama dengan password |
+| address            | String | ❌     | Alamat pengguna (opsional) |
+| role               | String | ❌     | Peran pengguna dalam sistem, default: "pelanggan" |
+
+**Contoh Request:**
+```json
+{
+  "fullname": "John Doe",
+  "email": "johndoe@example.com",
+  "phone_number": "081234567890",
+  "username": "johndoe",
+  "password": "password123",
+  "confirmation_password": "password123",
+  "address": "Jl. Mawar No. 10",
+  "role": "pelanggan"
+}
+```
+
+**Respon Sukses:**
+```json
+{
+  "message": "User berhasil didaftarkan",
+  "id": 1
+}
+```
+
+**Respon Gagal:**  
+- **400 Bad Request** – Data tidak lengkap atau format password salah  
+- **500 Internal Server Error** – Kesalahan saat menyimpan ke database  
+
+---
+
+### **2. Login User**  
+**Endpoint:**  
+```
+POST /login
+```
+**Deskripsi:**  
+Autentikasi user untuk mendapatkan token JWT.  
+
+**Request Body:**  
+| Parameter  | Tipe   | Wajib | Deskripsi |
+|------------|--------|-------|-----------|
+| username  | String | ✅     | Nama pengguna yang terdaftar |
+| password  | String | ✅     | Password yang sesuai dengan akun |
+
+**Contoh Request:**
+```json
+{
+  "username": "johndoe",
+  "password": "password123"
+}
+```
+
+**Respon Sukses:**
+```json
+{
+  "message": "Login berhasil",
+  "token": "eyJhbGciOiJIUzI1NiIsIn..."
+}
+```
+*(Token harus disertakan dalam header `Authorization` untuk akses endpoint yang memerlukan autentikasi.)*
+
+**Respon Gagal:**  
+- **400 Bad Request** – Username atau password kosong  
+- **401 Unauthorized** – Username atau password salah  
+- **500 Internal Server Error** – Kesalahan saat mengambil data dari database  
+
+---
+
+### **3. Logout User**  
+**Endpoint:**  
+```
+POST /logout
+```
+**Deskripsi:**  
+Logout hanya menghapus token di sisi client.  
+
+**Respon Sukses:**
+```json
+{
+  "message": "Logout berhasil, silakan hapus token di client"
+}
+```
+
+---
+
+### **4. Get Profile User (Protected)**  
+**Endpoint:**  
+```
+GET /profile
+```
+**Deskripsi:**  
+Mengambil data profil user yang sedang login.  
+
+**Headers:**  
+```
+Authorization: Bearer <token>
+```
+
+**Respon Sukses:**
+```json
+{
+  "message": "Profil user",
+  "user": {
+    "id": 1,
+    "username": "johndoe",
+    "role": "pelanggan"
+  }
+}
+```
+
+**Respon Gagal:**  
+- **401 Unauthorized** – Token tidak valid atau tidak disertakan  
+- **403 Forbidden** – User tidak memiliki akses  
+
+---
+
+## **Autentikasi & Keamanan**  
+- **Token JWT** digunakan untuk autentikasi user setelah login.  
+- Setiap request ke endpoint yang membutuhkan autentikasi harus menyertakan token dalam header:  
+  ```
+  Authorization: Bearer <token>
+  ```
+- **Password user dienkripsi** menggunakan bcrypt sebelum disimpan ke database.  
+
+---
+
 ## Autentikasi dengan Token JWT
 Setiap permintaan ke endpoint kecuali `/api/auth/login` harus mengirimkan header **Authorization** dengan format:
 ```
