@@ -5,7 +5,7 @@ const db = require('../db'); // Import koneksi database
 const { authenticate, isAdmin } = require('../middleware/auth'); // Import middleware
 const router = express.Router();
 
-const SECRET_KEY = process.env.JWT_SECRET; // Ambil secret key dari .env
+const SECRET_KEY = process.env.JWT_SECRET;
 
 const validatePassword = (password) => {
     const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
@@ -14,10 +14,14 @@ const validatePassword = (password) => {
 
 // REGISTER (Membuat User Baru)
 router.post('/register', async (req, res) => {
-    const { fullname, email, phone_number, username, password, address, role = "pelanggan" } = req.body;
+    const { fullname, email, phone_number, username, password, confirmation_password, address, role = "pelanggan" } = req.body;
 
-    if (!fullname || !email || !username || !password) {
+    if (!fullname || !email || !username || !password || !confirmation_password) {
         return res.status(400).json({ error: "Semua data wajib diisi" });
+    }
+
+    if (password !== confirmation_password) {
+        return res.status(400).json({ error: "Konfirmasi password tidak cocok" });
     }
 
     if (!validatePassword(password)) {
