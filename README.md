@@ -472,6 +472,134 @@ Authorization: Bearer <token>
 
 ---
 
+# **Dokumentasi API Testimoni**  
+API ini digunakan untuk mengelola testimoni dari pengguna terhadap layanan salon.  
+
+## **Base URL**  
+```
+http://localhost:3000/api/testimoni
+```
+
+## **Endpoints**  
+
+---
+
+### **1. Tambah Testimoni (User Submit Testimoni)**
+**Endpoint:**  
+```
+POST /
+```
+**Deskripsi:**  
+User yang sudah login dapat memberikan testimoni terhadap layanan yang digunakan.  
+
+**Headers:**  
+```
+Authorization: Bearer <token>
+```
+
+**Request Body:**  
+| Parameter  | Tipe   | Wajib | Deskripsi |
+|------------|--------|-------|-----------|
+| service_id | Int   | ✅     | ID layanan yang diberi testimoni |
+| rating     | Int   | ✅     | Nilai rating (1-5) |
+| comment    | String | ✅    | Komentar testimoni |
+
+**Contoh Request:**
+```json
+{
+  "service_id": 2,
+  "rating": 5,
+  "comment": "Layanan sangat memuaskan!"
+}
+```
+
+**Respon Sukses:**
+```json
+{
+  "message": "Testimoni berhasil ditambahkan",
+  "id": 10
+}
+```
+
+**Respon Gagal:**  
+- **400 Bad Request** – Jika ada field yang kosong  
+- **401 Unauthorized** – Jika user belum login  
+- **500 Internal Server Error** – Jika terjadi kesalahan di server  
+
+---
+
+### **2. Melihat Semua Testimoni**  
+**Endpoint:**  
+```
+GET /
+```
+**Deskripsi:**  
+Menampilkan semua testimoni yang telah dibuat oleh pengguna.  
+
+**Respon Sukses:**
+```json
+[
+  {
+    "id": 1,
+    "username": "johndoe",
+    "service_name": "Haircut",
+    "rating": 5,
+    "comment": "Layanan sangat memuaskan!",
+    "created_at": "2025-03-11 10:30:00"
+  },
+  {
+    "id": 2,
+    "username": "janedoe",
+    "service_name": "Facial",
+    "rating": 4,
+    "comment": "Hasilnya bagus, tapi bisa lebih baik.",
+    "created_at": "2025-03-11 11:00:00"
+  }
+]
+```
+
+**Respon Gagal:**  
+- **500 Internal Server Error** – Jika terjadi kesalahan di server  
+
+---
+
+### **3. Hapus Testimoni (Admin Saja)**  
+**Endpoint:**  
+```
+DELETE /:id
+```
+**Deskripsi:**  
+Hanya admin yang dapat menghapus testimoni.  
+
+**Headers:**  
+```
+Authorization: Bearer <token>
+```
+
+**Request Params:**  
+| Parameter | Tipe | Wajib | Deskripsi |
+|-----------|------|-------|-----------|
+| id        | Int  | ✅     | ID testimoni yang akan dihapus |
+
+**Contoh Request:**  
+```
+DELETE /5
+```
+
+**Respon Sukses:**
+```json
+{
+  "message": "Testimoni berhasil dihapus"
+}
+```
+
+**Respon Gagal:**  
+- **403 Forbidden** – Jika user bukan admin  
+- **404 Not Found** – Jika testimoni tidak ditemukan  
+- **500 Internal Server Error** – Jika terjadi kesalahan di server  
+
+---
+
 ## **Autentikasi & Keamanan**  
 - **Token JWT** digunakan untuk autentikasi user setelah login.  
 - Setiap request ke endpoint yang membutuhkan autentikasi harus menyertakan token dalam header:  
