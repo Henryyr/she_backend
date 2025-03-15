@@ -201,6 +201,167 @@ POST /api/layanan
     }
 }
 ```
+# Dokumentasi API Booking & Transaksi
+
+## Booking
+
+### 1. **Membuat Booking Baru**
+**Endpoint:** `POST /api/booking`
+
+**Headers:**
+- `Authorization: Bearer <token>`
+
+**Body (JSON):**
+```json
+{
+  "layanan_ids": [1, 2],
+  "tanggal": "2025-03-16",
+  "jam_mulai": "10:00:00"
+}
+```
+
+**Response (201 - Created):**
+```json
+{
+  "message": "Booking berhasil dibuat",
+  "booking_id": 45,
+  "total_harga": 150000
+}
+```
+
+---
+
+### 2. **Mendapatkan Semua Booking Pengguna**
+**Endpoint:** `GET /api/booking`
+
+**Headers:**
+- `Authorization: Bearer <token>`
+
+**Response (200 - OK):**
+```json
+{
+  "bookings": [
+    {
+      "id": 45,
+      "tanggal": "2025-03-16",
+      "jam_mulai": "10:00:00",
+      "status": "pending",
+      "total_harga": 150000,
+      "layanan": ["Potong Rambut", "Cuci Rambut"]
+    }
+  ]
+}
+```
+
+---
+
+### 3. **Mendapatkan Detail Booking**
+**Endpoint:** `GET /api/booking/:id`
+
+**Headers:**
+- `Authorization: Bearer <token>`
+
+**Response (200 - OK):**
+```json
+{
+  "id": 45,
+  "tanggal": "2025-03-16",
+  "jam_mulai": "10:00:00",
+  "status": "pending",
+  "total_harga": 150000,
+  "layanan": ["Potong Rambut", "Cuci Rambut"]
+}
+```
+
+---
+
+### 4. **Menghapus Booking**
+**Endpoint:** `DELETE /api/booking/:id`
+
+**Headers:**
+- `Authorization: Bearer <token>`
+
+**Response (200 - OK):**
+```json
+{
+  "message": "Booking berhasil dihapus"
+}
+```
+
+---
+
+## Transaksi
+
+### 1. **Membuat Transaksi Baru**
+**Endpoint:** `POST /api/transaksi`
+
+**Headers:**
+- `Authorization: Bearer <token>`
+
+**Body (JSON):**
+```json
+{
+  "booking_id": 45,
+  "kategori_transaksi_id": 2
+}
+```
+
+**Response (201 - Created):**
+```json
+{
+  "message": "Transaksi dibuat",
+  "transaksi_id": 123,
+  "status": "pending",
+  "snap_url": "https://midtrans.com/payment/123"
+}
+```
+
+---
+
+### 2. **Mendapatkan Semua Transaksi Pengguna**
+**Endpoint:** `GET /api/transaksi`
+
+**Headers:**
+- `Authorization: Bearer <token>`
+
+**Response (200 - OK):**
+```json
+{
+  "transactions": [
+    {
+      "id": 123,
+      "booking_id": 45,
+      "total_harga": 150000,
+      "paid_amount": 0,
+      "status": "pending",
+      "metode_pembayaran": "Cashless"
+    }
+  ]
+}
+```
+
+---
+
+### 3. **Webhook Midtrans**
+**Endpoint:** `POST /api/transaksi/webhook`
+
+**Body (JSON - contoh dari Midtrans):**
+```json
+{
+  "order_id": "abcd1234",
+  "transaction_status": "settlement",
+  "gross_amount": 150000
+}
+```
+
+**Response (200 - OK):**
+```json
+{
+  "message": "Transaksi berhasil diperbarui"
+}
+```
+
+
 
 # Dokumentasi API Admin Dashboard
 
