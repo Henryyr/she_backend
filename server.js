@@ -8,7 +8,9 @@ const morgan = require('morgan'); // Import Morgan for logging
 const db = require('./db');
 
 const app = express();
+const cron = require('node-cron');
 const PORT = process.env.PORT || 3000;
+
 
 app.set('trust proxy', 1);
 
@@ -26,6 +28,21 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// 🔹 Jalankan setiap hari pukul 00:00 WIB
+cron.schedule('0 0 * * *', async () => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        await db.promise().query(`DELETE FROM booking WHERE tanggal < ?`, [today]);
+
+        console.log(`✅ [CRON] Booking sebelum ${today} dihapus`);
+    } catch (err) {
+        console.error("❌ [CRON] Gagal menghapus booking:", err.message);
+    }
+}, {
+    timezone: "Asia/Jakarta" // Sesuaikan timezone
+});
+
 // --- ROUTES ---
 app.use('/api/booking', require('./routes/bookingRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
@@ -37,7 +54,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/testimoni', require('./routes/testimoniRoutes'));
 
 // Error Handling Middleware
-app.use((err, req, res, next) => {
+app.use((err, _req, res, _next) => {
     console.error(err.stack);
     res.status(500).json({ error: 'Something went wrong!' });
 });
