@@ -1,217 +1,406 @@
-# Dokumentasi API - Sistem Web Salon
+# Web Salon System API Documentation
 
-## 1. Autentikasi
-### Login Admin
+## Table of Contents
+1. [Authentication](#1-authentication)
+2. [User Management](#2-user-management)
+3. [Admin Dashboard](#3-admin-dashboard)
+4. [Services Management](#4-services-management)
+5. [Booking System](#5-booking-system)
+6. [Transaction Management](#6-transaction-management)
+7. [Testimonials](#7-testimonials)
+
+---
+
+## 1. Authentication
+
+### Register User
 **Endpoint:**
 ```
-POST /api/auth/login
+POST /api/auth/register
 ```
-**Deskripsi:** Login admin untuk mendapatkan token JWT.
+**Description:** Register a new user in the system.
 
 **Request Body:**
 ```json
 {
-    "username": "admin",
-    "password": "password123"
+  "fullname": "John Doe",
+  "email": "johndoe@example.com",
+  "phone_number": "081234567890", // Optional
+  "username": "johndoe",
+  "password": "password123",
+  "confirmation_password": "password123",
+  "address": "Jl. Mawar No. 10", // Optional
+  "role": "pelanggan" // Optional, default: "pelanggan"
 }
 ```
-**Response:**
+**Response (201 Created):**
 ```json
 {
-    "message": "Login berhasil",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI..."
+  "message": "User berhasil didaftarkan",
+  "id": 1
 }
 ```
 
-### Login User
+### Login
 **Endpoint:**
 ```
 POST /api/auth/login
 ```
-**Deskripsi:** Login user untuk mendapatkan token JWT.
+**Description:** Authenticate user to get JWT token.
 
 **Request Body:**
 ```json
 {
-    "username": "user",
-    "password": "passworduser"
+  "username": "johndoe",
+  "password": "password123"
 }
 ```
-**Response:**
+**Response (200 OK):**
 ```json
 {
-    "message": "Login berhasil",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI..."
+  "message": "Login berhasil",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI..."
+}
+```
+
+### Logout
+**Endpoint:**
+```
+POST /api/auth/logout
+```
+**Description:** Logout only removes token on client side.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Logout berhasil, silakan hapus token di client"
+}
+```
+
+### Get User Profile
+**Endpoint:**
+```
+GET /api/auth/profile
+```
+**Description:** Get current logged-in user profile.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "message": "Profil user",
+  "user": {
+    "id": 1,
+    "username": "johndoe",
+    "role": "pelanggan"
+  }
 }
 ```
 
 ---
 
-## 2. Manajemen Dashboard Admin
-### Mendapatkan Dashboard Admin
-**Endpoint:**
-```
-GET /api/admin/dashboard
-```
-**Deskripsi:** Mendapatkan daftar pengguna untuk admin.
+## 2. User Management
 
-**Response:**
-```json
-{
-    "message": "Dashboard Admin - Daftar Pengguna",
-    "users": [
-        {
-            "id": 1,
-            "fullname": "Admin User",
-            "email": "admin@example.com",
-            "phone_number": "08123456789",
-            "username": "admin",
-            "address": "Jl. Admin No.1",
-            "role": "admin"
-        }
-    ]
-}
-```
-
----
-
-## 3. Manajemen Pengguna
-### Mendapatkan Semua Pengguna
+### Get All Users
 **Endpoint:**
 ```
 GET /api/users
 ```
-**Response:**
+**Description:** Get a list of all users (admin only).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
 ```json
 [
-    {
-        "id": 1,
-        "username": "admin",
-        "email": "admin@example.com",
-        "role": "admin"
-    }
+  {
+    "id": 1,
+    "username": "admin",
+    "email": "admin@example.com",
+    "role": "admin"
+  }
 ]
 ```
 
-### Menambahkan Pengguna
+### Add User
 **Endpoint:**
 ```
 POST /api/users
 ```
+**Description:** Add a new user (admin only).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
 **Request Body:**
 ```json
 {
-    "fullname": "New User",
-    "email": "user@example.com",
-    "phone_number": "08129876543",
-    "username": "newuser",
-    "password": "securepass",
-    "address": "Jl. User No.2",
-    "role": "customer"
+  "fullname": "New User",
+  "email": "user@example.com",
+  "phone_number": "08129876543",
+  "username": "newuser",
+  "password": "securepass",
+  "address": "Jl. User No.2",
+  "role": "customer"
 }
 ```
-**Response:**
+**Response (201 Created):**
 ```json
 {
-    "message": "User berhasil ditambahkan",
-    "userId": 2
+  "message": "User berhasil ditambahkan",
+  "userId": 2
 }
 ```
 
-### Mengedit Pengguna
+### Update User
 **Endpoint:**
 ```
 PUT /api/users/:id
 ```
+**Description:** Update user information (admin only).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
 **Request Body:**
 ```json
 {
-    "fullname": "Updated User",
-    "email": "updated@example.com",
-    "phone_number": "081234567890",
-    "username": "updateduser",
-    "address": "Jl. Baru No.10",
-    "role": "customer"
+  "fullname": "Updated User",
+  "email": "updated@example.com",
+  "phone_number": "081234567890",
+  "username": "updateduser",
+  "address": "Jl. Baru No.10",
+  "role": "customer"
 }
 ```
-**Response:**
+**Response (200 OK):**
 ```json
 {
-    "message": "User berhasil diperbarui"
+  "message": "User berhasil diperbarui"
 }
 ```
 
-### Menghapus Pengguna
+### Delete User
 **Endpoint:**
 ```
 DELETE /api/users/:id
 ```
-**Response:**
+**Description:** Delete a user by ID (admin only).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
 ```json
 {
-    "message": "User berhasil dihapus"
+  "message": "User berhasil dihapus"
 }
 ```
 
 ---
 
-## 4. Manajemen Layanan
-### Mendapatkan Semua Layanan
+## 3. Admin Dashboard
+
+### Get Admin Dashboard
+**Endpoint:**
+```
+GET /api/admin/dashboard
+```
+**Description:** Get user list for admin dashboard.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "message": "Dashboard Admin - Daftar Pengguna",
+  "users": [
+    {
+      "id": 1,
+      "fullname": "Admin User",
+      "email": "admin@example.com",
+      "phone_number": "08123456789",
+      "username": "admin",
+      "address": "Jl. Admin No.1",
+      "role": "admin"
+    }
+  ]
+}
+```
+
+### Add User (Admin)
+**Endpoint:**
+```
+POST /api/admin/users
+```
+**Description:** Admin can add a new user.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "fullname": "Jane Doe",
+  "email": "jane@example.com",
+  "phone_number": "08129876543",
+  "username": "janedoe",
+  "password": "password123",
+  "address": "Jl. Contoh No. 2",
+  "role": "pelanggan"
+}
+```
+**Response (201 Created):**
+```json
+{
+  "message": "User berhasil ditambahkan",
+  "userId": 2
+}
+```
+
+### Update User (Admin)
+**Endpoint:**
+```
+PUT /api/admin/users/:id
+```
+**Description:** Admin can update user information.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "fullname": "Jane Doe Updated",
+  "email": "jane_updated@example.com",
+  "phone_number": "08129876543",
+  "username": "janedoe",
+  "address": "Jl. Contoh Baru No. 3",
+  "role": "pelanggan"
+}
+```
+**Response (200 OK):**
+```json
+{
+  "message": "User berhasil diperbarui"
+}
+```
+
+### Delete User (Admin)
+**Endpoint:**
+```
+DELETE /api/admin/users/:id
+```
+**Description:** Admin can delete a user by ID.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "message": "User berhasil dihapus"
+}
+```
+
+---
+
+## 4. Services Management
+
+### Get All Services
 **Endpoint:**
 ```
 GET /api/layanan
 ```
-**Response:**
+**Description:** Get a list of all salon services.
+
+**Response (200 OK):**
 ```json
 [
-    {
-        "id": 1,
-        "name": "Haircut",
-        "description": "Potong rambut premium",
-        "price": 50000,
-        "duration": "30 menit"
-    }
+  {
+    "id": 1,
+    "name": "Haircut",
+    "description": "Potong rambut premium",
+    "price": 50000,
+    "duration": "30 menit"
+  }
 ]
 ```
 
-### Menambahkan Layanan
+### Add Service
 **Endpoint:**
 ```
 POST /api/layanan
 ```
+**Description:** Add a new service (admin only).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
 **Request Body:**
 ```json
 {
+  "name": "Facial",
+  "description": "Perawatan wajah",
+  "price": 75000,
+  "duration": "45 menit"
+}
+```
+**Response (201 Created):**
+```json
+{
+  "message": "Layanan berhasil ditambahkan",
+  "service": {
+    "id": 2,
     "name": "Facial",
     "description": "Perawatan wajah",
     "price": 75000,
     "duration": "45 menit"
+  }
 }
 ```
-**Response:**
-```json
-{
-    "message": "Layanan berhasil ditambahkan",
-    "service": {
-        "id": 2,
-        "name": "Facial",
-        "description": "Perawatan wajah",
-        "price": 75000,
-        "duration": "45 menit"
-    }
-}
+
+---
+
+## 5. Booking System
+
+### Create New Booking
+**Endpoint:**
 ```
-# Dokumentasi API Booking & Transaksi
-
-## Booking
-
-### 1. **Membuat Booking Baru**
-**Endpoint:** `POST /api/booking`
+POST /api/booking
+```
+**Description:** Create a new booking appointment.
 
 **Headers:**
-- `Authorization: Bearer <token>`
+```
+Authorization: Bearer <token>
+```
 
-**Body (JSON):**
+**Request Body:**
 ```json
 {
   "layanan_ids": [1, 2],
@@ -219,8 +408,7 @@ POST /api/layanan
   "jam_mulai": "10:00:00"
 }
 ```
-
-**Response (201 - Created):**
+**Response (201 Created):**
 ```json
 {
   "message": "Booking berhasil dibuat",
@@ -229,15 +417,19 @@ POST /api/layanan
 }
 ```
 
----
-
-### 2. **Mendapatkan Semua Booking Pengguna**
-**Endpoint:** `GET /api/booking`
+### Get User Bookings
+**Endpoint:**
+```
+GET /api/booking
+```
+**Description:** Get all bookings for current user.
 
 **Headers:**
-- `Authorization: Bearer <token>`
+```
+Authorization: Bearer <token>
+```
 
-**Response (200 - OK):**
+**Response (200 OK):**
 ```json
 {
   "bookings": [
@@ -253,15 +445,19 @@ POST /api/layanan
 }
 ```
 
----
-
-### 3. **Mendapatkan Detail Booking**
-**Endpoint:** `GET /api/booking/:id`
+### Get Booking Details
+**Endpoint:**
+```
+GET /api/booking/:id
+```
+**Description:** Get details of a specific booking.
 
 **Headers:**
-- `Authorization: Bearer <token>`
+```
+Authorization: Bearer <token>
+```
 
-**Response (200 - OK):**
+**Response (200 OK):**
 ```json
 {
   "id": 45,
@@ -273,15 +469,19 @@ POST /api/layanan
 }
 ```
 
----
-
-### 4. **Menghapus Booking**
-**Endpoint:** `DELETE /api/booking/:id`
+### Delete Booking
+**Endpoint:**
+```
+DELETE /api/booking/:id
+```
+**Description:** Delete a specific booking.
 
 **Headers:**
-- `Authorization: Bearer <token>`
+```
+Authorization: Bearer <token>
+```
 
-**Response (200 - OK):**
+**Response (200 OK):**
 ```json
 {
   "message": "Booking berhasil dihapus"
@@ -290,23 +490,28 @@ POST /api/layanan
 
 ---
 
-## Transaksi
+## 6. Transaction Management
 
-### 1. **Membuat Transaksi Baru**
-**Endpoint:** `POST /api/transaksi`
+### Create New Transaction
+**Endpoint:**
+```
+POST /api/transaksi
+```
+**Description:** Create a new transaction for a booking.
 
 **Headers:**
-- `Authorization: Bearer <token>`
+```
+Authorization: Bearer <token>
+```
 
-**Body (JSON):**
+**Request Body:**
 ```json
 {
   "booking_id": 45,
   "kategori_transaksi_id": 2
 }
 ```
-
-**Response (201 - Created):**
+**Response (201 Created):**
 ```json
 {
   "message": "Transaksi dibuat",
@@ -316,15 +521,19 @@ POST /api/layanan
 }
 ```
 
----
-
-### 2. **Mendapatkan Semua Transaksi Pengguna**
-**Endpoint:** `GET /api/transaksi`
+### Get User Transactions
+**Endpoint:**
+```
+GET /api/transaksi
+```
+**Description:** Get all transactions for current user.
 
 **Headers:**
-- `Authorization: Bearer <token>`
+```
+Authorization: Bearer <token>
+```
 
-**Response (200 - OK):**
+**Response (200 OK):**
 ```json
 {
   "transactions": [
@@ -340,12 +549,14 @@ POST /api/layanan
 }
 ```
 
----
+### Payment Gateway Webhook
+**Endpoint:**
+```
+POST /api/transaksi/webhook
+```
+**Description:** Webhook for payment gateway callbacks (Midtrans).
 
-### 3. **Webhook Midtrans**
-**Endpoint:** `POST /api/transaksi/webhook`
-
-**Body (JSON - contoh dari Midtrans):**
+**Request Body (Example from Midtrans):**
 ```json
 {
   "order_id": "abcd1234",
@@ -353,319 +564,30 @@ POST /api/layanan
   "gross_amount": 150000
 }
 ```
-
-**Response (200 - OK):**
+**Response (200 OK):**
 ```json
 {
   "message": "Transaksi berhasil diperbarui"
 }
 ```
 
-
-
-# Dokumentasi API Admin Dashboard
-
-## **Pendahuluan**
-Admin Dashboard dalam sistem web salon ini memungkinkan admin untuk mengelola pengguna. API ini mencakup fitur CRUD untuk pengguna serta autentikasi berbasis JWT.
-
 ---
-## **Autentikasi**
-Setiap endpoint dalam dashboard admin memerlukan autentikasi menggunakan JWT. Pastikan setiap permintaan mengirimkan header:
+
+## 7. Testimonials
+
+### Add Testimonial
+**Endpoint:**
+```
+POST /api/testimoni
+```
+**Description:** User submits a testimonial for a service.
+
+**Headers:**
 ```
 Authorization: Bearer <token>
 ```
 
----
-## **1. Mendapatkan Daftar Pengguna**
-### **Endpoint:**
-```
-GET /api/admin/dashboard
-```
-### **Deskripsi:**
-Mengambil daftar semua pengguna dalam sistem.
-### **Headers:**
-- `Authorization: Bearer <token>` (Wajib, hanya admin)
-### **Response:**
-#### **Berhasil (200 OK)**
-```json
-{
-    "message": "Dashboard Admin - Daftar Pengguna",
-    "users": [
-        {
-            "id": 1,
-            "fullname": "John Doe",
-            "email": "john@example.com",
-            "phone_number": "08123456789",
-            "username": "johndoe",
-            "address": "Jl. Example No. 1",
-            "role": "admin"
-        }
-    ]
-}
-```
-
----
-## **2. Menambahkan Pengguna Baru**
-### **Endpoint:**
-```
-POST /api/admin/users
-```
-### **Deskripsi:**
-Admin dapat menambahkan pengguna baru.
-### **Headers:**
-- `Authorization: Bearer <token>` (Wajib, hanya admin)
-### **Body (JSON):**
-```json
-{
-    "fullname": "Jane Doe",
-    "email": "jane@example.com",
-    "phone_number": "08129876543",
-    "username": "janedoe",
-    "password": "password123",
-    "address": "Jl. Contoh No. 2",
-    "role": "pelanggan"
-}
-```
-### **Response:**
-#### **Berhasil (201 Created)**
-```json
-{
-    "message": "User berhasil ditambahkan",
-    "userId": 2
-}
-```
-
----
-## **3. Mengedit Data Pengguna**
-### **Endpoint:**
-```
-PUT /api/admin/users/:id
-```
-### **Deskripsi:**
-Admin dapat memperbarui informasi pengguna.
-### **Headers:**
-- `Authorization: Bearer <token>` (Wajib, hanya admin)
-### **Body (JSON):**
-```json
-{
-    "fullname": "Jane Doe Updated",
-    "email": "jane_updated@example.com",
-    "phone_number": "08129876543",
-    "username": "janedoe",
-    "address": "Jl. Contoh Baru No. 3",
-    "role": "pelanggan"
-}
-```
-### **Response:**
-#### **Berhasil (200 OK)**
-```json
-{
-    "message": "User berhasil diperbarui"
-}
-```
-
----
-## **4. Menghapus Pengguna**
-### **Endpoint:**
-```
-DELETE /api/admin/users/:id
-```
-### **Deskripsi:**
-Admin dapat menghapus pengguna berdasarkan ID.
-### **Headers:**
-- `Authorization: Bearer <token>` (Wajib, hanya admin)
-### **Response:**
-#### **Berhasil (200 OK)**
-```json
-{
-    "message": "User berhasil dihapus"
-}
-```
-#### **Gagal (404 Not Found - Jika ID tidak ditemukan)**
-```json
-{
-    "message": "User tidak ditemukan"
-}
-```
----
-
-# **Dokumentasi API User Authentication**  
-API ini digunakan untuk registrasi, login, dan pengelolaan user dalam sistem web salon.  
-
-## **Base URL**  
-```
-http://localhost:3000/api/auth
-```
-
-## **Endpoints**  
-
-### **1. Register User Baru**  
-**Endpoint:**  
-```
-POST /register
-```
-**Deskripsi:**  
-Mendaftarkan user baru ke dalam sistem.  
-
-**Request Body:**  
-| Parameter            | Tipe   | Wajib | Deskripsi |
-|----------------------|--------|-------|-----------|
-| fullname            | String | ✅     | Nama lengkap pengguna |
-| email              | String | ✅     | Email pengguna |
-| phone_number       | String | ❌     | Nomor telepon pengguna (opsional) |
-| username           | String | ✅     | Nama pengguna untuk login |
-| password           | String | ✅     | Password minimal 8 karakter, kombinasi huruf dan angka |
-| confirmation_password | String | ✅     | Konfirmasi password harus sama dengan password |
-| address            | String | ❌     | Alamat pengguna (opsional) |
-| role               | String | ❌     | Peran pengguna dalam sistem, default: "pelanggan" |
-
-**Contoh Request:**
-```json
-{
-  "fullname": "John Doe",
-  "email": "johndoe@example.com",
-  "phone_number": "081234567890",
-  "username": "johndoe",
-  "password": "password123",
-  "confirmation_password": "password123",
-  "address": "Jl. Mawar No. 10",
-  "role": "pelanggan"
-}
-```
-
-**Respon Sukses:**
-```json
-{
-  "message": "User berhasil didaftarkan",
-  "id": 1
-}
-```
-
-**Respon Gagal:**  
-- **400 Bad Request** – Data tidak lengkap atau format password salah  
-- **500 Internal Server Error** – Kesalahan saat menyimpan ke database  
-
----
-
-### **2. Login User**  
-**Endpoint:**  
-```
-POST /login
-```
-**Deskripsi:**  
-Autentikasi user untuk mendapatkan token JWT.  
-
-**Request Body:**  
-| Parameter  | Tipe   | Wajib | Deskripsi |
-|------------|--------|-------|-----------|
-| username  | String | ✅     | Nama pengguna yang terdaftar |
-| password  | String | ✅     | Password yang sesuai dengan akun |
-
-**Contoh Request:**
-```json
-{
-  "username": "johndoe",
-  "password": "password123"
-}
-```
-
-**Respon Sukses:**
-```json
-{
-  "message": "Login berhasil",
-  "token": "eyJhbGciOiJIUzI1NiIsIn..."
-}
-```
-*(Token harus disertakan dalam header `Authorization` untuk akses endpoint yang memerlukan autentikasi.)*
-
-**Respon Gagal:**  
-- **400 Bad Request** – Username atau password kosong  
-- **401 Unauthorized** – Username atau password salah  
-- **500 Internal Server Error** – Kesalahan saat mengambil data dari database  
-
----
-
-### **3. Logout User**  
-**Endpoint:**  
-```
-POST /logout
-```
-**Deskripsi:**  
-Logout hanya menghapus token di sisi client.  
-
-**Respon Sukses:**
-```json
-{
-  "message": "Logout berhasil, silakan hapus token di client"
-}
-```
-
----
-
-### **4. Get Profile User (Protected)**  
-**Endpoint:**  
-```
-GET /profile
-```
-**Deskripsi:**  
-Mengambil data profil user yang sedang login.  
-
-**Headers:**  
-```
-Authorization: Bearer <token>
-```
-
-**Respon Sukses:**
-```json
-{
-  "message": "Profil user",
-  "user": {
-    "id": 1,
-    "username": "johndoe",
-    "role": "pelanggan"
-  }
-}
-```
-
-**Respon Gagal:**  
-- **401 Unauthorized** – Token tidak valid atau tidak disertakan  
-- **403 Forbidden** – User tidak memiliki akses  
-
----
-
-# **Dokumentasi API Testimoni**  
-API ini digunakan untuk mengelola testimoni dari pengguna terhadap layanan salon.  
-
-## **Base URL**  
-```
-http://localhost:3000/api/testimoni
-```
-
-## **Endpoints**  
-
----
-
-### **1. Tambah Testimoni (User Submit Testimoni)**
-**Endpoint:**  
-```
-POST /
-```
-**Deskripsi:**  
-User yang sudah login dapat memberikan testimoni terhadap layanan yang digunakan.  
-
-**Headers:**  
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**  
-| Parameter  | Tipe   | Wajib | Deskripsi |
-|------------|--------|-------|-----------|
-| service_id | Int   | ✅     | ID layanan yang diberi testimoni |
-| rating     | Int   | ✅     | Nilai rating (1-5) |
-| comment    | String | ✅    | Komentar testimoni |
-
-**Contoh Request:**
+**Request Body:**
 ```json
 {
   "service_id": 2,
@@ -673,8 +595,7 @@ Authorization: Bearer <token>
   "comment": "Layanan sangat memuaskan!"
 }
 ```
-
-**Respon Sukses:**
+**Response (201 Created):**
 ```json
 {
   "message": "Testimoni berhasil ditambahkan",
@@ -682,22 +603,14 @@ Authorization: Bearer <token>
 }
 ```
 
-**Respon Gagal:**  
-- **400 Bad Request** – Jika ada field yang kosong  
-- **401 Unauthorized** – Jika user belum login  
-- **500 Internal Server Error** – Jika terjadi kesalahan di server  
-
----
-
-### **2. Melihat Semua Testimoni**  
-**Endpoint:**  
+### Get All Testimonials
+**Endpoint:**
 ```
-GET /
+GET /api/testimoni
 ```
-**Deskripsi:**  
-Menampilkan semua testimoni yang telah dibuat oleh pengguna.  
+**Description:** Get all testimonials.
 
-**Respon Sukses:**
+**Response (200 OK):**
 ```json
 [
   {
@@ -719,61 +632,28 @@ Menampilkan semua testimoni yang telah dibuat oleh pengguna.
 ]
 ```
 
-**Respon Gagal:**  
-- **500 Internal Server Error** – Jika terjadi kesalahan di server  
-
----
-
-### **3. Hapus Testimoni (Admin Saja)**  
-**Endpoint:**  
+### Delete Testimonial
+**Endpoint:**
 ```
-DELETE /:id
+DELETE /api/testimoni/:id
 ```
-**Deskripsi:**  
-Hanya admin yang dapat menghapus testimoni.  
+**Description:** Delete a testimonial (admin only).
 
-**Headers:**  
+**Headers:**
 ```
 Authorization: Bearer <token>
 ```
 
-**Request Params:**  
-| Parameter | Tipe | Wajib | Deskripsi |
-|-----------|------|-------|-----------|
-| id        | Int  | ✅     | ID testimoni yang akan dihapus |
-
-**Contoh Request:**  
-```
-DELETE /5
-```
-
-**Respon Sukses:**
+**Response (200 OK):**
 ```json
 {
   "message": "Testimoni berhasil dihapus"
 }
 ```
 
-**Respon Gagal:**  
-- **403 Forbidden** – Jika user bukan admin  
-- **404 Not Found** – Jika testimoni tidak ditemukan  
-- **500 Internal Server Error** – Jika terjadi kesalahan di server  
-
 ---
 
-## **Autentikasi & Keamanan**  
-- **Token JWT** digunakan untuk autentikasi user setelah login.  
-- Setiap request ke endpoint yang membutuhkan autentikasi harus menyertakan token dalam header:  
-  ```
-  Authorization: Bearer <token>
-  ```
-- **Password user dienkripsi** menggunakan bcrypt sebelum disimpan ke database.  
-
----
-
-## Autentikasi dengan Token JWT
-Setiap permintaan ke endpoint kecuali `/api/auth/login` harus mengirimkan header **Authorization** dengan format:
-```
-Authorization: Bearer <token>
-```
-
+## Authentication & Security
+- JWT token authentication is required for protected endpoints
+- Include token in request header: `Authorization: Bearer <token>`
+- User passwords are encrypted with bcrypt before storing in database
