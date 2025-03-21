@@ -2,10 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticate } = require('../middleware/auth');
-const axios = require('axios');
-
-const API_KEY_WHATSAPP = "6201027";
-const CALLMEBOT_URL = "https://api.callmebot.com/whatsapp.php";
+const nodemailer = require('nodemailer');
 
 // Function to generate booking number
 const generateBookingNumber = async () => {
@@ -37,24 +34,132 @@ const generateBookingNumber = async () => {
     });
 };
 
-// Function to send WhatsApp notification
-const sendWhatsAppNotification = async (phone, message) => {
+// Email transporter setup
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: "henry.360420@gmail.com",
+        pass: "tklsvkimuouusprw",
+    },
+    logger: true,
+    debug: true,
+});
+
+// Function to send email
+const sendEmail = async (_to, _subject, _text, _html) => {
     try {
-        const response = await axios.get(CALLMEBOT_URL, {
-            params: {
-                phone: phone,
-                text: message,
-                apikey: API_KEY_WHATSAPP
+        if (!_to) throw new Error("Email tujuan kosong!");
+
+        const mailOptions = {
+            from: "henry.360420@gmail.com",
+            to: _to,
+            subject: _subject,
+            text: _text,
+            html: _html,
+            headers: {
+                'X-Priority': '3',
+                'X-Mailer': 'NodeMailer',
             }
-        });
-        console.log("WhatsApp Notification Sent:", response.data);
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log("Email berhasil dikirim ke:", _to);
     } catch (error) {
-        console.error("Failed to send WhatsApp message:", error.message);
+        console.error("Gagal mengirim email:", error);
     }
 };
 
+// POST buat booking baru
+router.post('/', authenticate, async (req, res) => {
+    const { layanan_id, tanggal, jam_mulai } = req.body;
+    const user_id = req.user.id;
+
+    if (!user_id) return res.status(401).json({ error: "User tidak ditemukan, pastikan sudah login" });
+    if (!layanan_id || !Array.isArray(layanan_id) || layanan_id.length === 0) 
+        return res.status(400).json({ error: "Harus memilih setidaknya satu layanan" });
+
+    try {
+        const [existingBookings] = await db.promise().query(
+            `SELECT id FROM booking WHERE user_id = ? AND tanggal = ?`,
+            [user_id, tanggal]
+        );
+
+        if (existingBookings.length > 0) {
+            return res.status(400).json({ error: "Anda sudah memiliki booking pada hari ini. Silakan pilih hari lain." });
+        }
+
+        const [layananResults] = await db.promise().query(
+            `SELECT id, nama, estimasi_waktu, harga FROM layanan WHERE id IN (?)`, 
+            [layanan_id]
+        );
+
+        if (layananResults.length === 0) return res.status(404).json({ error: "Layanan tidak ditemukan" });
+
+        const total_harga = layananResults.reduce((sum, layanan) => sum + parseFloat(layanan.harga), 0);
+        const total_estimasi = layananResults.reduce((sum, layanan) => sum + layanan.estimasi_waktu, 0);
+
+        const bookingNumber = await generateBookingNumber();
+
+        const [result] = await db.promise().query(`
+            INSERT INTO booking (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga)
+            VALUES (?, ?, ?, ADDTIME(?, SEC_TO_TIME(? * 60)), 'pending', ?, ?)`,
+            [user_id, tanggal, jam_mulai, jam_mulai, total_estimasi, bookingNumber, parseFloat(total_harga)]
+        );
+
+        const booking_id = result.insertId;
+
+        const values = layananResults.map(layanan => [booking_id, layanan.id]);
+        if (values.length > 0) {
+            await db.promise().query(`INSERT INTO booking_layanan (booking_id, layanan_id) VALUES ?`, [values]);
+        }
+
+        const [userResults] = await db.promise().query('SELECT email FROM users WHERE id = ?', [user_id]);
+        const email = userResults.length > 0 ? userResults[0].email : null;
+
+        console.log("Email penerima:", email);  // Debugging
+
+        const layanan_terpilih = layananResults.map(l => ({
+            id: l.id,
+            nama: l.nama,
+            harga: l.harga
+        }));
+
+        if (email) {
+            const layananList = layananResults.map(l => `🔹 ${l.nama} (Rp${l.harga})`).join("\n");
+            const subject = "Konfirmasi Booking Anda";
+            const htmlMessage = `
+                <p>Booking baru telah dibuat!</p>
+                <ul>${layananResults.map(l => `<li>${l.nama} (Rp${l.harga})</li>`).join('')}</ul>
+                <p><strong>Tanggal:</strong> ${tanggal}</p>
+                <p><strong>Jam:</strong> ${jam_mulai}</p>
+                <p><strong>Total:</strong> Rp${total_harga}</p>
+                // <p>Kode Booking: <strong>${bookingNumber}</strong></p>
+                <br>
+                <p>
+                    <a href='https://yourdomain.com/confirm/${bookingNumber}' style='padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; display: inline-block; margin-right: 10px;'>Konfirmasi Booking</a>
+                    <a href='https://yourdomain.com/cancel/${bookingNumber}' style='padding: 10px 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px; display: inline-block;'>Batalkan Booking</a>
+                </p>`;
+            await sendEmail(email, subject, `Booking baru telah dibuat!\n\nDetail Booking:\n${layananList}\nTanggal: ${tanggal}\nJam: ${jam_mulai}\nTotal: Rp${total_harga}\nKode Booking: ${bookingNumber}`, htmlMessage);
+        } else {
+            console.error("Email tidak ditemukan, tidak bisa mengirim.");
+        }
+
+        res.json({ 
+            message: "Booking berhasil dibuat!", 
+            booking_id, 
+            status: "pending", 
+            booking_number: bookingNumber, 
+            total_harga,
+            email,
+            layanan_terpilih
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET semua booking
-router.get('/', authenticate, async (req, res) => {
+router.get('/', authenticate, async (_req, res) => {
     try {
         const sql = `
             SELECT b.*, u.phone_number, GROUP_CONCAT(l.nama SEPARATOR ', ') AS layanan_nama
@@ -71,84 +176,33 @@ router.get('/', authenticate, async (req, res) => {
     }
 });
 
-// POST buat booking baru
-router.post('/', authenticate, async (req, res) => {
-    const { layanan_id, tanggal, jam_mulai } = req.body;
-    const user_id = req.user.id;
+// Route to send test email
+router.get('/send-email', async (req, res) => {
+    await sendMail();
+    res.send("Email sedang dikirim...");
+});
 
-    if (!user_id) return res.status(401).json({ error: "User tidak ditemukan, pastikan sudah login" });
-    if (!layanan_id || !Array.isArray(layanan_id) || layanan_id.length === 0) 
-        return res.status(400).json({ error: "Harus memilih setidaknya satu layanan" });
+// POST konfirmasi booking
+router.post('/confirm/:bookingNumber', authenticate, async (req, res) => {
+    const { bookingNumber } = req.params;
+    const sql = 'UPDATE booking SET status = ? WHERE booking_number = ?';
 
     try {
-        // Periksa apakah user sudah memiliki booking di tanggal yang sama
-        const [existingBookings] = await db.promise().query(
-            `SELECT id FROM booking WHERE user_id = ? AND tanggal = ?`,
-            [user_id, tanggal]
-        );
+        await db.promise().query(sql, ['confirmed', bookingNumber]);
+        res.json({ message: 'Booking berhasil dikonfirmasi' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
-        if (existingBookings.length > 0) {
-            return res.status(400).json({ error: "Anda sudah memiliki booking pada hari ini. Silakan pilih hari lain." });
-        }
+// POST batalkan booking
+router.post('/cancel/:bookingNumber', authenticate, async (req, res) => {
+    const { bookingNumber } = req.params;
+    const sql = 'UPDATE booking SET status = ? WHERE booking_number = ?';
 
-        // Ambil semua layanan berdasarkan array layanan_id
-        const [layananResults] = await db.promise().query(
-            `SELECT id, nama, estimasi_waktu, harga FROM layanan WHERE id IN (?)`, 
-            [layanan_id]
-        );
-
-        if (layananResults.length === 0) return res.status(404).json({ error: "Layanan tidak ditemukan" });
-
-        // Hitung total harga dan estimasi waktu
-        const total_harga = layananResults.reduce((sum, layanan) => sum + parseFloat(layanan.harga), 0);
-        const total_estimasi = layananResults.reduce((sum, layanan) => sum + layanan.estimasi_waktu, 0);
-
-        const bookingNumber = await generateBookingNumber();
-
-        // Simpan booking utama
-        const [result] = await db.promise().query(`
-            INSERT INTO booking (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga)
-            VALUES (?, ?, ?, ADDTIME(?, SEC_TO_TIME(? * 60)), 'pending', ?, ?)`,
-            [user_id, tanggal, jam_mulai, jam_mulai, total_estimasi, bookingNumber, parseFloat(total_harga)]
-        );
-
-        const booking_id = result.insertId;
-
-        // Simpan layanan yang dipesan ke tabel booking_layanan
-        const values = layananResults.map(layanan => [booking_id, layanan.id]);
-        if (values.length > 0) {
-            await db.promise().query(`INSERT INTO booking_layanan (booking_id, layanan_id) VALUES ?`, [values]);
-        }
-
-        // Ambil nomor telepon user
-        const [userResults] = await db.promise().query('SELECT phone_number FROM users WHERE id = ?', [user_id]);
-        const phone_number = userResults.length > 0 ? userResults[0].phone_number : null;
-
-        // Format daftar layanan yang dipilih
-        const layanan_terpilih = layananResults.map(l => ({
-            id: l.id,
-            nama: l.nama,
-            harga: l.harga
-        }));
-
-        // Kirim notifikasi WhatsApp jika nomor HP valid
-        if (phone_number) {
-            const layananList = layananResults.map(l => `🔹 ${l.nama} (Rp${l.harga})`).join("\n");
-            const message = `Booking baru telah dibuat!\n\n📌 *Detail Booking:*\n${layananList}\n📅 Tanggal: ${tanggal}\n⏰ Jam: ${jam_mulai}\n💰 Total: Rp${total_harga}\n\nKode Booking: ${bookingNumber}`;
-            
-            sendWhatsAppNotification(phone_number, message);
-        }
-
-        res.json({ 
-            message: "Booking berhasil dibuat!", 
-            booking_id, 
-            status: "pending", 
-            booking_number: bookingNumber, 
-            total_harga,
-            phone_number,
-            layanan_terpilih
-        });
-
+    try {
+        await db.promise().query(sql, ['canceled', bookingNumber]);
+        res.json({ message: 'Booking berhasil dibatalkan' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
