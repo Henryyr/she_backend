@@ -403,7 +403,7 @@ Authorization: Bearer <token>
 **Request Body:**
 ```json
 {
-  "layanan_ids": [1, 2],
+  "layanan_id": [1, 2],
   "tanggal": "2025-03-16",
   "jam_mulai": "10:00:00"
 }
@@ -509,6 +509,7 @@ Authorization: Bearer <token>
 {
   "booking_id": 45,
   "kategori_transaksi_id": 2
+  "is_dp": false/true
 }
 ```
 **Response (201 Created):**
