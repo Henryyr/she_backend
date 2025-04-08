@@ -91,28 +91,26 @@ router.post('/', authenticate, bookingLimiter, async (req, res) => {
     if (!layanan_id || !Array.isArray(layanan_id) || layanan_id.length === 0) 
         return res.status(400).json({ error: "Harus memilih setidaknya satu layanan" });
 
-    const connection = await db.promise().getConnection(); // Ambil koneksi dari pool
-
     try {
-        await connection.beginTransaction(); // Mulai transaksi
+        await db.promise().beginTransaction(); // Mulai transaksi
 
-        const [existingBookings] = await connection.query(
+        const [existingBookings] = await db.promise().query(
             `SELECT id FROM booking WHERE user_id = ? AND tanggal = ? FOR UPDATE`,
             [user_id, tanggal]
         );
 
         if (existingBookings.length > 0) {
-            await connection.rollback(); // Rollback jika sudah ada booking
+            await db.promise().rollback(); // Rollback jika sudah ada booking
             return res.status(400).json({ error: "Anda sudah memiliki booking pada hari ini. Silakan pilih hari lain." });
         }
 
-        const [layananResults] = await connection.query(
+        const [layananResults] = await db.promise().query(
             `SELECT id, nama, estimasi_waktu, harga FROM layanan WHERE id IN (?)`, 
             [layanan_id]
         );
 
         if (layananResults.length === 0) {
-            await connection.rollback(); // Rollback jika layanan tidak ditemukan
+            await db.promise().rollback(); // Rollback jika layanan tidak ditemukan
             return res.status(404).json({ error: "Layanan tidak ditemukan" });
         }
 
@@ -120,7 +118,7 @@ router.post('/', authenticate, bookingLimiter, async (req, res) => {
         const total_estimasi = layananResults.reduce((sum, layanan) => sum + layanan.estimasi_waktu, 0);
         const bookingNumber = await generateBookingNumber();
 
-        const [result] = await connection.query(
+        const [result] = await db.promise().query(
             `INSERT INTO booking (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga)
             VALUES (?, ?, ?, ADDTIME(?, SEC_TO_TIME(? * 60)), 'pending', ?, ?)`,
             [user_id, tanggal, jam_mulai, jam_mulai, total_estimasi, bookingNumber, parseFloat(total_harga)]
@@ -130,10 +128,10 @@ router.post('/', authenticate, bookingLimiter, async (req, res) => {
 
         const values = layananResults.map(layanan => [booking_id, layanan.id]);
         if (values.length > 0) {
-            await connection.query(`INSERT INTO booking_layanan (booking_id, layanan_id) VALUES ?`, [values]);
+            await db.promise().query(`INSERT INTO booking_layanan (booking_id, layanan_id) VALUES ?`, [values]);
         }
 
-        await connection.commit(); // Commit transaksi jika semua berhasil
+        await db.promise().commit(); // Commit transaksi jika semua berhasil
 
         const [userResults] = await db.promise().query('SELECT email FROM users WHERE id = ?', [user_id]);
         const email = userResults.length > 0 ? userResults[0].email : null;
@@ -178,11 +176,9 @@ router.post('/', authenticate, bookingLimiter, async (req, res) => {
         });
 
     } catch (err) {
-        await connection.rollback(); // Jika ada error, rollback transaksi
+        await db.promise().rollback(); // Jika ada error, rollback transaksi
         console.error("Error saat membuat booking:", err);
         res.status(500).json({ error: "Terjadi kesalahan, booking gagal dibuat." });
-    } finally {
-        connection.release(); // Pastikan koneksi dikembalikan ke pool
     }
 });
 
