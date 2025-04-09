@@ -3,6 +3,7 @@ const db = require('../db');
 const bookingHelper = require('../helpers/bookingHelper');
 
 const createBooking = async (user_id, layanan_id, tanggal, jam_mulai) => {
+    console.log('Creating booking:', { user_id, layanan_id, tanggal, jam_mulai });
     try {
         await db.promise().beginTransaction(); // Mulai transaksi
 
@@ -33,6 +34,7 @@ const createBooking = async (user_id, layanan_id, tanggal, jam_mulai) => {
         const [result] = await db.promise().query(
             `INSERT INTO booking (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga)
             VALUES (?, ?, ?, ADDTIME(?, SEC_TO_TIME(? * 60)), 'pending', ?, ?)`,
+
             [user_id, tanggal, jam_mulai, jam_mulai, total_estimasi, bookingNumber, parseFloat(total_harga)]
         );
 
@@ -57,6 +59,8 @@ const createBooking = async (user_id, layanan_id, tanggal, jam_mulai) => {
             harga: l.harga
         }));
 
+        console.log(`Booking created successfully. ID: ${booking_id}, Number: ${bookingNumber}`);
+
         return {
             booking_id,
             status: "pending",
@@ -66,31 +70,52 @@ const createBooking = async (user_id, layanan_id, tanggal, jam_mulai) => {
             layanan_terpilih
         };
     } catch (err) {
+        console.error('Failed to create booking:', err);
         await db.promise().rollback(); // Jika ada error, rollback transaksi
         throw err;
     }
 };
 
 const getAllBookings = async (page, limit) => {
-    const offset = (page - 1) * limit;
-    
-    const sql = `
-        SELECT b.*, u.phone_number, GROUP_CONCAT(l.nama SEPARATOR ', ') AS layanan_nama
-        FROM booking b
-        JOIN users u ON b.user_id = u.id
-        JOIN booking_layanan bl ON b.id = bl.booking_id
-        JOIN layanan l ON bl.layanan_id = l.id
-        GROUP BY b.id
-        LIMIT ? OFFSET ?
-    `;
-    
-    const [results] = await db.promise().query(sql, [parseInt(limit), parseInt(offset)]);
-    return results;
+    console.log(`Fetching bookings (page: ${page}, limit: ${limit})`);
+    try {
+        const [results] = await db.promise().query(
+            `SELECT b.*, u.phone_number, GROUP_CONCAT(l.nama SEPARATOR ', ') AS layanan_nama
+            FROM booking b
+            JOIN users u ON b.user_id = u.id
+            JOIN booking_layanan bl ON b.id = bl.booking_id
+            JOIN layanan l ON bl.layanan_id = l.id
+            GROUP BY b.id
+            LIMIT ? OFFSET ?`,
+            [parseInt(limit), (page - 1) * limit]
+        );
+        console.log(`Found ${results.length} bookings`);
+        return results;
+    } catch (err) {
+        console.error('Error fetching bookings:', err);
+        throw err;
+    }
 };
 
 const getBookingById = async (id) => {
-    const [results] = await db.promise().query('SELECT * FROM booking WHERE id = ?', [id]);
-    return results.length > 0 ? results[0] : null;
+    console.log('Fetching booking details for ID:', id);
+    try {
+        const [results] = await db.promise().query(
+            `SELECT b.*, u.phone_number, GROUP_CONCAT(l.nama SEPARATOR ', ') AS layanan_nama
+            FROM booking b
+            JOIN users u ON b.user_id = u.id
+            JOIN booking_layanan bl ON b.id = bl.booking_id
+            JOIN layanan l ON bl.layanan_id = l.id
+            WHERE b.id = ?
+            GROUP BY b.id`,
+            [id]
+        );
+        console.log(`Booking ${results.length ? 'found' : 'not found'}`);
+        return results[0];
+    } catch (err) {
+        console.error('Error fetching booking:', err);
+        throw err;
+    }
 };
 
 const updateBookingStatus = async (bookingNumber, status) => {
@@ -100,9 +125,29 @@ const updateBookingStatus = async (bookingNumber, status) => {
 };
 
 const deleteBooking = async (id) => {
-    const sql = 'DELETE FROM booking WHERE id = ?';
-    await db.promise().query(sql, [id]);
-    return true;
+    console.log('Attempting to delete booking:', id);
+    try {
+        await db.promise().beginTransaction();
+        
+        // Delete booking_layanan entries first (karena foreign key)
+        await db.promise().query('DELETE FROM booking_layanan WHERE booking_id = ?', [id]);
+        
+        // Then delete the booking
+        const [result] = await db.promise().query('DELETE FROM booking WHERE id = ?', [id]);
+        
+        if (result.affectedRows === 0) {
+            await db.promise().rollback();
+            throw new Error('Booking not found');
+        }
+
+        await db.promise().commit();
+        console.log('Booking deleted successfully');
+        return true;
+    } catch (err) {
+        console.error('Failed to delete booking:', err);
+        await db.promise().rollback();
+        throw err;
+    }
 };
 
 module.exports = {

@@ -35,19 +35,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Cron bawaan di app.js (opsional, bisa dipindah semua ke cronJobs.js)
-cron.schedule('0 0 * * *', async () => {
-  try {
-    const today = new Date().toISOString().split('T')[0];
-    await db.promise().query(`DELETE FROM booking WHERE tanggal < ?`, [today]);
-    console.log(`✅ [CRON] Booking sebelum ${today} dihapus`);
-  } catch (err) {
-    console.error("❌ [CRON] Gagal menghapus booking:", err.message);
-  }
-}, {
-  timezone: "Asia/Jakarta"
-});
-
 // Inisialisasi cron tambahan
 initCronJobs();
 
