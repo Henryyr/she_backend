@@ -1,4 +1,5 @@
 const TransaksiService = require('../services/transaksiService');
+const transactionReceiptTemplate = require('../html/transactionReceipt');
 
 class TransaksiController {
     async createTransaction(req, res) {
@@ -47,6 +48,30 @@ class TransaksiController {
         } catch (error) {
             console.error('[TransaksiController] getUserTransactions error:', error);
             res.status(500).json({ error: "Internal Server Error" });
+        }
+    }
+
+    async testQRCode(req, res) {
+        try {
+            console.log('[TransaksiController] testQRCode called');
+            const testData = {
+                booking_number: 'TEST-123',
+                paymentStatus: 'paid',
+                layanan_nama: 'Test Layanan',
+                tanggal: new Date(),
+                jam_mulai: '09:00',
+                jam_selesai: '10:00',
+                gross_amount: 100000,
+                total_harga: 100000,
+                newPaidAmount: 100000
+            };
+
+            const receipt = await transactionReceiptTemplate(testData);
+            console.log('[TransaksiController] Receipt HTML generated');
+            res.send(receipt);
+        } catch (error) {
+            console.error('[TransaksiController] Test QR Error:', error);
+            res.status(500).json({ error: error.message });
         }
     }
 }

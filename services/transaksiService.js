@@ -1,5 +1,7 @@
 const db = require('../db');
 const midtransClient = require('midtrans-client');
+const { sendEmail } = require('./emailService');
+const transactionReceiptTemplate = require('../html/transactionReceipt');
 
 const snap = new midtransClient.Snap({
     isProduction: false,
@@ -147,9 +149,17 @@ class TransaksiService {
 
             await conn.beginTransaction();
 
+            // Get transaction with user email and booking details
             const [transaksiResult] = await conn.query(
-                `SELECT id, booking_id, total_harga, paid_amount, dp_amount, payment_status 
-                 FROM transaksi WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
+                `SELECT t.*, u.email, b.tanggal, b.jam_mulai, b.jam_selesai, 
+                 GROUP_CONCAT(l.nama SEPARATOR ', ') as layanan_nama
+                 FROM transaksi t
+                 JOIN users u ON t.user_id = u.id
+                 JOIN booking b ON t.booking_id = b.id
+                 JOIN booking_layanan bl ON b.id = bl.booking_id
+                 JOIN layanan l ON bl.layanan_id = l.id
+                 WHERE t.midtrans_order_id = ? OR t.pelunasan_order_id = ?
+                 GROUP BY t.id`,
                 [order_id, order_id]
             );
 
@@ -184,6 +194,30 @@ class TransaksiService {
                         [transaksi.booking_id]
                     );
                 }
+
+                // Send email receipt
+                const emailSubject = paymentStatus === 'paid' ? 
+                    'Pembayaran Berhasil - Booking Salon' : 
+                    'Pembayaran DP Berhasil - Booking Salon';
+
+                const emailHtml = await transactionReceiptTemplate({
+                    booking_number: transaksi.booking_number,
+                    paymentStatus,
+                    layanan_nama: transaksi.layanan_nama,
+                    tanggal: transaksi.tanggal,
+                    jam_mulai: transaksi.jam_mulai,
+                    jam_selesai: transaksi.jam_selesai,
+                    gross_amount,
+                    total_harga: transaksi.total_harga,
+                    newPaidAmount
+                });
+
+                await sendEmail(
+                    transaksi.email,
+                    emailSubject,
+                    'Pembayaran anda telah berhasil',
+                    emailHtml
+                );
             } else if (transaction_status === "expire" || transaction_status === "cancel" || transaction_status === "deny") {
                 await conn.query(
                     `DELETE FROM transaksi WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`, 

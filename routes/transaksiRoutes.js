@@ -12,4 +12,7 @@ router.get('/webhook', (_req, res) => {
 router.post('/lunasi', authenticate, TransaksiController.payRemaining);
 router.get('/', authenticate, TransaksiController.getUserTransactions);
 
+// Add test endpoint - no auth needed for testing
+router.get('/test-receipt', TransaksiController.testQRCode);
+
 module.exports = router;
