@@ -21,6 +21,7 @@ class TransaksiService {
         try {
             await conn.beginTransaction();
 
+            // Check booking status
             const [bookingResult] = await conn.query(
                 `SELECT id, total_harga, status FROM booking WHERE id = ?`, 
                 [booking_id]
@@ -36,7 +37,33 @@ class TransaksiService {
                 throw { status: 400, message: "Booking sudah dibayar" };
             }
 
-            const order_id = `BKG-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(booking_id).padStart(3, '0')}`;
+            // Check existing transaction with more specific conditions
+            const [existingTransaction] = await conn.query(
+                `SELECT id, payment_status, status, dp_amount 
+                 FROM transaksi 
+                 WHERE booking_id = ? 
+                 AND status NOT IN ('failed', 'expire', 'cancel')`,
+                [booking_id]
+            );
+
+            // Validate transaction state
+            if (existingTransaction.length > 0) {
+                const existing = existingTransaction[0];
+                
+                if (existing.payment_status === 'paid') {
+                    throw { status: 400, message: "Booking ini sudah dibayar penuh" };
+                }
+                
+                if (is_dp && existing.dp_amount > 0) {
+                    throw { status: 400, message: "DP untuk booking ini sudah dibuat" };
+                }
+                
+                if (!is_dp && existing.payment_status === 'DP') {
+                    throw { status: 400, message: "Silakan gunakan menu pelunasan untuk pembayaran penuh" };
+                }
+            }
+
+            const order_id = `BKG-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(booking_id).padStart(3, '0')}-${Math.random().toString(36).substr(2, 5)}`;
             const booking_number = order_id;
             const dp_amount = is_dp ? Math.round(total_harga * 0.3) : 0;
             const amountToPay = is_dp ? dp_amount : total_harga;
@@ -84,7 +111,27 @@ class TransaksiService {
         } catch (err) {
             console.error('[TransaksiService] createTransaction error:', err);
             await conn.rollback();
-            throw err;
+            
+            // Format Midtrans specific errors
+            if (err.ApiResponse && err.ApiResponse.error_messages) {
+                throw {
+                    status: 400,
+                    message: "Gagal membuat transaksi",
+                    details: err.ApiResponse.error_messages
+                };
+            }
+            
+            // Re-throw known errors
+            if (err.status) {
+                throw err;
+            }
+
+            // Handle unexpected errors
+            throw {
+                status: 500,
+                message: "Terjadi kesalahan saat membuat transaksi",
+                details: process.env.NODE_ENV === 'development' ? err.message : undefined
+            };
         }
     }
 
