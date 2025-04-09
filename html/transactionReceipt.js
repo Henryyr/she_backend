@@ -118,9 +118,9 @@ const transactionReceiptTemplate = async (data) => {
         <body>
             <div class="receipt">
                 <div class="header">
-                    <div class="logo">SALON KECANTIKAN</div>
-                    <div>Jl. Contoh No. 123, Jakarta</div>
-                    <div>Telp: (021) 123-4567</div>
+                    <div class="logo">SHE SALON</div>
+                    <div>Jl. Taman Giri Perum Griya Nugraha Blok B13</div>
+                    <div>Telp: 089675694072</div>
                 </div>
 
                 <div class="details">
