@@ -10,6 +10,16 @@ const snap = new midtransClient.Snap({
     clientKey: process.env.MIDTRANS_CLIENT_KEY
 });
 
+// Helper function untuk get frontend URL
+const getFrontendURL = () => {
+    // Prioritaskan environment variable
+    if (process.env.FRONTEND_URL) {
+        return process.env.FRONTEND_URL;
+    }
+    // Fallback ke localhost jika tidak ada
+    return 'http://localhost:3000';
+};
+
 // ✅ Buat Transaksi Baru
 router.post('/', authenticate, async (req, res) => {
     const { booking_id, kategori_transaksi_id, is_dp } = req.body; // Gunakan is_dp untuk menentukan apakah DP atau full payment
@@ -60,7 +70,12 @@ router.post('/', authenticate, async (req, res) => {
                     category: "Perawatan"
                 }
             ],
-            customer_details: { user_id: user_id }
+            customer_details: { user_id: user_id },
+            callbacks: {
+                finish: `${getFrontendURL()}/`,
+                error: `${getFrontendURL()}/`,
+                pending: `${getFrontendURL()}/`
+            }
         };
 
         const snapResponse = await snap.createTransaction(parameter);
@@ -231,7 +246,12 @@ router.post('/lunasi', authenticate, async (req, res) => {
                     category: "Perawatan"
                 }
             ],
-            customer_details: { user_id: req.user.id }
+            customer_details: { user_id: req.user.id },
+            callbacks: {
+                finish: `${getFrontendURL()}/payment/result`,
+                error: `${getFrontendURL()}/payment/error`,
+                pending: `${getFrontendURL()}/payment/pending`
+            }
         });
 
         // Update transaksi dengan order_id pelunasan
