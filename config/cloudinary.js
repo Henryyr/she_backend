@@ -1,5 +1,6 @@
 const { v2: cloudinary } = require('cloudinary');
 
+// Configure Cloudinary
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -16,13 +17,17 @@ const uploadOptions = {
     ]
 };
 
-// Test connection
-cloudinary.api.ping((error, result) => {
-    if (error) {
-        console.error('Cloudinary connection failed:', error);
-    } else {
-        console.log('Cloudinary connection successful:', result);
+// Initialize Cloudinary connection
+const initCloudinary = async () => {
+    try {
+        await cloudinary.api.ping();
+        console.log('✅ Connected to Cloudinary');
+    } catch (error) {
+        console.log('⚠️ Cloudinary connection not available');
     }
-});
+};
+
+// Call initialization without waiting
+initCloudinary().catch(() => {});
 
 module.exports = { cloudinary, uploadOptions };

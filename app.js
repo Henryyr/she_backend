@@ -6,22 +6,17 @@ const helmet = require('helmet');
 const bodyParser = require('body-parser');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
-const cron = require('node-cron');
-const db = require('./db');
-const { initCronJobs } = require('./utils/cronJobs');
-const fs = require('fs');
-const path = require('path');
+const compression = require('compression');
+require('./config/cloudinary');
 
 const app = express();
 
-// Trust proxy jika pakai reverse proxy (nginx, vercel, dll)
-app.set('trust proxy', 1);
-
 // Middlewares
+app.set('trust proxy', 1);
+app.use(compression());
 app.use(cors());
 app.use(helmet());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(morgan('combined'));
 
@@ -32,14 +27,17 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Logging request manual
+// Performance monitoring middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
-  next();
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        if (duration > 1000) {
+            console.warn(`Slow request: ${req.method} ${req.url} took ${duration}ms`);
+        }
+    });
+    next();
 });
-
-// Inisialisasi cron tambahan
-initCronJobs();
 
 // ROUTES
 app.use('/api/booking', require('./routes/bookingRoutes'));
@@ -52,10 +50,16 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/testimoni', require('./routes/testimoniRoutes'));
 app.use('/api/transaksikategori', require('./routes/transaksikategoriRoutes'));
 
-// Error handler global
+// Error handler
 app.use((err, _req, res, _next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+    console.error('Error:', {
+        message: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+        timestamp: new Date().toISOString()
+    });
+    res.status(err.status || 500).json({
+        error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
+    });
 });
 
 module.exports = app;

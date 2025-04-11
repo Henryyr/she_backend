@@ -1,15 +1,26 @@
 // services/emailService.js
 const nodemailer = require('nodemailer');
+require('dotenv').config();
 
-// Email transporter setup - kept exactly as in original code
+// Email transporter setup - updated to use environment variables and disable debug output
 const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-        user: "henry.360420@gmail.com",
-        pass: "tklsvkimuouusprw",
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
     },
-    logger: true,
-    debug: true,
+    silent: true, 
+    logger: false,  // Disable logging
+    debug: false    // Disable debug output
+});
+
+// Test connection and show status
+transporter.verify((error) => {
+    if (error) {
+        console.log('⚠️ Email service not available');
+    } else {
+        console.log('✅ Email service is ready');
+    }
 });
 
 // Function to send email - keeping the original function signature
@@ -18,7 +29,7 @@ const sendEmail = async (_to, _subject, _text, _html) => {
         if (!_to) throw new Error("Email tujuan kosong!");
 
         const mailOptions = {
-            from: "henry.360420@gmail.com",
+            from: process.env.EMAIL_USER,
             to: _to,
             subject: _subject,
             text: _text,

@@ -11,22 +11,20 @@ const dbConfig = {
     connectTimeout: 10000
 };
 
-let db;
+const pool = mysql.createPool(dbConfig).promise();
 
-const connectWithRetry = () => {
-    db = mysql.createConnection(dbConfig);
-
-    db.connect(err => {
-        if (err) {
-            console.error('❌ Database connection failed:', err);
-            console.log('🔄 Retrying connection in 5 seconds...');
-            setTimeout(connectWithRetry, 5000); // Coba ulang setelah 5 detik
-        } else {
-            console.log(`✅ Connected to ${process.env.DB_NAME} database`);
-        }
-    });
+// Test connection method
+const connect = async () => {
+    try {
+        await pool.query('SELECT 1');
+        console.log(`✅ Connected to ${process.env.DB_NAME} database`);
+    } catch (err) {
+        console.error('❌ Database connection failed:', err);
+        throw err;
+    }
 };
 
-connectWithRetry();
-
-module.exports = db;
+module.exports = {
+    pool,
+    connect
+};
