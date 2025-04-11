@@ -125,6 +125,21 @@ const deleteBooking = async (req, res) => {
     }
 };
 
+const completeBooking = async (req, res) => {
+    const { bookingNumber } = req.params;
+    
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: "Hanya admin yang dapat menyelesaikan booking" });
+        }
+
+        await bookingService.completeBooking(bookingNumber);
+        res.json({ message: 'Treatment selesai' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 module.exports = {
     createBooking,
     getAllBookings,
@@ -132,5 +147,6 @@ module.exports = {
     sendTestEmail,
     confirmBooking,
     cancelBooking,
-    deleteBooking
+    deleteBooking,
+    completeBooking
 };

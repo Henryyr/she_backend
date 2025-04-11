@@ -9,6 +9,8 @@ const morgan = require('morgan');
 const cron = require('node-cron');
 const db = require('./db');
 const { initCronJobs } = require('./utils/cronJobs');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 
@@ -19,6 +21,7 @@ app.set('trust proxy', 1);
 app.use(cors());
 app.use(helmet());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(morgan('combined'));
 

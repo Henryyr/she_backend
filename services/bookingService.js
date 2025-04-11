@@ -124,6 +124,21 @@ const updateBookingStatus = async (bookingNumber, status) => {
     return true;
 };
 
+const completeBooking = async (bookingNumber) => {
+    const sql = `
+        UPDATE booking 
+        SET 
+            status = 'completed',
+            completed_at = NOW()
+        WHERE booking_number = ?`;
+    
+    const [result] = await db.promise().query(sql, [bookingNumber]);
+    if (result.affectedRows === 0) {
+        throw new Error('Booking tidak ditemukan');
+    }
+    return true;
+};
+
 const deleteBooking = async (id) => {
     console.log('Attempting to delete booking:', id);
     try {
@@ -155,5 +170,6 @@ module.exports = {
     getAllBookings,
     getBookingById,
     updateBookingStatus,
-    deleteBooking
+    deleteBooking,
+    completeBooking
 };
