@@ -6,6 +6,12 @@ const redis = require('redis');
 const client = redis.createClient();
 
 const createBooking = async (req, res) => {
+    console.log('[BookingController] Received booking request:', {
+        body: req.body,
+        user: req.user?.id,
+        ip: req.ip
+    });
+
     const bookingData = {
         user_id: req.user.id,          // Ambil dari auth middleware
         layanan_id: req.body.layanan_id,
@@ -20,7 +26,8 @@ const createBooking = async (req, res) => {
         const result = await bookingService.createBooking(bookingData);
         res.json(result);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        const statusCode = err.statusCode || 500;
+        res.status(statusCode).json({ error: err.message });
     }
 };
 

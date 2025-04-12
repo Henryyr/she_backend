@@ -5,6 +5,25 @@ const bookingController = require('../controllers/bookingController');
 const { authenticate } = require('../middleware/auth');
 const { bookingLimiter } = require('../utils/rateLimiter');
 
+// Add request logging middleware
+router.use((req, res, next) => {
+    console.log('[BookingRoutes] Incoming request:', {
+        method: req.method,
+        path: req.path,
+        ip: req.ip,
+        timestamp: new Date().toISOString()
+    });
+    next();
+});
+
+// Add error handler for rate limiter
+router.use((err, req, res, next) => {
+    if (err instanceof Error && err.statusCode === 429) {
+        return res.status(429).json({ error: err.message });
+    }
+    next(err);
+});
+
 // Booking routes
 router.post('/', authenticate, bookingLimiter, bookingController.createBooking);
 router.get('/', authenticate, bookingController.getAllBookings);

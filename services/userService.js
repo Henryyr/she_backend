@@ -1,8 +1,8 @@
-const db = require('../db');
+const { pool } = require('../db');
 
 class UserService {
     async getAllUsers() {
-        const [results] = await db.promise().query('SELECT * FROM users');
+        const [results] = await pool.query('SELECT * FROM users');
         return results;
     }
 }

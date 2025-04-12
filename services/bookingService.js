@@ -2,9 +2,11 @@ const { pool } = require('../db');
 const bookingValidationHelper = require('../helpers/bookingValidationHelper');
 const { updateHairColorStock, updateSmoothingStock, updateKeratinStock } = require('./stockService');
 const { DEFAULT_PRODUCTS } = require('../config/product');
+const bookingHelper = require('../helpers/bookingHelper');
 
 const createBooking = async (data) => {
-    const { user_id, layanan_id, tanggal, jam_mulai, hair_color, smoothing_product, keratin_product } = data;
+    const { user_id, layanan_id, tanggal, jam_mulai, hair_color } = data;
+    let { smoothing_product, keratin_product } = data; // Change to let
 
     const connection = await pool.getConnection();
     console.log('Starting booking process...', { user_id, layanan_id, tanggal, jam_mulai });
@@ -48,6 +50,11 @@ const createBooking = async (data) => {
         const categories = layananWithCategory.map(l => l.kategori_nama);
         console.log('Categories to book:', categories);
 
+        // Validate required products first
+        if (categories.includes('Cat Rambut') && !hair_color) {
+            throw new Error('Layanan Cat Rambut membutuhkan pemilihan warna');
+        }
+
         // Validate category combinations
         if (bookingValidationHelper.isIncompatibleCombo(categories)) {
             throw new Error('Kombinasi layanan yang dipilih tidak diperbolehkan');
@@ -67,6 +74,18 @@ const createBooking = async (data) => {
         let total_harga = layananWithCategory.reduce((sum, l) => sum + parseFloat(l.harga), 0);
         let product_detail = {};
 
+        // Set default smoothing product if needed
+        if (categories.includes('Smoothing') && !smoothing_product) {
+            console.log('Using default smoothing product');
+            smoothing_product = { ...DEFAULT_PRODUCTS.smoothing };
+        }
+
+        // Set default keratin product if needed
+        if (categories.includes('Keratin') && !keratin_product) {
+            console.log('Using default keratin product');
+            keratin_product = { ...DEFAULT_PRODUCTS.keratin };
+        }
+
         if (categories.includes('Smoothing') && !smoothing_product) {
             console.log('Using default smoothing product');
             const [defaultProduct] = await connection.query(`
@@ -78,7 +97,7 @@ const createBooking = async (data) => {
             );
 
             if (defaultProduct.length > 0) {
-                smoothing_product = DEFAULT_PRODUCTS.smoothing;
+                smoothing_product = { ...DEFAULT_PRODUCTS.smoothing };  // Create new object
                 product_detail.smoothing = {
                     nama: defaultProduct[0].nama,
                     jenis: defaultProduct[0].jenis,
@@ -249,6 +268,163 @@ const createBooking = async (data) => {
     } finally {
         connection.release();
         console.log('Connection released');
+    }
+};
+
+const getAllBookings = async () => {
+    const connection = await pool.getConnection();
+    try {
+        const [bookings] = await connection.query(
+            `SELECT 
+                b.*,
+                GROUP_CONCAT(l.nama) as layanan_names
+             FROM booking b
+             LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
+             LEFT JOIN layanan l ON bl.layanan_id = l.id
+             GROUP BY b.id
+             ORDER BY b.created_at DESC`
+        );
+        return bookings;
+    } catch (error) {
+        throw new Error(`Error getting all bookings: ${error.message}`);
+    } finally {
+        connection.release();
+    }
+};
+
+const getBookingById = async (id) => {
+    const connection = await pool.getConnection();
+    try {
+        const [booking] = await connection.query(
+            `SELECT 
+                b.*, 
+                GROUP_CONCAT(l.nama) as layanan_names,
+                GROUP_CONCAT(l.id) as layanan_ids
+             FROM booking b
+             LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
+             LEFT JOIN layanan l ON bl.layanan_id = l.id
+             WHERE b.id = ?
+             GROUP BY b.id`,
+            [id]
+        );
+
+        if (!booking[0]) {
+            throw new Error('Booking tidak ditemukan');
+        }
+
+        return booking[0];
+    } catch (error) {
+        throw new Error(`Error getting booking: ${error.message}`);
+    } finally {
+        connection.release();
+    }
+};
+
+const updateBookingStatus = async (id, status) => {
+    const connection = await pool.getConnection();
+    try {
+        const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+        if (!validStatuses.includes(status)) {
+            throw new Error('Status tidak valid');
+        }
+
+        const [result] = await connection.query(
+            'UPDATE booking SET status = ? WHERE id = ?',
+            [status, id]
+        );
+
+        if (result.affectedRows === 0) {
+            throw new Error('Booking tidak ditemukan');
+        }
+
+        return { message: 'Status booking berhasil diperbarui' };
+    } catch (error) {
+        throw new Error(`Error updating booking status: ${error.message}`);
+    } finally {
+        connection.release();
+    }
+};
+
+const deleteBooking = async (id) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Check if booking exists and get its status
+        const [booking] = await connection.query(
+            'SELECT status FROM booking WHERE id = ?',
+            [id]
+        );
+
+        if (!booking[0]) {
+            throw new Error('Booking tidak ditemukan');
+        }
+
+        if (booking[0].status === 'completed') {
+            throw new Error('Tidak dapat menghapus booking yang sudah selesai');
+        }
+
+        // Delete related records first (foreign key constraints)
+        await connection.query('DELETE FROM booking_layanan WHERE booking_id = ?', [id]);
+        await connection.query('DELETE FROM booking_colors WHERE booking_id = ?', [id]);
+        
+        // Delete the main booking record
+        const [result] = await connection.query('DELETE FROM booking WHERE id = ?', [id]);
+
+        await connection.commit();
+        return { message: 'Booking berhasil dihapus' };
+
+    } catch (error) {
+        await connection.rollback();
+        throw new Error(`Error deleting booking: ${error.message}`);
+    } finally {
+        connection.release();
+    }
+};
+
+const completeBooking = async (id) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Check if booking exists and its current status
+        const [booking] = await connection.query(
+            'SELECT status FROM booking WHERE id = ? FOR UPDATE',
+            [id]
+        );
+
+        if (!booking[0]) {
+            throw new Error('Booking tidak ditemukan');
+        }
+
+        if (booking[0].status === 'completed') {
+            throw new Error('Booking sudah selesai');
+        }
+
+        if (booking[0].status === 'cancelled') {
+            throw new Error('Tidak dapat menyelesaikan booking yang sudah dibatalkan');
+        }
+
+        // Update booking status to completed
+        const [result] = await connection.query(
+            `UPDATE booking 
+             SET status = 'completed', 
+                 completed_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [id]
+        );
+
+        await connection.commit();
+        return { 
+            message: 'Booking berhasil diselesaikan',
+            booking_id: id
+        };
+
+    } catch (error) {
+        await connection.rollback();
+        throw new Error(`Error completing booking: ${error.message}`);
+    } finally {
+        connection.release();
     }
 };
 
