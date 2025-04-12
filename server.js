@@ -20,6 +20,10 @@ async function startServer() {
         server = app.listen(PORT, () => {
             console.log(`🚀 Server running on http://localhost:${PORT}`);
         });
+        
+        // Add timeout handling
+        server.timeout = 30000; // 30 seconds timeout
+        
     } catch (error) {
         console.error('❌ Failed to start server:', error);
         process.exit(1);

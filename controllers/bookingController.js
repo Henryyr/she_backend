@@ -1,9 +1,5 @@
 const bookingService = require('../services/bookingService');
 const emailService = require('../services/emailService');
-const redis = require('redis');
-
-// Redis client setup
-const client = redis.createClient();
 
 const createBooking = async (req, res) => {
     console.log('[BookingController] Received booking request:', {
@@ -43,25 +39,19 @@ const getAllBookings = async (req, res) => {
 };
 
 const getBookingById = async (req, res) => {
-    const { id } = req.params;
-    
-    client.get(`booking:${id}`, async (err, data) => {
-        if (data) {
-            return res.json(JSON.parse(data));
-        } else {
-            try {
-                const booking = await bookingService.getBookingById(id);
-                if (booking) {
-                    client.setex(`booking:${id}`, 3600, JSON.stringify(booking)); // Cache for 1 hour
-                    res.json(booking);
-                } else {
-                    res.status(404).json({ error: "Booking tidak ditemukan" });
-                }
-            } catch (err) {
-                res.status(500).json({ error: err.message });
-            }
+    try {
+        const booking = await bookingService.getBookingById(req.params.id);
+        if (!booking) {
+            return res.status(404).json({ message: 'Booking not found' });
         }
-    });
+        res.json(booking);
+    } catch (error) {
+        console.error('Failed to get booking:', error);
+        res.status(500).json({ 
+            message: 'Error retrieving booking',
+            error: error.message 
+        });
+    }
 };
 
 const sendTestEmail = async (req, res) => {
