@@ -1,70 +1,21 @@
-// services/bookingService.js
-const db = require('../db');
-const bookingHelper = require('../helpers/bookingHelper');
-
-// Update konstanta kategori
-const KATEGORI_BUTUH_PRODUK = ['Cat Rambut']; 
-const KATEGORI_OPTIONAL_PRODUK = ['Smoothing', 'Keratin']; 
-const KATEGORI_TIDAK_PILIH_PRODUK = ['Make Up', 'Facial']; 
-
-// Tambahkan konstanta untuk default products
-const DEFAULT_PRODUCTS = {
-    smoothing: {
-        brand_id: 1,          // Matrix (default brand)
-        product_id: 1,        // Matrix Opti Normal (default product)
-    },
-    keratin: {
-        brand_id: 1,          // Matrix
-        product_id: 1,        // Matrix Keratin Regular
-    }
-};
-
-// Helper functions untuk update stok
-const updateHairColorStock = async (connection, hair_color) => {
-    console.log('Updating hair color stock:', hair_color);
-    const [result] = await connection.query(
-        'UPDATE hair_colors SET stok = stok - 1 WHERE id = ? AND stok > 0',
-        [hair_color.color_id]
-    );
-    if (result.affectedRows === 0) {
-        console.error('Stock update failed:', { hair_color, result });
-        throw new Error('Stok warna rambut tidak mencukupi');
-    }
-    console.log('Stock updated successfully');
-};
-
-const updateSmoothingStock = async (connection, smoothing_product) => {
-    const [result] = await connection.query(
-        'UPDATE smoothing_products SET stok = stok - 1 WHERE id = ? AND brand_id = ? AND stok > 0',
-        [smoothing_product.product_id, smoothing_product.brand_id]
-    );
-    if (result.affectedRows === 0) {
-        throw new Error('Stok produk smoothing tidak mencukupi');
-    }
-};
-
-const updateKeratinStock = async (connection, keratin_product) => {
-    const [result] = await connection.query(
-        'UPDATE keratin_products SET stok = stok - 1 WHERE id = ? AND brand_id = ? AND stok > 0',
-        [keratin_product.product_id, keratin_product.brand_id]
-    );
-    if (result.affectedRows === 0) {
-        throw new Error('Stok produk keratin tidak mencukupi');
-    }
-};
+const { pool } = require('../db');
+const bookingValidationHelper = require('../helpers/bookingValidationHelper');
+const { updateHairColorStock, updateSmoothingStock, updateKeratinStock } = require('./stockService');
+const { DEFAULT_PRODUCTS } = require('../config/product');
 
 const createBooking = async (data) => {
     const { user_id, layanan_id, tanggal, jam_mulai, hair_color, smoothing_product, keratin_product } = data;
-    const connection = await db.pool.getConnection();
+
+    const connection = await pool.getConnection();
     console.log('Starting booking process...', { user_id, layanan_id, tanggal, jam_mulai });
 
-    let layananWithCategory = null; // Definisikan di luar try block
+    let layananWithCategory = null;
 
     try {
         await connection.beginTransaction();
         console.log('Transaction started');
 
-        // Validasi booking yang sudah ada
+        // Validate if booking already exists
         const [existingBookings] = await connection.query(
             `SELECT id FROM booking WHERE user_id = ? AND tanggal = ? FOR UPDATE`,
             [user_id, tanggal]
@@ -75,7 +26,7 @@ const createBooking = async (data) => {
             throw new Error("Anda sudah memiliki booking pada hari ini");
         }
 
-        // Get semua layanan dengan kategorinya
+        // Get service details with categories
         console.log('Fetching layanan details...');
         const [layananResults] = await connection.query(
             `SELECT l.*, lk.nama as kategori_nama 
@@ -84,9 +35,8 @@ const createBooking = async (data) => {
              WHERE l.id IN (?)`, 
             [layanan_id]
         );
-        layananWithCategory = layananResults; // Assign hasil query
+        layananWithCategory = layananResults;
 
-        // Validasi jumlah layanan yang ditemukan
         if (layananWithCategory.length === 0) {
             throw new Error("Layanan tidak ditemukan");
         }
@@ -94,87 +44,29 @@ const createBooking = async (data) => {
             throw new Error("Beberapa layanan tidak valid");
         }
 
-        // Cek kategori yang ada
+        // Extract categories
         const categories = layananWithCategory.map(l => l.kategori_nama);
         console.log('Categories to book:', categories);
 
-        // Validasi khusus untuk kombinasi Cat Rambut dan Smoothing
-        if (categories.includes('Cat Rambut') && categories.includes('Smoothing')) {
-            if (!hair_color) {
-                throw new Error("Harus memilih warna rambut untuk layanan cat rambut");
-            }
-            // smoothing_product opsional
-        }
-        // Jika hanya Cat Rambut
-        else if (categories.includes('Cat Rambut')) {
-            if (!hair_color) {
-                throw new Error("Harus memilih warna rambut untuk layanan cat rambut");
-            }
-        }
-        // Jika hanya Smoothing
-        else if (categories.includes('Smoothing')) {
-            // smoothing_product opsional
+        // Validate category combinations
+        if (bookingValidationHelper.isIncompatibleCombo(categories)) {
+            throw new Error('Kombinasi layanan yang dipilih tidak diperbolehkan');
         }
 
-        console.log('Validated service combinations:', categories);
-
-        // Validasi produk smoothing jika ada
-        if (categories.includes('Smoothing') && smoothing_product) {
-            if (!smoothing_product) {
-                console.log('Smoothing without product (using salon default product)');
-            }
-        }
-
-        // Validasi produk keratin jika ada
-        if (categories.includes('Keratin') && keratin_product) {
-            if (!keratin_product) {
-                console.log('Keratin without product (using salon default product)');
-            }
-        }
-
-        // Validasi produk untuk kategori yang tidak perlu produk
-        const hasUnnecessaryProduct = categories.some(cat => 
-            KATEGORI_TIDAK_PILIH_PRODUK.includes(cat)
-        );
-
-        if (hasUnnecessaryProduct && (hair_color || smoothing_product || keratin_product)) {
-            throw new Error("Beberapa layanan yang dipilih tidak memerlukan produk tambahan");
-        }
-
-        // Cek kategori yang duplikat (tetap dilarang)
-        const uniqueCategories = [...new Set(categories)];
-        
-        if (categories.length !== uniqueCategories.length) {
-            console.error('Duplicate categories detected:', categories);
+        if (bookingValidationHelper.hasDuplicateCategory(categories)) {
             throw new Error("Tidak bisa booking layanan dari kategori yang sama sekaligus. Silakan booking terpisah.");
         }
 
-        // Tapi kombinasi kategori berbeda diperbolehkan
-        console.log('Valid service categories:', uniqueCategories);
-
-        // Cek kombinasi kategori yang tidak diperbolehkan
-        const hasIncompatibleServices = (categories) => {
-            // Hanya kombinasi yang benar-benar tidak boleh
-            const incompatiblePairs = [
-                ['Smoothing', 'Keratin']  // Hapus validasi Cat Rambut
-            ];
-
-            return incompatiblePairs.some(([cat1, cat2]) => 
-                categories.includes(cat1) && categories.includes(cat2)
-            );
-        };
-
-        if (hasIncompatibleServices(categories)) {
-            throw new Error("Kombinasi layanan yang dipilih tidak diperbolehkan");
+        if (bookingValidationHelper.isProductUnnecessary(categories, hair_color, smoothing_product, keratin_product)) {
+            throw new Error("Beberapa layanan yang dipilih tidak memerlukan produk tambahan");
         }
 
-        console.log('Validated service categories:', uniqueCategories);
+        console.log('Valid service categories:', categories);
 
-        if (layananWithCategory.length === 0) {
-            throw new Error("Layanan tidak ditemukan");
-        }
+        // Use default products if necessary
+        let total_harga = layananWithCategory.reduce((sum, l) => sum + parseFloat(l.harga), 0);
+        let product_detail = {};
 
-        // Jika ada layanan smoothing tapi tidak ada product yang dipilih, gunakan default
         if (categories.includes('Smoothing') && !smoothing_product) {
             console.log('Using default smoothing product');
             const [defaultProduct] = await connection.query(`
@@ -198,30 +90,7 @@ const createBooking = async (data) => {
             }
         }
 
-        // Jika ada layanan keratin tapi tidak ada product yang dipilih, gunakan default
-        if (categories.includes('Keratin') && !keratin_product) {
-            console.log('Using default keratin product');
-            const [defaultProduct] = await connection.query(`
-                SELECT kp.*, pb.nama as brand_nama
-                FROM keratin_products kp
-                JOIN product_brands pb ON kp.brand_id = pb.id
-                WHERE kp.id = ? AND kp.brand_id = ?`,
-                [DEFAULT_PRODUCTS.keratin.product_id, DEFAULT_PRODUCTS.keratin.brand_id]
-            );
-
-            if (defaultProduct.length > 0) {
-                keratin_product = DEFAULT_PRODUCTS.keratin;
-                product_detail.keratin = {
-                    nama: defaultProduct[0].nama,
-                    jenis: defaultProduct[0].jenis,
-                    brand: defaultProduct[0].brand_nama,
-                    harga: defaultProduct[0].harga
-                };
-                total_harga += parseFloat(defaultProduct[0].harga);
-            }
-        }
-
-        // Update stok sesuai kategori
+        // Update stock for products
         if (hair_color) {
             console.log('Processing hair color:', hair_color);
             await updateHairColorStock(connection, hair_color);
@@ -236,10 +105,7 @@ const createBooking = async (data) => {
             await updateKeratinStock(connection, keratin_product);
         }
 
-        // Hitung total harga
-        let total_harga = layananWithCategory.reduce((sum, l) => sum + parseFloat(l.harga), 0);
-        
-        // Tambah harga produk jika ada
+        // Additional price calculations for selected products
         if (hair_color) {
             const [colorResult] = await connection.query(
                 `SELECT hc.*, hp.harga_dasar 
@@ -273,13 +139,13 @@ const createBooking = async (data) => {
 
         const bookingNumber = await bookingHelper.generateBookingNumber();
 
-        // Hitung jam selesai berdasarkan estimasi waktu layanan
+        // Calculate estimated end time
         const total_estimasi = layananWithCategory.reduce((sum, l) => sum + l.estimasi_waktu, 0);
         const jam_selesai = new Date(`${tanggal} ${jam_mulai}`);
         jam_selesai.setMinutes(jam_selesai.getMinutes() + total_estimasi);
         const jam_selesai_string = jam_selesai.toTimeString().split(' ')[0];
         
-        // Insert booking dengan jam_selesai
+        // Insert booking and service relations
         const [insertResult] = await connection.query(
             `INSERT INTO booking (
                 user_id, tanggal, jam_mulai, jam_selesai, 
@@ -290,13 +156,13 @@ const createBooking = async (data) => {
 
         const booking_id = insertResult.insertId;
 
-        // Insert relasi booking_layanan
+        // Insert layanan
         await connection.query(
             `INSERT INTO booking_layanan (booking_id, layanan_id) VALUES ?`,
             [layanan_id.map(id => [booking_id, id])]
         );
 
-        // Insert produk yang dipilih ke tabel relasi yang sesuai
+        // Insert selected products
         if (hair_color) {
             await connection.query(
                 `INSERT INTO booking_colors (booking_id, color_id, brand_id, harga_saat_booking)
@@ -305,9 +171,7 @@ const createBooking = async (data) => {
             );
         }
 
-        // Get detail produk yang dipilih
-        let product_detail = {};
-        
+        // Get product details
         if (hair_color) {
             const [colorDetail] = await connection.query(`
                 SELECT 
@@ -388,124 +252,7 @@ const createBooking = async (data) => {
     }
 };
 
-const getAllBookings = async (page, limit) => {
-    const connection = await db.pool.getConnection();
-    console.log(`Fetching bookings (page: ${page}, limit: ${limit})`);
-    try {
-        const [results] = await connection.query(
-            `SELECT b.*, u.phone_number, GROUP_CONCAT(l.nama SEPARATOR ', ') AS layanan_nama
-            FROM booking b
-            JOIN users u ON b.user_id = u.id
-            JOIN booking_layanan bl ON b.id = bl.booking_id
-            JOIN layanan l ON bl.layanan_id = l.id
-            GROUP BY b.id
-            LIMIT ? OFFSET ?`,
-            [parseInt(limit), (page - 1) * limit]
-        );
-        console.log(`Found ${results.length} bookings`);
-        return results;
-    } catch (err) {
-        console.error('Error fetching bookings:', err);
-        throw err;
-    } finally {
-        connection.release();
-    }
-};
-
-const getBookingById = async (id) => {
-    const connection = await db.pool.getConnection();
-    console.log('Fetching booking details for ID:', id);
-    try {
-        const [results] = await connection.query(
-            `SELECT b.*, u.phone_number, GROUP_CONCAT(l.nama SEPARATOR ', ') AS layanan_nama
-            FROM booking b
-            JOIN users u ON b.user_id = u.id
-            JOIN booking_layanan bl ON b.id = bl.booking_id
-            JOIN layanan l ON bl.layanan_id = l.id
-            WHERE b.id = ?
-            GROUP BY b.id`,
-            [id]
-        );
-        console.log(`Booking ${results.length ? 'found' : 'not found'}`);
-        return results[0];
-    } catch (err) {
-        console.error('Error fetching booking:', err);
-        throw err;
-    } finally {
-        connection.release();
-    }
-};
-
-const updateBookingStatus = async (bookingNumber, status) => {
-    const connection = await db.pool.getConnection();
-    try {
-        const sql = 'UPDATE booking SET status = ? WHERE booking_number = ?';
-        await connection.query(sql, [status, bookingNumber]);
-        return true;
-    } finally {
-        connection.release();
-    }
-};
-
-const completeBooking = async (bookingNumber) => {
-    const connection = await db.pool.getConnection();
-    try {
-        const sql = `
-            UPDATE booking 
-            SET 
-                status = 'completed',
-                completed_at = NOW()
-            WHERE booking_number = ?`;
-        
-        const [result] = await connection.query(sql, [bookingNumber]);
-        if (result.affectedRows === 0) {
-            throw new Error('Booking tidak ditemukan');
-        }
-        return true;
-    } finally {
-        connection.release();
-    }
-};
-
-const deleteBooking = async (id) => {
-    const connection = await db.pool.getConnection();
-    console.log('Attempting to delete booking:', id);
-    try {
-        await connection.beginTransaction();
-
-        // Delete related testimonials first
-        await connection.query('DELETE FROM testimoni WHERE booking_id = ?', [id]);
-
-        // Delete related transactions
-        await connection.query('DELETE FROM transaksi WHERE booking_id = ?', [id]);
-
-        // Delete booking_layanan entries
-        await connection.query('DELETE FROM booking_layanan WHERE booking_id = ?', [id]);
-
-        // Then delete the booking
-        const [result] = await connection.query('DELETE FROM booking WHERE id = ?', [id]);
-
-        if (result.affectedRows === 0) {
-            await connection.rollback();
-            throw new Error('Booking not found');
-        }
-
-        await connection.commit();
-        console.log('Booking deleted successfully');
-        return { message: "Booking dan semua data terkait berhasil dihapus" };
-    } catch (err) {
-        console.error('Failed to delete booking:', err);
-        await connection.rollback();
-        throw {
-            status: 500,
-            message: "Gagal menghapus booking",
-            details: err.message
-        };
-    } finally {
-        connection.release();
-    }
-};
-
+// Export the necessary functions
 module.exports = {
     createBooking,
     getAllBookings,

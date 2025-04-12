@@ -1,12 +1,9 @@
-// controllers/bookingController.js
-const db = require('../db');
 const bookingService = require('../services/bookingService');
 const emailService = require('../services/emailService');
 const redis = require('redis');
 
-// Redis client setup (kept in controller as in original code)
+// Redis client setup
 const client = redis.createClient();
-const generateEmailTemplate = require('../html/emailTemplate');
 
 const createBooking = async (req, res) => {
     const bookingData = {
@@ -41,7 +38,6 @@ const getAllBookings = async (req, res) => {
 const getBookingById = async (req, res) => {
     const { id } = req.params;
     
-    // Original Redis cache implementation kept as is
     client.get(`booking:${id}`, async (err, data) => {
         if (data) {
             return res.json(JSON.parse(data));
