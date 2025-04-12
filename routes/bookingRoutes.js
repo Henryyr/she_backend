@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const bookingController = require('../controllers/bookingController');
 const { authenticate } = require('../middleware/auth');
-const { bookingLimiter } = require('../utils/rateLimiter');
+const { bookingLimiter } = require('../config/rateLimit'); // Updated import path
 
 // Add request logging middleware
 router.use((req, res, next) => {
