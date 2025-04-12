@@ -1,20 +1,9 @@
 const { pool } = require('../db');
-const midtransClient = require('midtrans-client');
 const { sendEmail } = require('./emailService');
 const transactionReceiptTemplate = require('../html/transactionReceipt');
+const { getFrontendURL } = require('../utils/general');
+const snap = require('../config/midtrans');
 
-const snap = new midtransClient.Snap({
-    isProduction: false,
-    serverKey: process.env.MIDTRANS_SERVER_KEY,
-    clientKey: process.env.MIDTRANS_CLIENT_KEY
-});
-
-const getFrontendURL = () => {
-    if (process.env.FRONTEND_URL) {
-        return process.env.FRONTEND_URL;
-    }
-    return 'http://localhost:3000';
-};
 
 class TransaksiService {
     async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
