@@ -40,14 +40,23 @@ class TransaksiController {
     }
 
     async getUserTransactions(req, res) {
-        console.log('[TransaksiController] getUserTransactions called', { user_id: req.user.id });
+        const tag = '[TransaksiController.getUserTransactions]';
+        console.log(`${tag} started - user_id:`, req.user.id);
         try {
             const user_id = req.user.id;
             const transactions = await TransaksiService.getUserTransactions(user_id);
+            console.log(`${tag} success - found ${transactions.length} transactions`);
             res.json({ transactions });
         } catch (error) {
-            console.error('[TransaksiController] getUserTransactions error:', error);
-            res.status(500).json({ error: "Internal Server Error" });
+            console.error(`${tag} error:`, {
+                message: error.message,
+                stack: error.stack,
+                details: error.details || {}
+            });
+            res.status(error.status || 500).json({ 
+                error: error.message || "Internal Server Error",
+                details: process.env.NODE_ENV === 'development' ? error.details : undefined
+            });
         }
     }
 

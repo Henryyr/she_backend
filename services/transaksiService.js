@@ -1,4 +1,4 @@
-const db = require('../db');
+const { pool } = require('../db');
 const midtransClient = require('midtrans-client');
 const { sendEmail } = require('./emailService');
 const transactionReceiptTemplate = require('../html/transactionReceipt');
@@ -19,7 +19,7 @@ const getFrontendURL = () => {
 class TransaksiService {
     async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
         console.log('[TransaksiService] createTransaction started', { booking_id, kategori_transaksi_id, is_dp, user_id });
-        const conn = await db.promise();
+        const conn = await pool.getConnection();
         try {
             await conn.beginTransaction();
 
@@ -33,9 +33,9 @@ class TransaksiService {
                 throw { status: 404, message: "Booking tidak ditemukan" };
             }
 
-            const { total_harga, status } = bookingResult[0];
+            const { total_harga, status: bookingStatus } = bookingResult[0];
 
-            if (status === 'completed') {
+            if (bookingStatus === 'completed') {
                 throw { status: 400, message: "Booking sudah dibayar" };
             }
 
@@ -67,17 +67,29 @@ class TransaksiService {
 
             const order_id = `BKG-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(booking_id).padStart(3, '0')}-${Math.random().toString(36).substr(2, 5)}`;
             const booking_number = order_id;
-            const dp_amount = is_dp ? Math.round(total_harga * 0.3) : 0;
-            const amountToPay = is_dp ? dp_amount : total_harga;
-            const paid_amount = 0;
+            
+            // Force DP for cash payment
+            if (kategori_transaksi_id === 1) { // 1 = cash
+                is_dp = true; // Force DP for cash
+            }
 
+            const dp_amount = Math.round(total_harga * 0.3); // Always calculate DP
+            const amountToPay = is_dp ? dp_amount : total_harga;
+            let paid_amount = 0;
+            let transactionStatus = 'pending';
+            let payment_status = 'unpaid';
+            let snapResponse = null;
+
+            // Generate snap token for all payment methods (including cash)
             const parameter = {
                 transaction_details: { order_id, gross_amount: amountToPay },
                 item_details: [{
                     id: booking_id,
                     price: amountToPay,
                     quantity: 1,
-                    name: is_dp ? 'Booking Salon (DP 30%)' : 'Booking Salon (Full Payment)',
+                    name: kategori_transaksi_id === 1 ? 
+                        'Booking Salon (DP Cash 30%)' : 
+                        (is_dp ? 'Booking Salon (DP 30%)' : 'Booking Salon (Full Payment)'),
                     brand: "Salon",
                     category: "Perawatan"
                 }],
@@ -89,14 +101,16 @@ class TransaksiService {
                 }
             };
 
-            const snapResponse = await snap.createTransaction(parameter);
+            snapResponse = await snap.createTransaction(parameter);
             
+            // Insert transaksi
             const [result] = await conn.query(
-                `INSERT INTO transaksi (user_id, booking_id, total_harga, paid_amount, dp_amount, 
-                 kategori_transaksi_id, status, midtrans_order_id, payment_status, booking_number) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO transaksi (
+                    user_id, booking_id, total_harga, paid_amount, dp_amount, 
+                    kategori_transaksi_id, status, midtrans_order_id, payment_status, booking_number
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [user_id, booking_id, total_harga, paid_amount, dp_amount, 
-                 kategori_transaksi_id, 'pending', order_id, 'unpaid', booking_number]
+                 kategori_transaksi_id, transactionStatus, order_id, payment_status, booking_number]
             );
 
             await conn.commit();
@@ -105,10 +119,14 @@ class TransaksiService {
             return {
                 message: "Transaksi dibuat",
                 transaksi_id: result.insertId,
-                status: 'pending',
+                status: transactionStatus,
                 snap_url: snapResponse.redirect_url,
-                dp_amount: is_dp ? dp_amount : 0,
-                remaining_amount: is_dp ? total_harga - dp_amount : 0
+                dp_amount,
+                remaining_amount: total_harga - dp_amount,
+                payment_status,
+                total_harga,
+                amount_to_pay: amountToPay,
+                payment_method: kategori_transaksi_id === 1 ? 'Cash (DP 30%)' : 'Online Payment'
             };
         } catch (err) {
             console.error('[TransaksiService] createTransaction error:', err);
@@ -134,12 +152,14 @@ class TransaksiService {
                 message: "Terjadi kesalahan saat membuat transaksi",
                 details: process.env.NODE_ENV === 'development' ? err.message : undefined
             };
+        } finally {
+            conn.release();
         }
     }
 
     async handleWebhook(webhookData) {
         console.log('[TransaksiService] handleWebhook started', webhookData);
-        const conn = await db.promise();
+        const conn = await pool.getConnection();
         try {
             const { order_id, transaction_status, gross_amount } = webhookData;
 
@@ -232,12 +252,14 @@ class TransaksiService {
             console.error('[TransaksiService] handleWebhook error:', err);
             await conn.rollback();
             throw err;
+        } finally {
+            conn.release();
         }
     }
 
     async payRemaining(transaksi_id, user_id) {
         console.log('[TransaksiService] payRemaining started', { transaksi_id, user_id });
-        const conn = await db.promise();
+        const conn = await pool.getConnection();
         try {
             const [transaksiResult] = await conn.query(
                 `SELECT id, booking_id, total_harga, paid_amount, dp_amount, midtrans_order_id 
@@ -299,13 +321,16 @@ class TransaksiService {
             console.error('[TransaksiService] payRemaining error:', err);
             await conn.rollback();
             throw err;
+        } finally {
+            conn.release();
         }
     }
 
     async getUserTransactions(user_id) {
-        console.log('[TransaksiService] getUserTransactions started', { user_id });
+        const tag = '[TransaksiService.getUserTransactions]';
+        console.log(`${tag} started - user_id:`, user_id);
         try {
-            const [results] = await db.promise().query(`
+            const [results] = await pool.query(`
                 SELECT 
                     t.*, 
                     k.nama AS metode_pembayaran,
@@ -329,11 +354,21 @@ class TransaksiService {
                 ORDER BY t.created_at DESC
             `, [user_id]);
             
-            console.log('[TransaksiService] getUserTransactions success', { count: results.length });
+            console.log(`${tag} success - found ${results.length} transactions`);
             return results;
         } catch (err) {
-            console.error('[TransaksiService] getUserTransactions error:', err);
-            throw err;
+            console.error(`${tag} error:`, {
+                message: err.message,
+                code: err.code,
+                stack: err.stack,
+                details: err.details || {},
+                query: err.sql
+            });
+            throw {
+                status: 500,
+                message: "Gagal mengambil data transaksi",
+                details: err.message
+            };
         }
     }
 }

@@ -13,6 +13,6 @@ router.get('/send-email', bookingController.sendTestEmail);
 router.post('/confirm/:bookingNumber', authenticate, bookingController.confirmBooking);
 router.post('/cancel/:bookingNumber', authenticate, bookingController.cancelBooking);
 router.patch('/:bookingNumber/complete', authenticate, bookingController.completeBooking);
-router.delete('/:id', bookingController.deleteBooking);
+router.delete('/:id', authenticate, bookingController.deleteBooking);
 
 module.exports = router;

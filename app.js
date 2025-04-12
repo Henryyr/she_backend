@@ -49,6 +49,7 @@ app.use('/api/transaksi', require('./routes/transaksiRoutes'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/testimoni', require('./routes/testimoniRoutes'));
 app.use('/api/transaksikategori', require('./routes/transaksikategoriRoutes'));
+app.use('/api/products', require('./routes/productRoutes'));
 
 // Error handler
 app.use((err, _req, res, _next) => {

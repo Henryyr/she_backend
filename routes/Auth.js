@@ -1,7 +1,7 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('../db'); // Import koneksi database
+const db = require('../db'); // Import db pool
 const { authenticate, isAdmin } = require('../middleware/auth'); // Import middleware
 const router = express.Router();
 
@@ -45,39 +45,46 @@ router.post('/register', async (req, res) => {
 });
 
 // LOGIN (Autentikasi User)
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
-    if (!username || !password) {
-        return res.status(400).json({ error: "Username dan password wajib diisi" });
-    }
-
-    const sql = `SELECT * FROM users WHERE username = ?`;
-
-    db.query(sql, [username], async (err, results) => {
-        if (err) return res.status(500).json({ error: err });
-
-        if (results.length === 0) {
-            return res.status(401).json({ error: "Username atau password salah" });
-        }
-
-        const user = results[0];
-
-        // Cek password dengan bcrypt
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ error: "Username atau password salah" });
-        }
-
-        // Generate JWT Token dengan masa berlaku 3 jam
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            SECRET_KEY,
-            { expiresIn: '3h' }
+    try {
+        const [users] = await db.pool.query(
+            'SELECT * FROM users WHERE username = ?',
+            [username]
         );
 
-        res.json({ message: "Login berhasil", token });
-    });
+        if (users.length === 0) {
+            return res.status(401).json({ error: "Username atau password salah" });
+        }
+
+        const user = users[0];
+        const isValid = await bcrypt.compare(password, user.password);
+
+        if (!isValid) {
+            return res.status(401).json({ error: "Username atau password salah" });
+        }
+
+        const token = jwt.sign(
+            { id: user.id, role: user.role }, 
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        res.json({
+            token,
+            user: {
+                id: user.id,
+                fullname: user.fullname,
+                username: user.username,
+                role: user.role
+            }
+        });
+
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: "Internal server error" });
+    }
 });
 
 // LOGOUT (Sederhana, Hanya Hapus Token di Client)

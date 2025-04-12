@@ -9,43 +9,21 @@ const client = redis.createClient();
 const generateEmailTemplate = require('../html/emailTemplate');
 
 const createBooking = async (req, res) => {
-    const { layanan_id, tanggal, jam_mulai } = req.body;
-    const user_id = req.user.id;
-
-    if (!user_id) return res.status(401).json({ error: "User tidak ditemukan, pastikan sudah login" });
-    if (!layanan_id || !Array.isArray(layanan_id) || layanan_id.length === 0) 
-        return res.status(400).json({ error: "Harus memilih setidaknya satu layanan" });
+    const bookingData = {
+        user_id: req.user.id,          // Ambil dari auth middleware
+        layanan_id: req.body.layanan_id,
+        tanggal: req.body.tanggal,
+        jam_mulai: req.body.jam_mulai,
+        hair_color: req.body.hair_color,
+        smoothing_product: req.body.smoothing_product,
+        keratin_product: req.body.keratin_product
+    };
 
     try {
-        const result = await bookingService.createBooking(user_id, layanan_id, tanggal, jam_mulai);
-        
-        // Send email notification if booking created successfully
-        if (result.email) {
-            const layananList = result.layanan_terpilih.map(l => `🔹 ${l.nama} (Rp${l.harga})`).join("\n");
-            const formattedDate = new Date(tanggal).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            const subject = "Konfirmasi Booking Anda";
-            const htmlMessage = generateEmailTemplate(result, formattedDate, jam_mulai);
-            
-            await emailService.sendEmail(
-                result.email, 
-                subject, 
-                `Booking baru telah dibuat!\n\nDetail Booking:\n${layananList}\nTanggal: ${tanggal}\nJam: ${jam_mulai}\nTotal: Rp${result.total_harga}\nKode Booking: ${result.booking_number}`, 
-                htmlMessage
-            );
-        }
-
-        res.json({ 
-            message: "Booking berhasil dibuat!", 
-            booking_id: result.booking_id, 
-            status: "pending", 
-            booking_number: result.booking_number, 
-            total_harga: result.total_harga,
-            email: result.email,
-            layanan_terpilih: result.layanan_terpilih
-        });
+        const result = await bookingService.createBooking(bookingData);
+        res.json(result);
     } catch (err) {
-        console.error("Error saat membuat booking:", err);
-        res.status(500).json({ error: "Terjadi kesalahan, booking gagal dibuat." });
+        res.status(500).json({ error: err.message });
     }
 };
 
@@ -115,13 +93,20 @@ const cancelBooking = async (req, res) => {
 };
 
 const deleteBooking = async (req, res) => {
-    const { id } = req.params;
-    
+    const tag = '[BookingController.deleteBooking]';
     try {
-        await bookingService.deleteBooking(id);
-        res.json({ message: 'Booking berhasil dihapus' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+        const { id } = req.params;
+        console.log(`${tag} started - booking_id:`, id);
+        
+        const result = await bookingService.deleteBooking(id);
+        console.log(`${tag} success - booking_id:`, id);
+        
+        res.json(result);
+    } catch (error) {
+        console.error(`${tag} error:`, error);
+        res.status(error.status || 500).json({ 
+            error: error.message || "Internal Server Error" 
+        });
     }
 };
 
