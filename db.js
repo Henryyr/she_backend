@@ -6,9 +6,16 @@ const dbConfig = {
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: 20,
     queueLimit: 0,
-    connectTimeout: 10000
+    connectTimeout: 10000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+    namedPlaceholders: true,
+    multipleStatements: true,
+    maxIdle: 10, // max idle connections, reduce memory
+    idleTimeout: 60000, // 60 seconds
+    timezone: process.env.NODE_ENV === 'production' ? '+00:00' : undefined // Only set in production
 };
 
 const pool = mysql.createPool(dbConfig).promise();
