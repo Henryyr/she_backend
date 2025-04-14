@@ -327,24 +327,60 @@ const completeBooking = async (id) => {
     try {
         await connection.beginTransaction();
 
-        const [booking] = await connection.query(
-            'SELECT status FROM booking WHERE id = ? FOR UPDATE',
+        // Get booking details with product information
+        const [bookingDetails] = await connection.query(`
+            SELECT b.*, 
+                   bc.color_id, bc.brand_id as color_brand_id,
+                   bs.product_id as smoothing_id, bs.brand_id as smoothing_brand_id,
+                   bk.product_id as keratin_id, bk.brand_id as keratin_brand_id
+            FROM booking b
+            LEFT JOIN booking_colors bc ON b.id = bc.booking_id
+            LEFT JOIN booking_smoothing bs ON b.id = bs.booking_id
+            LEFT JOIN booking_keratin bk ON b.id = bk.booking_id
+            WHERE b.id = ? FOR UPDATE`,
             [id]
         );
 
-        if (!booking[0]) {
+        if (!bookingDetails[0]) {
             throw new Error('Booking tidak ditemukan');
         }
 
-        if (booking[0].status === 'completed') {
+        const booking = bookingDetails[0];
+
+        if (booking.status === 'completed') {
             throw new Error('Booking sudah selesai');
         }
 
-        if (booking[0].status === 'cancelled') {
+        if (booking.status === 'cancelled') {
             throw new Error('Tidak dapat menyelesaikan booking yang sudah dibatalkan');
         }
 
-        const [result] = await connection.query(
+        // Update stocks based on products used
+        const stockUpdates = [];
+        
+        if (booking.color_id) {
+            stockUpdates.push(
+                updateHairColorStock(booking.color_id, booking.color_brand_id, -1)
+            );
+        }
+
+        if (booking.smoothing_id) {
+            stockUpdates.push(
+                updateSmoothingStock(booking.smoothing_id, booking.smoothing_brand_id, -1)
+            );
+        }
+
+        if (booking.keratin_id) {
+            stockUpdates.push(
+                updateKeratinStock(booking.keratin_id, booking.keratin_brand_id, -1)
+            );
+        }
+
+        // Wait for all stock updates to complete
+        await Promise.all(stockUpdates);
+
+        // Update booking status
+        await connection.query(
             `UPDATE booking 
              SET status = 'completed', 
                  completed_at = CURRENT_TIMESTAMP

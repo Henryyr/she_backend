@@ -8,22 +8,40 @@ const createBooking = async (req, res) => {
         ip: req.ip
     });
 
-    const bookingData = {
-        user_id: req.user.id,          // Ambil dari auth middleware
-        layanan_id: req.body.layanan_id,
-        tanggal: req.body.tanggal,
-        jam_mulai: req.body.jam_mulai,
-        hair_color: req.body.hair_color,
-        smoothing_product: req.body.smoothing_product,
-        keratin_product: req.body.keratin_product
-    };
-
     try {
+        // Validate JSON structure
+        const cleanBody = JSON.parse(JSON.stringify(req.body));
+        
+        if (!cleanBody || Object.keys(cleanBody).length === 0) {
+            return res.status(400).json({
+                error: 'Invalid request body. Please provide valid JSON data.',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        const bookingData = {
+            user_id: req.user.id,
+            layanan_id: cleanBody.layanan_id,
+            tanggal: cleanBody.tanggal,
+            jam_mulai: cleanBody.jam_mulai,
+            hair_color: cleanBody.hair_color,
+            smoothing_product: cleanBody.smoothing_product,
+            keratin_product: cleanBody.keratin_product
+        };
+
         const result = await bookingService.createBooking(bookingData);
         res.json(result);
     } catch (err) {
-        const statusCode = err.statusCode || 500;
-        res.status(statusCode).json({ error: err.message });
+        console.error('[BookingController] Error:', {
+            message: err.message,
+            body: JSON.stringify(req.body),
+            timestamp: new Date().toISOString()
+        });
+        return res.status(400).json({
+            error: 'Invalid JSON format',
+            details: err.message,
+            timestamp: new Date().toISOString()
+        });
     }
 };
 

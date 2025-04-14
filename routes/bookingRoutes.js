@@ -5,6 +5,22 @@ const bookingController = require('../controllers/bookingController');
 const { authenticate } = require('../middleware/auth');
 const { bookingLimiter } = require('../config/rateLimit'); // Updated import path
 
+// Add JSON sanitization middleware
+router.use(express.json({
+    verify: (req, res, buf) => {
+        try {
+            JSON.parse(buf);
+        } catch (e) {
+            res.status(400).json({ 
+                error: 'Invalid JSON format',
+                details: e.message,
+                timestamp: new Date().toISOString()
+            });
+            throw new Error('Invalid JSON');
+        }
+    }
+}));
+
 // Add request logging middleware
 router.use((req, res, next) => {
     console.log('[BookingRoutes] Incoming request:', {
@@ -16,10 +32,19 @@ router.use((req, res, next) => {
     next();
 });
 
-// Add error handler for rate limiter
+// Add error handler for rate limiter and JSON parsing errors
 router.use((err, req, res, next) => {
-    if (err instanceof Error && err.statusCode === 429) {
-        return res.status(429).json({ error: err.message });
+    if (err instanceof Error) {
+        if (err.statusCode === 429) {
+            return res.status(429).json({ error: err.message });
+        }
+        // Handle JSON parsing errors
+        if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+            return res.status(400).json({ 
+                error: 'Invalid JSON format in request body',
+                details: err.message
+            });
+        }
     }
     next(err);
 });

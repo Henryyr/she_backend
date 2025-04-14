@@ -57,11 +57,6 @@ class TransaksiService {
             const order_id = `BKG-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(booking_id).padStart(3, '0')}-${Math.random().toString(36).substr(2, 5)}`;
             const booking_number = order_id;
             
-            // Force DP for cash payment
-            if (kategori_transaksi_id === 1) { // 1 = cash
-                is_dp = true; // Force DP for cash
-            }
-
             const dp_amount = Math.round(total_harga * 0.3); // Always calculate DP
             const amountToPay = is_dp ? dp_amount : total_harga;
             let paid_amount = 0;
@@ -69,29 +64,29 @@ class TransaksiService {
             let payment_status = 'unpaid';
             let snapResponse = null;
 
-            // Generate snap token for all payment methods (including cash)
-            const parameter = {
-                transaction_details: { order_id, gross_amount: amountToPay },
-                item_details: [{
-                    id: booking_id,
-                    price: amountToPay,
-                    quantity: 1,
-                    name: kategori_transaksi_id === 1 ? 
-                        'Booking Salon (DP Cash 30%)' : 
-                        (is_dp ? 'Booking Salon (DP 30%)' : 'Booking Salon (Full Payment)'),
-                    brand: "Salon",
-                    category: "Perawatan"
-                }],
-                customer_details: { user_id },
-                callbacks: {
-                    finish: `${getFrontendURL()}/`,
-                    error: `${getFrontendURL()}/`,
-                    pending: `${getFrontendURL()}/`
-                }
-            };
+            // Generate snap token for online payments only
+            if (kategori_transaksi_id !== 1) { // If not cash payment
+                const parameter = {
+                    transaction_details: { order_id, gross_amount: amountToPay },
+                    item_details: [{
+                        id: booking_id,
+                        price: amountToPay,
+                        quantity: 1,
+                        name: is_dp ? 'Booking Salon (DP 30%)' : 'Booking Salon (Full Payment)',
+                        brand: "Salon",
+                        category: "Perawatan"
+                    }],
+                    customer_details: { user_id },
+                    callbacks: {
+                        finish: `${getFrontendURL()}/`,
+                        error: `${getFrontendURL()}/`,
+                        pending: `${getFrontendURL()}/`
+                    }
+                };
 
-            snapResponse = await snap.createTransaction(parameter);
-            
+                snapResponse = await snap.createTransaction(parameter);
+            }
+
             // Insert transaksi
             const [result] = await conn.query(
                 `INSERT INTO transaksi (
@@ -109,13 +104,13 @@ class TransaksiService {
                 message: "Transaksi dibuat",
                 transaksi_id: result.insertId,
                 status: transactionStatus,
-                snap_url: snapResponse.redirect_url,
+                snap_url: snapResponse ? snapResponse.redirect_url : null,
                 dp_amount,
                 remaining_amount: total_harga - dp_amount,
                 payment_status,
                 total_harga,
                 amount_to_pay: amountToPay,
-                payment_method: kategori_transaksi_id === 1 ? 'Cash (DP 30%)' : 'Online Payment'
+                payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment'
             };
         } catch (err) {
             console.error('[TransaksiService] createTransaction error:', err);
