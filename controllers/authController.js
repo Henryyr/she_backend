@@ -19,10 +19,20 @@ const login = async (req, res) => {
     }
 };
 
-const logout = (req, res) => {
-    res.json({
-        message: "Logout berhasil, silakan hapus token di client"
-    });
+const logout = async (req, res) => {
+    try {
+        const token = req.headers.authorization?.split(" ")[1];
+        
+        if (token && req.tokenExp) {
+            await authService.blacklistToken(token, req.tokenExp);
+        }
+
+        res.json({
+            message: "Logout berhasil"
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Logout gagal" });
+    }
 };
 
 const getProfile = async (req, res) => {
