@@ -33,7 +33,7 @@ class TransaksiService {
                 `SELECT id, payment_status, status, dp_amount 
                  FROM transaksi 
                  WHERE booking_id = ? 
-                 AND status NOT IN ('failed', 'expire', 'cancel')`,
+                 AND status NOT IN ('failed', 'expired', 'cancelled')`,
                 [booking_id]
             );
 
@@ -231,7 +231,7 @@ class TransaksiService {
                     'Pembayaran anda telah berhasil',
                     emailHtml
                 );
-            } else if (transaction_status === "expire" || transaction_status === "cancel" || transaction_status === "deny") {
+            } else if (transaction_status === "expired" || transaction_status === "cancelled" || transaction_status === "deny") {
                 await conn.query(
                     `DELETE FROM transaksi WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`, 
                     [order_id, order_id]
