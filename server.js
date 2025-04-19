@@ -1,77 +1,70 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const bodyParser = require('body-parser');
-const rateLimit = require('express-rate-limit');
-const morgan = require('morgan'); // Import Morgan for logging
-const db = require('./db');
+// server.js
+const app = require('./app');
+const { connect } = require('./db');
+const validateEnv = require('./config/envValidator');
 
-const app = express();
-const cron = require('node-cron');
 const PORT = process.env.PORT || 3000;
+let server;
 
-
-app.set('trust proxy', 1);
-
-// Middleware
-app.use(cors());
-app.use(helmet());
-app.use(express.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(morgan('combined')); // Use Morgan for logging
-
-// Rate Limiting Middleware
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // limit each IP to 100 requests per windowMs
-});
-app.use(limiter);
-
-// Logging Middleware
-app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
-    next();
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-// 🔹 Jalankan setiap hari pukul 00:00 WIB
-cron.schedule('0 0 * * *', async () => {
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    process.exit(1);
+});
+
+async function startServer() {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        // Validate environment variables first
+        if (!validateEnv()) {
+            process.exit(1);
+        }
 
-        await db.promise().query(`DELETE FROM booking WHERE tanggal < ?`, [today]);
-
-        console.log(`✅ [CRON] Booking sebelum ${today} dihapus`);
-    } catch (err) {
-        console.error("❌ [CRON] Gagal menghapus booking:", err.message);
-    }
-}, {
-    timezone: "Asia/Jakarta" // Sesuaikan timezone
-});
-
-// --- ROUTES ---
-app.use('/api/booking', require('./routes/bookingRoutes'));
-app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/layanan', require('./routes/layananRoutes'));
-app.use('/api/layanankategori', require('./routes/layanankategoriRoutes'));
-app.use('/api/auth', require('./routes/Auth'));
-app.use('/api/transaksi', require('./routes/transaksiRoutes'));
-app.use('/api/admin', require('./routes/admin'));
-app.use('/api/testimoni', require('./routes/testimoniRoutes'));
-app.use('/api/transaksikategori', require('./routes/transaksikategoriRoutes'));
-
-// Error Handling Middleware
-app.use((err, _req, res, _next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Something went wrong!' });
-});
-
-// Jalankan server
-app.listen(PORT, async () => {
-    try {
-        await db.connect();
-        console.log(`🚀 Server berjalan di http://localhost:${PORT}`);
+        await connect();
+        server = app.listen(PORT, () => {
+            console.log(`🚀 Server running on http://localhost:${PORT}`);
+        });
+        
+        // Improved security timeouts
+        server.timeout = 10000; // 10 seconds
+        server.keepAliveTimeout = 5000;
+        server.headersTimeout = 6000;
+        
+        // Limit max connections
+        server.maxConnections = 100;
+        
+        // Enable TCP Keep Alive
+        server.on('connection', socket => {
+            socket.setKeepAlive(true, 60000); // 60 seconds
+        });
+        
     } catch (error) {
-        console.error('Gagal menghubungkan ke database:', error);
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
     }
-});
+}
+
+// Improved graceful shutdown
+async function gracefulShutdown(signal) {
+    console.log(`Received ${signal}, shutting down...`);
+    
+    if (server) {
+        server.close(() => {
+            console.log('Server closed');
+            process.exit(0);
+        });
+
+        // Force close after 10 seconds
+        setTimeout(() => {
+            console.log('Could not close connections in time, forcing shutdown');
+            process.exit(1);
+        }, 10000);
+    }
+}
+
+process.on('SIGTERM', (signal) => gracefulShutdown(signal));
+process.on('SIGINT', (signal) => gracefulShutdown(signal));
+
+startServer().catch(console.error);

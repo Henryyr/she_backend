@@ -1,60 +1,52 @@
 const express = require('express');
-const db = require('../db'); // Koneksi database
-const { authenticate } = require('../middleware/auth'); // Middleware otentikasi
+const { authenticate } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+
+// Ganti storage ke memory untuk sementara sebelum upload ke Cloudinary
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 1000000 }, // 1MB limit
+    fileFilter: function(req, file, cb) {
+        checkFileType(file, cb);
+    }
+});
+
+// Check File Type
+function checkFileType(file, cb) {
+    const filetypes = /jpeg|jpg|png/;
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = filetypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+        return cb(null, true);
+    } else {
+        cb('Error: Images Only!');
+    }
+}
+
+const TestimoniController = require('../controllers/testimoniController');
 const router = express.Router();
 
-// Create Testimonial (User Submit Testimoni)
-router.post('/', authenticate, (req, res) => {
-    const { service_id, rating, comment } = req.body;
-    const user_id = req.user.id; // Ambil user_id dari token JWT
-
-    if (!service_id || !rating || !comment) {
-        return res.status(400).json({ error: "Semua field wajib diisi" });
+router.post('/', authenticate, upload.single('image'), TestimoniController.createTestimoni);
+router.get('/public', TestimoniController.getPublicTestimoni);
+router.get('/admin', authenticate, (req, res, next) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: "Forbidden: Hanya admin yang bisa melihat semua testimoni" });
     }
-
-    const sql = `INSERT INTO testimoni (user_id, service_id, rating, comment) VALUES (?, ?, ?, ?)`;
-    db.query(sql, [user_id, service_id, rating, comment], (err, result) => {
-        if (err) return res.status(500).json({ error: err });
-
-        res.json({ message: "Testimoni berhasil ditambahkan", id: result.insertId });
-    });
-});
-
-// Read All Testimonials
-router.get('/', (req, res) => {
-    const sql = `
-        SELECT t.id, u.username, s.service_name, t.rating, t.comment, t.created_at
-        FROM testimoni t
-        JOIN users u ON t.user_id = u.id
-        JOIN services s ON t.service_id = s.id
-        ORDER BY t.created_at DESC
-    `;
-
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ error: err });
-
-        res.json(results);
-    });
-});
-
-// Delete Testimonial (Hanya admin bisa hapus)
-router.delete('/:id', authenticate, (req, res) => {
+    next();
+}, TestimoniController.getAllTestimoni);
+router.delete('/:id', authenticate, (req, res, next) => {
     if (req.user.role !== 'admin') {
         return res.status(403).json({ error: "Forbidden: Hanya admin yang bisa menghapus testimoni" });
     }
-
-    const { id } = req.params;
-    const sql = `DELETE FROM testimoni WHERE id = ?`;
-
-    db.query(sql, [id], (err, result) => {
-        if (err) return res.status(500).json({ error: err });
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: "Testimoni tidak ditemukan" });
-        }
-
-        res.json({ message: "Testimoni berhasil dihapus" });
-    });
-});
+    next();
+}, TestimoniController.deleteTestimoni);
+router.put('/status', authenticate, (req, res, next) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: "Forbidden: Hanya admin yang bisa mengubah status testimoni" });
+    }
+    next();
+}, TestimoniController.updateStatus);
 
 module.exports = router;
