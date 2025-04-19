@@ -46,7 +46,10 @@ router.use((err, req, res, next) => {
             });
         }
     }
-    next(err);
+    // Only call next(err) if no response has been sent
+    if (!res.headersSent) {
+        next(err);
+    }
 });
 
 // Booking routes

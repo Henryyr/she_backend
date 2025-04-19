@@ -3,8 +3,8 @@ const { isDevelopment } = require('../config/midtrans');
 const validateCreateTransaction = (req, res, next) => {
     const { booking_id, kategori_transaksi_id, is_dp } = req.body;
 
-    // Skip validasi jika dalam mode testing
-    if (req.headers['x-test-mode'] === 'true') {
+    // Skip validasi jika dalam mode development atau testing
+    if (isDevelopment || req.headers['x-test-mode'] === 'true') {
         return next();
     }
 
@@ -28,8 +28,8 @@ const validateCreateTransaction = (req, res, next) => {
 const validatePayRemaining = (req, res, next) => {
     const { transaksi_id } = req.body;
 
-    // Skip validasi jika dalam mode testing
-    if (req.headers['x-test-mode'] === 'true') {
+    // Skip validasi jika dalam mode development atau testing
+    if (isDevelopment || req.headers['x-test-mode'] === 'true') {
         return next();
     }
 

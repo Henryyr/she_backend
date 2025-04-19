@@ -1,23 +1,24 @@
-const { DEFAULT_PRODUCTS } = require('../config/product');
-
-const KATEGORI_TIDAK_PILIH_PRODUK = ['Hair Cut', 'Hair Treatment'];
 const KATEGORI_DEFAULT_PRODUK = ['Smoothing', 'Keratin'];
 const KATEGORI_WAJIB_PRODUK = {
     'Cat Rambut': ['hair_color']
 };
 
 const isProductUnnecessary = (categories, hair_color, smoothing_product, keratin_product) => {
+    const productValues = {
+        hair_color,
+        smoothing_product,
+        keratin_product
+    };
+
     for (const category of categories) {
-        // Skip categories with default products
         if (KATEGORI_DEFAULT_PRODUK.includes(category)) {
             continue;
         }
         
-        // Check required products for other categories
         const requiredProducts = KATEGORI_WAJIB_PRODUK[category];
         if (requiredProducts) {
             for (const product of requiredProducts) {
-                if (!eval(product)) {
+                if (!productValues[product]) {
                     throw new Error(`Layanan ${category} membutuhkan pemilihan produk`);
                 }
             }

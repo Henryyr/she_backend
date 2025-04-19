@@ -17,7 +17,7 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(compression({
   level: 6,
-  threshold: 0, // Start compressing immediately
+  threshold: 0,
   filter: (req, res) => {
     if (req.headers['x-no-compression']) return false;
     return compression.filter(req, res);
@@ -26,13 +26,11 @@ app.use(compression({
 
 // Cache control middleware
 app.use((req, res, next) => {
-  // Don't cache API responses in development
   if (process.env.NODE_ENV === 'development') {
     res.set('Cache-Control', 'no-store');
   } else {
-    // Cache successful GET requests in production
     if (req.method === 'GET') {
-      res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
+      res.set('Cache-Control', 'public, max-age=300');
     } else {
       res.set('Cache-Control', 'no-store');
     }
@@ -40,17 +38,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Simplified CORS settings
+// CORS
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://mysalon.com'] // Ganti dengan domain production Anda
+    ? ['https://mysalon.com']
     : 'http://localhost:3000',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 };
 app.use(cors(corsOptions));
 
-// Enhanced Helmet configuration
+// Helmet
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   contentSecurityPolicy: {
@@ -69,24 +67,28 @@ app.use(helmet({
   }
 }));
 
+// Validasi dan parsing JSON
 app.use(express.json({ 
   limit: '10kb',
   verify: (req, res, buf) => {
     try {
       JSON.parse(buf);
     } catch(e) {
-      res.status(400).json({ error: 'Invalid JSON' });
-      throw new Error('Invalid JSON');
+      const err = new Error('Invalid JSON');
+      err.status = 400;
+      throw err; // Biarkan error handler yang tangani
     }
   }
-})); // Limit payload size and validate JSON
+}));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10kb' }));
-app.use(morgan('dev')); // Simplified logging in development
 
-// Add security middleware
-app.use(mongoSanitize()); // Prevent NoSQL injection
+// Logging
+app.use(morgan('dev'));
 
-// XSS Protection middleware
+// Security middleware
+app.use(mongoSanitize());
+
+// XSS protection
 app.use((req, res, next) => {
   if (req.body) {
     for (let key in req.body) {
@@ -98,7 +100,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Stricter rate limiting
+// Rate limiter
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'production' ? 50 : 100,
@@ -106,27 +108,23 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
-  keyGenerator: (req) => {
-    return req.ip + '-' + req.route?.path
-  }
+  keyGenerator: (req) => req.ip + '-' + req.route?.path
 });
-
-// Apply rate limiting to all routes
 app.use('/api/', limiter);
 
-// Simplified performance monitoring
+// Performance monitoring
 app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-        const duration = Date.now() - start;
-        if (duration > 1000) {
-            console.warn(`Slow Request - ${req.method} ${req.url}: ${duration}ms`);
-        }
-    });
-    next();
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (duration > 1000) {
+      console.warn(`Slow Request - ${req.method} ${req.url}: ${duration}ms`);
+    }
+  });
+  next();
 });
 
-// ROUTES
+// Routes
 app.use('/api/booking', require('./routes/bookingRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/layanan', require('./routes/layananRoutes'));
@@ -138,23 +136,25 @@ app.use('/api/testimoni', require('./routes/testimoniRoutes'));
 app.use('/api/transaksikategori', require('./routes/transaksikategoriRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 
-// Enhanced error handler with security headers
+// Global error handler
 app.use((err, _req, res, _next) => {
-    const status = err.status || 500;
-    const message = process.env.NODE_ENV === 'production' ? 
-        'Internal server error' : err.message;
-    
-    // Remove potentially sensitive error info in production
-    if (process.env.NODE_ENV === 'production') {
-        res.removeHeader('X-Powered-By');
-        res.removeHeader('Server');
-    }
-    
-    res.status(status).json({ 
-        error: message,
-        // Only include stack trace in development
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-    });
+  const status = err.status || 500;
+  const message = process.env.NODE_ENV === 'production' ? 
+    'Internal server error' : err.message;
+
+  if (process.env.NODE_ENV === 'production') {
+    res.removeHeader('X-Powered-By');
+    res.removeHeader('Server');
+  }
+
+  if (res.headersSent) {
+    return;
+  }
+
+  res.status(status).json({ 
+    error: message,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
 });
 
 module.exports = app;
