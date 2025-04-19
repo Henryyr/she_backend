@@ -2,6 +2,12 @@ const jwt = require('jsonwebtoken');
 const authService = require('../services/authService');
 const SECRET_KEY = process.env.JWT_SECRET;
 
+// Add error logging rate limit tracking
+const errorLogTracker = {
+    lastLog: {},
+    logInterval: 5 * 60 * 1000 // 5 minutes
+};
+
 // Run cleanup every 12 hours instead of every hour
 setInterval(async () => {
     try {
@@ -29,13 +35,27 @@ const authenticate = async (req, res, next) => {
 
         jwt.verify(token, SECRET_KEY, (err, user) => {
             if (err) {
-                console.log('Authentication failed: Invalid token -', err.message);
-                return res.status(403).json({ error: "Token tidak valid" });
+                let errorMessage = "Token tidak valid";
+                if (err.message === 'jwt malformed') {
+                    errorMessage = "Format token tidak valid, silakan login kembali";
+                } else if (err.message === 'jwt expired') {
+                    errorMessage = "Sesi anda telah berakhir, silakan login kembali";
+                }
+                
+                // Rate limited logging
+                const now = Date.now();
+                const errorKey = `${err.message}-${req.ip}`;
+                if (!errorLogTracker.lastLog[errorKey] || 
+                    (now - errorLogTracker.lastLog[errorKey]) > errorLogTracker.logInterval) {
+                    console.log('Authentication failed:', err.message);
+                    errorLogTracker.lastLog[errorKey] = now;
+                }
+
+                return res.status(403).json({ error: errorMessage });
             }
             req.user = user;
             req.token = token;
             req.tokenExp = user.exp * 1000;
-            console.log(`User authenticated successfully: ${user.id}`);
             next();
         });
     } catch (error) {
