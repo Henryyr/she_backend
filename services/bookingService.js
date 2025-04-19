@@ -160,9 +160,9 @@ const createBooking = async (data) => {
 
         const [insertResult] = await connection.query(
             `INSERT INTO booking /*+ BATCH_INSERT */ 
-            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?)`,
-            [user_id, tanggal, jam_mulai, jam_selesai_string, bookingNumber, total_harga]
+            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`,
+            [user_id, tanggal, jam_mulai, jam_selesai_string, bookingNumber, total_harga, data.special_request]
         );
 
         const booking_id = insertResult.insertId;
@@ -199,6 +199,7 @@ const createBooking = async (data) => {
             jam_mulai,
             jam_selesai: jam_selesai_string,
             product_detail,
+            special_request: data.special_request,
             default_products: categories.includes('Smoothing') && !smoothing_product ? true : undefined
         };
 
@@ -379,19 +380,21 @@ const completeBooking = async (id) => {
         // Wait for all stock updates to complete
         await Promise.all(stockUpdates);
 
-        // Update booking status
+        // Update booking status and completed_at
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
         await connection.query(
             `UPDATE booking 
              SET status = 'completed', 
-                 completed_at = CURRENT_TIMESTAMP
+                 completed_at = ?
              WHERE id = ?`,
-            [id]
+            [now, id]
         );
 
         await connection.commit();
         return { 
             message: 'Booking berhasil diselesaikan',
-            booking_id: id
+            booking_id: id,
+            completed_at: now
         };
 
     } catch (error) {

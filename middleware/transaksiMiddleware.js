@@ -15,10 +15,19 @@ const validateCreateTransaction = (req, res, next) => {
         });
     }
 
-    if (typeof is_dp !== 'boolean') {
+    // For cash transactions (kategori_transaksi_id === 1), is_dp should not be present
+    if (kategori_transaksi_id === 1 && is_dp !== undefined) {
         return res.status(400).json({
             error: "Format tidak valid",
-            details: "is_dp harus berupa boolean"
+            details: "Pembayaran cash tidak menggunakan sistem DP"
+        });
+    }
+
+    // For non-cash transactions (kategori_transaksi_id === 2), is_dp must be boolean
+    if (kategori_transaksi_id === 2 && typeof is_dp !== 'boolean') {
+        return res.status(400).json({
+            error: "Format tidak valid",
+            details: "is_dp harus berupa boolean untuk pembayaran non-cash"
         });
     }
 

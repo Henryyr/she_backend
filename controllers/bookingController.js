@@ -26,7 +26,8 @@ const createBooking = async (req, res) => {
             jam_mulai: cleanBody.jam_mulai,
             hair_color: cleanBody.hair_color,
             smoothing_product: cleanBody.smoothing_product,
-            keratin_product: cleanBody.keratin_product
+            keratin_product: cleanBody.keratin_product,
+            special_request: cleanBody.special_request || null
         };
 
         const result = await bookingService.createBooking(bookingData);

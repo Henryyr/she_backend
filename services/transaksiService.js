@@ -57,15 +57,24 @@ class TransaksiService {
             const order_id = `BKG-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(booking_id).padStart(3, '0')}-${Math.random().toString(36).substr(2, 5)}`;
             const booking_number = order_id;
             
-            const dp_amount = Math.round(total_harga * 0.3); // Always calculate DP
-            const amountToPay = is_dp ? dp_amount : total_harga;
             let paid_amount = 0;
             let transactionStatus = 'pending';
             let payment_status = 'unpaid';
             let snapResponse = null;
+            let amountToPay = total_harga;
+            let dp_amount = 0;
 
-            // Generate snap token for online payments only
-            if (kategori_transaksi_id !== 1) { // If not cash payment
+            // Handle cash vs non-cash differently
+            if (kategori_transaksi_id === 1) { 
+                paid_amount = 0; 
+                transactionStatus = 'pending'; 
+                payment_status = 'unpaid';
+                dp_amount = 0;
+                amountToPay = total_harga;
+            } else { // Online payment
+                dp_amount = Math.round(total_harga * 0.3);
+                amountToPay = is_dp ? dp_amount : total_harga;
+
                 const parameter = {
                     transaction_details: { order_id, gross_amount: amountToPay },
                     item_details: [{
