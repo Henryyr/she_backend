@@ -25,8 +25,14 @@ const logout = (req, res) => {
     });
 };
 
-const getProfile = (req, res) => {
-    res.json({ message: "Profil user", user: req.user });
+const getProfile = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const profile = await authService.getProfile(userId);
+        res.json(profile);
+    } catch (error) {
+        res.status(error.status || 500).json({ error: error.message });
+    }
 };
 
 module.exports = {

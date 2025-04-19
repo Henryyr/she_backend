@@ -55,7 +55,21 @@ const loginUser = async ({ username, password }) => {
     };
 };
 
+const getProfile = async (userId) => {
+    const [user] = await pool.query(
+        'SELECT id, fullname, username, email, phone_number, address, role FROM users WHERE id = ?',
+        [userId]
+    );
+    
+    if (user.length === 0) {
+        throw { status: 404, message: "User tidak ditemukan" };
+    }
+    
+    return user[0];
+};
+
 module.exports = {
     registerUser,
-    loginUser
+    loginUser,
+    getProfile
 };
