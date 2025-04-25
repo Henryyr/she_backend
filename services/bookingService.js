@@ -15,9 +15,9 @@ const createBooking = async (data) => {
     let layananWithCategory = []; // Define at the top level of the function
     
     try {
-        // Check rate limit with development-friendly message
+        // Check rate limit with index hint
         const [requests] = await connection.query(
-            `SELECT COUNT(*) as count 
+            `SELECT /*+ INDEX(booking idx_user_created) */ COUNT(*) as count 
              FROM booking 
              WHERE user_id = ? 
              AND created_at > NOW() - INTERVAL ? MINUTE`,
@@ -31,14 +31,14 @@ const createBooking = async (data) => {
 
         await connection.beginTransaction();
 
-        // Simple efficient queries without forced index hints
+        // Simple efficient queries with index hints
         const [[existingBookings], layananResults] = await Promise.all([
             connection.query(
-                'SELECT id FROM booking WHERE user_id = ? AND tanggal = ? FOR UPDATE',
+                'SELECT /*+ INDEX(booking idx_user_tanggal) */ id FROM booking WHERE user_id = ? AND tanggal = ? FOR UPDATE',
                 [user_id, tanggal]
             ),
             connection.query(
-                `SELECT l.*, lk.nama as kategori_nama 
+                `SELECT /*+ INDEX(l idx_layanan_id) */ l.*, lk.nama as kategori_nama 
                  FROM layanan l 
                  JOIN kategori_layanan lk ON l.kategori_id = lk.id 
                  WHERE l.id IN (?)`, 
@@ -222,7 +222,7 @@ const getAllBookings = async () => {
     const connection = await pool.getConnection();
     try {
         const [bookings] = await connection.query(`
-            SELECT b.*,
+            SELECT /*+ INDEX(b idx_booking_created) */ b.*,
                 GROUP_CONCAT(l.nama ORDER BY l.id) as layanan_names
             FROM booking b
             LEFT JOIN booking_layanan bl ON b.id = bl.booking_id

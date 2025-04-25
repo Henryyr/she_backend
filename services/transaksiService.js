@@ -2,7 +2,7 @@ const { pool } = require('../db');
 const { sendEmail } = require('./emailService');
 const transactionReceiptTemplate = require('../html/transactionReceipt');
 const { getFrontendURL } = require('../utils/general');
-const snap = require('../config/midtrans');
+const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../config/midtrans');
 
 
 class TransaksiService {
@@ -154,13 +154,22 @@ class TransaksiService {
         console.log('[TransaksiService] handleWebhook started', webhookData);
         const conn = await pool.getConnection();
         try {
-            const { order_id, transaction_status, gross_amount } = webhookData;
+            // Validate Midtrans notification
+            validateMidtransNotification(webhookData);
+            
+            const { order_id, transaction_status, gross_amount, status_code, signature_key } = webhookData;
 
-            if (!order_id || !transaction_status) {
-                throw { status: 400, message: "Data tidak lengkap" };
+            // Verify transaction status
+            let newStatus;
+            if (MIDTRANS_STATUS.SUCCESS.includes(transaction_status)) {
+                newStatus = 'success';
+            } else if (MIDTRANS_STATUS.FAILED.includes(transaction_status)) {
+                newStatus = 'failed';
+            } else if (MIDTRANS_STATUS.REFUND.includes(transaction_status)) {
+                newStatus = 'refunded';
+            } else {
+                newStatus = 'pending';
             }
-
-            await conn.beginTransaction();
 
             // Get transaction with user email and booking details
             const [transaksiResult] = await conn.query(
@@ -244,6 +253,15 @@ class TransaksiService {
         } catch (err) {
             console.error('[TransaksiService] handleWebhook error:', err);
             await conn.rollback();
+            
+            // Special handling for Midtrans-specific errors
+            if (err.message.includes('Midtrans')) {
+                throw { 
+                    status: 400, 
+                    message: "Invalid Midtrans notification",
+                    details: err.message
+                };
+            }
             throw err;
         } finally {
             conn.release();
@@ -320,48 +338,72 @@ class TransaksiService {
     }
 
     async getUserTransactions(user_id) {
-        const tag = '[TransaksiService.getUserTransactions]';
-        console.log(`${tag} started - user_id:`, user_id);
         try {
             const [results] = await pool.query(`
                 SELECT 
-                    t.*, 
-                    k.nama AS metode_pembayaran,
+                    t.id,
+                    t.booking_number,
+                    t.total_harga,
+                    t.paid_amount,
+                    t.dp_amount,
                     t.status AS transaction_status,
                     t.payment_status,
-                    b.tanggal,
+                    t.created_at AS transaction_date,
+                    t.updated_at AS last_updated,
+                    k.nama AS metode_pembayaran,
+                    b.tanggal AS booking_date,
                     b.jam_mulai,
                     b.jam_selesai,
                     b.status AS booking_status,
-                    b.created_at AS booking_created_at,
-                    b.booking_number,
-                    b.total_harga,
-                    GROUP_CONCAT(l.nama SEPARATOR ', ') AS layanan_nama
+                    GROUP_CONCAT(l.nama ORDER BY l.nama SEPARATOR ', ') AS layanan_nama
                 FROM transaksi t
+                FORCE INDEX (idx_user_status) /* Force using composite index */
                 JOIN kategori_transaksi k ON t.kategori_transaksi_id = k.id
                 JOIN booking b ON t.booking_id = b.id
-                JOIN booking_layanan bl ON b.id = bl.booking_id
+                JOIN booking_layanan bl USE INDEX (booking_id_idx) ON b.id = bl.booking_id
                 JOIN layanan l ON bl.layanan_id = l.id
                 WHERE t.user_id = ?
+                AND t.status NOT IN ('expired', 'cancelled', 'failed')
+                AND b.tanggal >= CURDATE() - INTERVAL 3 MONTH
                 GROUP BY t.id
-                ORDER BY t.created_at DESC
+                ORDER BY 
+                    CASE t.status 
+                        WHEN 'pending' THEN 1
+                        WHEN 'processing' THEN 2
+                        WHEN 'completed' THEN 3
+                        ELSE 4 
+                    END,
+                    b.tanggal DESC,
+                    t.created_at DESC
             `, [user_id]);
             
-            console.log(`${tag} success - found ${results.length} transactions`);
             return results;
         } catch (err) {
-            console.error(`${tag} error:`, {
-                message: err.message,
-                code: err.code,
-                stack: err.stack,
-                details: err.details || {},
-                query: err.sql
-            });
             throw {
                 status: 500,
                 message: "Gagal mengambil data transaksi",
                 details: err.message
             };
+        }
+    }
+
+    async handleExpiredTransactions() {
+        const conn = await pool.getConnection();
+        try {
+            const [expiredTransactions] = await conn.query(
+                `SELECT id FROM transaksi 
+                 WHERE status = 'pending' 
+                 AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)`
+            );
+
+            for (const trans of expiredTransactions) {
+                await conn.query(
+                    `UPDATE transaksi SET status = 'expired' WHERE id = ?`,
+                    [trans.id]
+                );
+            }
+        } finally {
+            conn.release();
         }
     }
 }
