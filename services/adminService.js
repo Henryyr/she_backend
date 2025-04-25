@@ -6,13 +6,14 @@ const getAllUsers = async (page = 1, limit = 10) => {
     const [users] = await pool.query(
         `SELECT id, fullname, email, phone_number, username, address, role 
          FROM users
+         WHERE role = 'pelanggan'
          ORDER BY created_at DESC
          LIMIT ? OFFSET ?`,
         [limit, offset]
     );
 
     const [totalCount] = await pool.query(
-        "SELECT COUNT(*) as total FROM users"
+        "SELECT COUNT(*) as total FROM users WHERE role = 'pelanggan'"
     );
 
     return {
