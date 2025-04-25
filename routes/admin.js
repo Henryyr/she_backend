@@ -4,7 +4,13 @@ const adminController = require('../controllers/adminController');
 
 const router = express.Router();
 
-router.get('/dashboard', authenticate, isAdmin, adminController.getDashboard);
-router.get('/transaksi', authenticate, isAdmin, adminController.getAllTransactions);
+// Semua routes admin harus melalui middleware authenticate dan isAdmin
+router.use(authenticate, isAdmin);
+
+router.get('/dashboard', adminController.getDashboard);
+router.get('/transaksi', adminController.getAllTransactions);
+router.get('/users', adminController.getAllUsers);
+router.put('/users/:id', adminController.updateUser);
+router.delete('/users/:id', adminController.deleteUser);
 
 module.exports = router;

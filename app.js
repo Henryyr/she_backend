@@ -126,7 +126,6 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/booking', require('./routes/bookingRoutes'));
-app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/layanan', require('./routes/layananRoutes'));
 app.use('/api/layanankategori', require('./routes/layanankategoriRoutes'));
 app.use('/api/auth', require('./routes/auth'));

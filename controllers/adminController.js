@@ -12,12 +12,12 @@ const getDashboard = async (req, res) => {
     }
 };
 
-const createUser = async (req, res) => {
+const getAllUsers = async (req, res) => {
     try {
-        const userId = await adminService.createUser(req.body);
-        res.json({ message: "User berhasil ditambahkan", userId });
+        const users = await adminService.getAllUsers();
+        res.json(users);
     } catch (err) {
-        res.status(500).json({ message: "Gagal menambah user", error: err });
+        res.status(500).json({ message: "Gagal mengambil data users", error: err });
     }
 };
 
@@ -56,7 +56,7 @@ const getAllTransactions = async (req, res) => {
 
 module.exports = {
     getDashboard,
-    createUser,
+    getAllUsers,
     updateUser,
     deleteUser,
     getAllTransactions
