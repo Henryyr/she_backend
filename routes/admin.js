@@ -5,8 +5,6 @@ const adminController = require('../controllers/adminController');
 const router = express.Router();
 
 router.get('/dashboard', authenticate, isAdmin, adminController.getDashboard);
-router.post('/users', authenticate, isAdmin, adminController.createUser);
-router.put('/users/:id', authenticate, isAdmin, adminController.updateUser);
-router.delete('/users/:id', authenticate, isAdmin, adminController.deleteUser);
+router.get('/transaksi', authenticate, isAdmin, adminController.getAllTransactions);
 
 module.exports = router;

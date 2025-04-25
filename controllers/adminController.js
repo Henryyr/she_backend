@@ -2,8 +2,11 @@ const adminService = require('../services/adminService');
 
 const getDashboard = async (req, res) => {
     try {
-        const users = await adminService.getAllUsers();
-        res.json({ message: "Dashboard Admin - Daftar Pengguna", users });
+        const dashboardData = await adminService.getDashboardStats();
+        res.json({
+            title: "Dashboard She Salon",
+            ...dashboardData
+        });
     } catch (err) {
         res.status(500).json({ message: "Terjadi kesalahan", error: err });
     }
@@ -40,9 +43,21 @@ const deleteUser = async (req, res) => {
     }
 };
 
+const getAllTransactions = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const transactions = await adminService.getAllTransactions(page, limit);
+        res.json(transactions);
+    } catch (err) {
+        res.status(500).json({ message: "Terjadi kesalahan", error: err });
+    }
+};
+
 module.exports = {
     getDashboard,
     createUser,
     updateUser,
-    deleteUser
+    deleteUser,
+    getAllTransactions
 };
