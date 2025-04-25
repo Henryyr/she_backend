@@ -112,6 +112,45 @@ const getAllTransactions = async (page = 1, limit = 10) => {
     };
 };
 
+const getAllBookings = async (page = 1, limit = 10) => {
+    const offset = (page - 1) * limit;
+
+    const [bookings] = await pool.query(`
+        SELECT 
+            b.id,
+            u.fullname as customer,
+            DATE_FORMAT(b.tanggal, '%d %b %Y') as date,
+            TIME_FORMAT(b.jam_mulai, '%H:%i') as start_time,
+            TIME_FORMAT(b.jam_selesai, '%H:%i') as end_time,
+            GROUP_CONCAT(l.nama SEPARATOR ', ') as services,
+            b.status
+        FROM booking b
+        FORCE INDEX (idx_created_status) -- pastikan index ini ada di tabel booking
+        JOIN users u USE INDEX (PRIMARY) ON b.user_id = u.id
+        JOIN booking_layanan bl USE INDEX (idx_booking_id) ON b.id = bl.booking_id
+        JOIN layanan l USE INDEX (PRIMARY) ON bl.layanan_id = l.id
+        GROUP BY b.id
+        ORDER BY b.created_at DESC
+        LIMIT ? OFFSET ?
+    `, [limit, offset]);
+
+    const [totalCount] = await pool.query(`
+        SELECT COUNT(DISTINCT b.id) as total
+        FROM booking b
+        FORCE INDEX (idx_created_status)
+    `);
+
+    return {
+        bookings,
+        pagination: {
+            total: totalCount[0].total,
+            page,
+            limit,
+            totalPages: Math.ceil(totalCount[0].total / limit)
+        }
+    };
+};
+
 const getDashboardStats = async () => {
     // Get current month stats
     const [currentMonth] = await pool.query(`
@@ -190,5 +229,6 @@ module.exports = {
     deleteUser,
     getRecentTransactions,
     getAllTransactions,
-    getDashboardStats
+    getDashboardStats,
+    getAllBookings
 };

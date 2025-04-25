@@ -56,10 +56,22 @@ const getAllTransactions = async (req, res) => {
     }
 };
 
+const getAllBookings = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const bookings = await adminService.getAllBookings(page, limit);
+        res.json(bookings);
+    } catch (err) {
+        res.status(500).json({ message: "Terjadi kesalahan", error: err });
+    }
+};
+
 module.exports = {
     getDashboard,
     getAllUsers,
     updateUser,
     deleteUser,
-    getAllTransactions
+    getAllTransactions,
+    getAllBookings
 };
