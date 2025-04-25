@@ -161,11 +161,11 @@ class TransaksiService {
 
             // Verify transaction status
             let newStatus;
-            if (MIDTRANS_STATUS.SUCCESS.includes(transaction_status)) {
+            if (MIDTRANS_STATUS.PAYMENT.SUCCESS.includes(transaction_status)) {
                 newStatus = 'success';
-            } else if (MIDTRANS_STATUS.FAILED.includes(transaction_status)) {
+            } else if (MIDTRANS_STATUS.PAYMENT.FAILED.includes(transaction_status)) {
                 newStatus = 'failed';
-            } else if (MIDTRANS_STATUS.REFUND.includes(transaction_status)) {
+            } else if (MIDTRANS_STATUS.PAYMENT.REFUND.includes(transaction_status)) {
                 newStatus = 'refunded';
             } else {
                 newStatus = 'pending';
@@ -241,9 +241,13 @@ class TransaksiService {
                     emailHtml
                 );
             } else if (transaction_status === "expired" || transaction_status === "cancelled" || transaction_status === "deny") {
+                // Soft delete: update status instead of deleting
+                let softDeleteStatus = 'cancelled';
+                if (transaction_status === "expired") softDeleteStatus = 'expired';
+                if (transaction_status === "deny") softDeleteStatus = 'failed';
                 await conn.query(
-                    `DELETE FROM transaksi WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`, 
-                    [order_id, order_id]
+                    `UPDATE transaksi SET status = ? WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`, 
+                    [softDeleteStatus, order_id, order_id]
                 );
             }
 
