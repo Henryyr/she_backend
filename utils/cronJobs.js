@@ -8,11 +8,12 @@ const cleanupOldData = () => {
         try {
             const today = new Date().toISOString().split('T')[0];
             await db.promise().query(`DELETE FROM booking WHERE tanggal < ?`, [today]);
-            await db.promise().query(`
-                DELETE FROM transaksi 
-                WHERE status IN ('failed', 'expired') 
-                AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
-            `);
+            // Hapus baris berikut jika ingin hanya soft delete:
+            // await db.promise().query(`
+            //     DELETE FROM transaksi 
+            //     WHERE status IN ('failed', 'expired') 
+            //     AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+            // `);
         } catch (err) {
             console.error("[CRON] Cleanup error:", err.message);
         }
