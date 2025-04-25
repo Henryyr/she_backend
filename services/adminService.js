@@ -49,24 +49,37 @@ const getAllTransactions = async (page = 1, limit = 10) => {
     const [transactions] = await pool.query(`
         SELECT 
             t.id,
-            t.booking_number,
-            u.fullname,
-            t.created_at as transaction_date,
-            t.status,
-            t.total_harga,
-            t.payment_status,
-            k.nama as payment_method
+            u.fullname as name,
+            GROUP_CONCAT(l.nama SEPARATOR ', ') as keterangan,
+            CONCAT(
+                DATE_FORMAT(b.tanggal, '%d %b %Y'), ' - ',
+                TIME_FORMAT(b.jam_mulai, '%H:%i'), ' WIB'
+            ) as date_time,
+            k.nama as type,
+            CASE 
+                WHEN t.status = 'completed' THEN 'Completed'
+                WHEN t.status = 'pending' THEN 'Pending'
+                ELSE CONCAT(UPPER(LEFT(t.status, 1)), LOWER(SUBSTRING(t.status, 2)))
+            END as status
         FROM transaksi t
         FORCE INDEX (idx_created_status)
-        JOIN users u ON t.user_id = u.id
-        JOIN kategori_transaksi k ON t.kategori_transaksi_id = k.id
+        JOIN users u USE INDEX (PRIMARY) ON t.user_id = u.id
+        JOIN booking b ON t.booking_id = b.id
+        JOIN kategori_transaksi k USE INDEX (PRIMARY) ON t.kategori_transaksi_id = k.id
+        JOIN booking_layanan bl ON b.id = bl.booking_id
+        JOIN layanan l ON bl.layanan_id = l.id
+        WHERE t.status NOT IN ('expired', 'cancelled', 'failed')
+        GROUP BY t.id
         ORDER BY t.created_at DESC
         LIMIT ? OFFSET ?
     `, [limit, offset]);
 
-    const [totalCount] = await pool.query(
-        "SELECT COUNT(*) as total FROM transaksi"
-    );
+    const [totalCount] = await pool.query(`
+        SELECT COUNT(DISTINCT t.id) as total 
+        FROM transaksi t
+        FORCE INDEX (idx_created_status)
+        WHERE t.status NOT IN ('expired', 'cancelled', 'failed')
+    `);
 
     return {
         transactions,
