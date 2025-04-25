@@ -1,4 +1,5 @@
 const productService = require('../services/productService');
+const { validateStock, validateProductData } = require('../utils/productUtils');
 
 const getAllProducts = async (req, res) => {
     try {
@@ -31,11 +32,20 @@ const getProductsByCategory = async (req, res) => {
 const updateStock = async (req, res) => {
     const { id } = req.params;
     const { stok } = req.body;
+    
     try {
+        validateStock(stok);
         await productService.updateStock(id, stok);
-        res.json({ message: 'Stok berhasil diupdate' });
+        res.json({
+            success: true,
+            message: 'Stok berhasil diupdate',
+            data: { id, stok }
+        });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(err.name === 'ValidationError' ? 400 : 500).json({
+            success: false,
+            message: err.message
+        });
     }
 };
 
@@ -94,73 +104,81 @@ const getHairColorsByProduct = async (req, res) => {
 const updateHairColorStock = async (req, res) => {
     const { id, stok } = req.body;
     try {
-        if (!id || stok === undefined) {
-            return res.status(400).json({ 
-                error: "Format yang benar: { id: number, stok: number }" 
-            });
+        if (!id) {
+            throw { name: 'ValidationError', message: 'ID warna harus diisi' };
         }
+        validateStock(stok);
 
         await productService.updateHairColorStock(id, stok);
-        res.json({ 
+        res.json({
             success: true,
             message: 'Stok warna berhasil diupdate',
             data: { id, stok }
         });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(err.name === 'ValidationError' ? 400 : 500).json({
+            success: false,
+            message: err.message
+        });
     }
 };
 
 const updateSmoothingStock = async (req, res) => {
     const { id, stok } = req.body;
     try {
-        if (!id || stok === undefined) {
-            return res.status(400).json({ 
-                error: "Format yang benar: { id: number, stok: number }" 
-            });
-        }
-
+        validateStock(stok);
         await productService.updateSmoothingStock(id, stok);
-        res.json({ 
+        res.json({
             success: true,
             message: 'Stok smoothing berhasil diupdate',
             data: { id, stok }
         });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(err.name === 'ValidationError' ? 400 : 500).json({
+            success: false,
+            message: err.message
+        });
     }
 };
 
 const updateKeratinStock = async (req, res) => {
     const { id, stok } = req.body;
     try {
-        if (!id || stok === undefined) {
-            return res.status(400).json({ 
-                error: "Format yang benar: { id: number, stok: number }" 
-            });
-        }
-
+        validateStock(stok);
         await productService.updateKeratinStock(id, stok);
-        res.json({ 
+        res.json({
             success: true,
             message: 'Stok keratin berhasil diupdate',
             data: { id, stok }
         });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(err.name === 'ValidationError' ? 400 : 500).json({
+            success: false,
+            message: err.message
+        });
     }
 };
 
 const addHairColor = async (req, res) => {
     const { product_id, nama, kategori, level, stok, tambahan_harga } = req.body;
     try {
-        const result = await productService.addHairColor(product_id, nama, kategori, level, stok, tambahan_harga);
+        validateProductData({ nama, kategori, stok: tambahan_harga });
+        validateStock(stok);
+
+        const result = await productService.addHairColor(
+            product_id, nama, kategori, level, stok, tambahan_harga
+        );
+        
         res.status(201).json({
+            success: true,
             message: 'Warna berhasil ditambahkan',
             data: result
         });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(err.name === 'ValidationError' ? 400 : 500).json({
+            success: false,
+            message: err.message
+        });
     }
 };
 

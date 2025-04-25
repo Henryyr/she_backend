@@ -1,53 +1,59 @@
 const db = require('../db');
+const NodeCache = require('node-cache');
+const cache = new NodeCache({ stdTTL: 300 }); // 5 minutes cache
 
 const getAllProducts = async () => {
+    const cacheKey = 'all_products';
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
     const connection = await db.pool;
     try {
-        // Get hair products
-        const [hairProducts] = await connection.query(`
-            SELECT 
-                hp.id,
-                'hair' as type,
-                hp.nama,
-                hp.jenis,
-                hp.harga_dasar as harga,
-                pb.nama as brand_nama
-            FROM hair_products hp
-            JOIN product_brands pb ON hp.brand_id = pb.id
-        `);
+        const [results] = await Promise.all([
+            connection.query(`
+                (SELECT 
+                    hp.id,
+                    'hair' as type,
+                    hp.nama,
+                    hp.jenis,
+                    hp.harga_dasar as harga,
+                    pb.nama as brand_nama
+                FROM hair_products hp
+                USE INDEX (idx_brand_id)
+                JOIN product_brands pb ON hp.brand_id = pb.id)
+                UNION ALL
+                (SELECT 
+                    sp.id,
+                    'smoothing' as type,
+                    sp.nama,
+                    sp.jenis,
+                    sp.harga,
+                    pb.nama as brand_nama
+                FROM smoothing_products sp
+                USE INDEX (idx_brand_id)
+                JOIN product_brands pb ON sp.brand_id = pb.id)
+                UNION ALL
+                (SELECT 
+                    kp.id,
+                    'keratin' as type,
+                    kp.nama,
+                    kp.jenis,
+                    kp.harga,
+                    pb.nama as brand_nama
+                FROM keratin_products kp
+                USE INDEX (idx_brand_id)
+                JOIN product_brands pb ON kp.brand_id = pb.id)
+            `)
+        ]);
 
-        // Get smoothing products
-        const [smoothingProducts] = await connection.query(`
-            SELECT 
-                sp.id,
-                'smoothing' as type,
-                sp.nama,
-                sp.jenis,
-                sp.harga,
-                pb.nama as brand_nama
-            FROM smoothing_products sp
-            JOIN product_brands pb ON sp.brand_id = pb.id
-        `);
-
-        // Get keratin products
-        const [keratinProducts] = await connection.query(`
-            SELECT 
-                kp.id,
-                'keratin' as type,
-                kp.nama,
-                kp.jenis,
-                kp.harga,
-                pb.nama as brand_nama
-            FROM keratin_products kp
-            JOIN product_brands pb ON kp.brand_id = pb.id
-        `);
-
-        return {
-            hair_products: hairProducts,
-            smoothing_products: smoothingProducts,
-            keratin_products: keratinProducts
+        const groupedResults = {
+            hair_products: results[0].filter(p => p.type === 'hair'),
+            smoothing_products: results[0].filter(p => p.type === 'smoothing'),
+            keratin_products: results[0].filter(p => p.type === 'keratin')
         };
 
+        cache.set(cacheKey, groupedResults);
+        return groupedResults;
     } catch (err) {
         console.error('Service Error:', err);
         throw new Error('Gagal mengambil data produk: ' + err.message);
@@ -55,9 +61,12 @@ const getAllProducts = async () => {
 };
 
 const getHairProducts = async () => {
+    const cacheKey = 'hair_products';
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
     const connection = await db.pool;
     try {
-        // Get all hair products with their brands
         const [products] = await connection.query(`
             SELECT 
                 hp.id,
@@ -66,51 +75,46 @@ const getHairProducts = async () => {
                 hp.deskripsi,
                 hp.harga_dasar,
                 pb.id as brand_id,
-                pb.nama as brand_nama
+                pb.nama as brand_nama,
+                GROUP_CONCAT(
+                    JSON_OBJECT(
+                        'color_id', hc.id,
+                        'nama', hc.nama,
+                        'kategori', hc.kategori,
+                        'level', hc.level,
+                        'stok', hc.stok,
+                        'tambahan_harga', hc.tambahan_harga
+                    )
+                ) as colors
             FROM hair_products hp
+            USE INDEX (idx_brand_id)
             JOIN product_brands pb ON hp.brand_id = pb.id
+            LEFT JOIN hair_colors hc ON hc.product_id = hp.id AND hc.stok > 0
+            GROUP BY hp.id
             ORDER BY pb.nama, hp.nama
         `);
 
-        // Get colors for each product
-        const productsWithColors = await Promise.all(products.map(async (product) => {
-            const [colors] = await connection.query(`
-                SELECT 
-                    id as color_id,
-                    nama,
-                    kategori,
-                    level,
-                    stok,
-                    tambahan_harga
-                FROM hair_colors 
-                WHERE product_id = ? AND stok > 0
-                ORDER BY nama
-            `, [product.id]);
-
-            return {
-                product_id: product.id,
-                brand: {
-                    id: product.brand_id,
-                    nama: product.brand_nama
-                },
-                product: {
-                    nama: product.product_nama,
-                    jenis: product.jenis,
-                    deskripsi: product.deskripsi,
-                    harga_dasar: parseInt(product.harga_dasar)
-                },
-                available_colors: colors.map(color => ({
-                    color_id: color.color_id,
-                    nama: color.nama,
-                    kategori: color.kategori,
-                    level: color.level,
-                    stok: color.stok,
+        const formattedProducts = products.map(product => ({
+            product_id: product.id,
+            brand: {
+                id: product.brand_id,
+                nama: product.brand_nama
+            },
+            product: {
+                nama: product.product_nama,
+                jenis: product.jenis,
+                deskripsi: product.deskripsi,
+                harga_dasar: parseInt(product.harga_dasar)
+            },
+            available_colors: product.colors ? 
+                JSON.parse(`[${product.colors}]`).map(color => ({
+                    ...color,
                     harga_total: parseInt(product.harga_dasar) + parseInt(color.tambahan_harga)
-                }))
-            };
+                })) : []
         }));
 
-        return productsWithColors;
+        cache.set(cacheKey, formattedProducts);
+        return formattedProducts;
     } catch (err) {
         console.error('Service Error:', err);
         throw new Error('Gagal mengambil data produk rambut: ' + err.message);
@@ -227,15 +231,34 @@ const getHairColorsByProduct = async (productId) => {
 const updateHairColorStock = async (id, stok) => {
     const connection = await db.pool;
     try {
-        const [result] = await connection.query(
-            'UPDATE hair_colors SET stok = ? WHERE id = ?',
-            [stok, id]
+        await connection.beginTransaction();
+
+        const [[currentStock]] = await connection.query(
+            'SELECT stok FROM hair_colors WHERE id = ? FOR UPDATE',
+            [id]
         );
-        if (result.affectedRows === 0) {
+
+        if (!currentStock) {
+            await connection.rollback();
             throw new Error('Warna tidak ditemukan');
         }
+
+        if (stok < 0) {
+            await connection.rollback();
+            throw new Error('Stok tidak boleh negatif');
+        }
+
+        await connection.query(
+            'UPDATE hair_colors SET stok = ?, updated_at = NOW() WHERE id = ?',
+            [stok, id]
+        );
+
+        await connection.commit();
+        cache.del('hair_products');
+        cache.del('hair_colors');
         return true;
     } catch (err) {
+        await connection.rollback();
         throw new Error('Gagal update stok warna: ' + err.message);
     }
 };
@@ -279,6 +302,7 @@ const addHairColor = async (product_id, nama, kategori, level, stok, tambahan_ha
             `INSERT INTO hair_colors 
             (product_id, nama, kategori, level, stok, tambahan_harga)
             VALUES (?, ?, ?, ?, ?, ?)`,
+
             [product_id, nama, kategori, level, stok, tambahan_harga]
         );
         

@@ -15,9 +15,9 @@ const createBooking = async (data) => {
     let layananWithCategory = []; // Define at the top level of the function
     
     try {
-        // Check rate limit with development-friendly message
+        // Check rate limit with index hint
         const [requests] = await connection.query(
-            `SELECT COUNT(*) as count 
+            `SELECT /*+ INDEX(booking idx_user_created) */ COUNT(*) as count 
              FROM booking 
              WHERE user_id = ? 
              AND created_at > NOW() - INTERVAL ? MINUTE`,
@@ -31,14 +31,14 @@ const createBooking = async (data) => {
 
         await connection.beginTransaction();
 
-        // Simple efficient queries without forced index hints
+        // Simple efficient queries with index hints
         const [[existingBookings], layananResults] = await Promise.all([
             connection.query(
-                'SELECT id FROM booking WHERE user_id = ? AND tanggal = ? FOR UPDATE',
+                'SELECT /*+ INDEX(booking idx_user_tanggal) */ id FROM booking WHERE user_id = ? AND tanggal = ? FOR UPDATE',
                 [user_id, tanggal]
             ),
             connection.query(
-                `SELECT l.*, lk.nama as kategori_nama 
+                `SELECT /*+ INDEX(l idx_layanan_id) */ l.*, lk.nama as kategori_nama 
                  FROM layanan l 
                  JOIN kategori_layanan lk ON l.kategori_id = lk.id 
                  WHERE l.id IN (?)`, 
@@ -160,9 +160,9 @@ const createBooking = async (data) => {
 
         const [insertResult] = await connection.query(
             `INSERT INTO booking /*+ BATCH_INSERT */ 
-            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?)`,
-            [user_id, tanggal, jam_mulai, jam_selesai_string, bookingNumber, total_harga]
+            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`,
+            [user_id, tanggal, jam_mulai, jam_selesai_string, bookingNumber, total_harga, data.special_request]
         );
 
         const booking_id = insertResult.insertId;
@@ -199,6 +199,7 @@ const createBooking = async (data) => {
             jam_mulai,
             jam_selesai: jam_selesai_string,
             product_detail,
+            special_request: data.special_request,
             default_products: categories.includes('Smoothing') && !smoothing_product ? true : undefined
         };
 
@@ -221,7 +222,7 @@ const getAllBookings = async () => {
     const connection = await pool.getConnection();
     try {
         const [bookings] = await connection.query(`
-            SELECT b.*,
+            SELECT /*+ INDEX(b idx_booking_created) */ b.*,
                 GROUP_CONCAT(l.nama ORDER BY l.id) as layanan_names
             FROM booking b
             LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
@@ -379,19 +380,21 @@ const completeBooking = async (id) => {
         // Wait for all stock updates to complete
         await Promise.all(stockUpdates);
 
-        // Update booking status
+        // Update booking status and completed_at
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
         await connection.query(
             `UPDATE booking 
              SET status = 'completed', 
-                 completed_at = CURRENT_TIMESTAMP
+                 completed_at = ?
              WHERE id = ?`,
-            [id]
+            [now, id]
         );
 
         await connection.commit();
         return { 
             message: 'Booking berhasil diselesaikan',
-            booking_id: id
+            booking_id: id,
+            completed_at: now
         };
 
     } catch (error) {

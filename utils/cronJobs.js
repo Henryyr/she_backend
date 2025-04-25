@@ -1,42 +1,39 @@
-// utils/cronJobs.js
 const cron = require('node-cron');
 const db = require('../db');
+const TransaksiService = require('../services/transaksiService');
 
-// Cron untuk menghapus booking lama
-const deleteOldBookings = () => {
+// Cron untuk menghapus booking dan transaksi yang expired
+const cleanupOldData = () => {
     cron.schedule('0 0 * * *', async () => {
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        await db.promise().query(`DELETE FROM booking WHERE tanggal < ?`, [today]);
-        console.log(`✅ [CRON] Booking sebelum ${today} dihapus`);
-      } catch (err) {
-        console.error("❌ [CRON] Gagal menghapus booking:", err.message);
-      }
-    }, {
-      timezone: "Asia/Jakarta"
-    });
-  };
-
-// Initialize cron jobs
-const initCronJobs = () => {
-    // Cron job to auto-cancel unconfirmed bookings after 24 hours
-    cron.schedule('0 0 * * *', async () => { // Every midnight
         try {
+            const today = new Date().toISOString().split('T')[0];
+            await db.promise().query(`DELETE FROM booking WHERE tanggal < ?`, [today]);
             await db.promise().query(`
-                UPDATE booking 
-                SET status = 'canceled' 
-                WHERE status = 'pending' AND TIMESTAMPDIFF(HOUR, created_at, NOW()) > 24
+                DELETE FROM transaksi 
+                WHERE status IN ('failed', 'expired') 
+                AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
             `);
-            console.log("Booking yang tidak dikonfirmasi lebih dari 24 jam telah dibatalkan.");
         } catch (err) {
-            console.error("Error in auto-cancel cron job:", err);
+            console.error("[CRON] Cleanup error:", err.message);
         }
     }, {
-        timezone: "Asia/Jakarta" // Sesuaikan timezone
+        timezone: "Asia/Jakarta"
     });
-    deleteOldBookings();
 };
 
-module.exports = {
-    initCronJobs
+const initCronJobs = () => {
+    cleanupOldData();
+    // Handle expired transactions hourly
+    cron.schedule('0 */1 * * *', async () => {
+        try {
+            const transaksiService = new TransaksiService();
+            await transaksiService.handleExpiredTransactions();
+        } catch (err) {
+            console.error("[CRON] Expired transactions error:", err.message);
+        }
+    }, {
+        timezone: "Asia/Jakarta"
+    });
 };
+
+module.exports = { initCronJobs };
