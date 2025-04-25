@@ -14,8 +14,10 @@ const getDashboard = async (req, res) => {
 
 const getAllUsers = async (req, res) => {
     try {
-        const users = await adminService.getAllUsers();
-        res.json(users);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const userData = await adminService.getAllUsers(page, limit);
+        res.json(userData);
     } catch (err) {
         res.status(500).json({ message: "Gagal mengambil data users", error: err });
     }

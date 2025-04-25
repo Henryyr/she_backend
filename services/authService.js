@@ -24,6 +24,44 @@ const registerUser = async (userData) => {
     return pool.query(sql, [fullname, email, phone_number, username, hashedPassword, address, role]);
 };
 
+const register = async (userData) => {
+    const { email, username, password, fullname, phone_number, address } = userData;
+
+    // Prevent role injection from register
+    if (userData.role) {
+        throw { 
+            status: 403, 
+            message: "Tidak diizinkan mengatur role pengguna" 
+        };
+    }
+
+    // Force set role to 'user' for all registrations
+    const role = 'user';
+
+    // Validate email and username uniqueness
+    const [existingUser] = await pool.query(
+        "SELECT id FROM users WHERE email = ? OR username = ?", 
+        [email, username]
+    );
+
+    if (existingUser.length > 0) {
+        throw { 
+            status: 400, 
+            message: "Email atau username sudah digunakan" 
+        };
+    }
+
+    // Hash password and create user with forced 'user' role
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [result] = await pool.query(
+        `INSERT INTO users (email, username, password, fullname, phone_number, address, role) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [email, username, hashedPassword, fullname, phone_number, address, role]
+    );
+
+    return result.insertId;
+};
+
 const loginUser = async ({ username, password }) => {
     const [users] = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
 
@@ -98,6 +136,7 @@ const cleanupExpiredTokens = async () => {
 
 module.exports = {
     registerUser,
+    register,
     loginUser,
     getProfile,
     blacklistToken,

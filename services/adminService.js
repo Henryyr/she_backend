@@ -1,10 +1,29 @@
 const { pool } = require('../db');
 
-const getAllUsers = async () => {
-    const [results] = await pool.query(
-        "SELECT id, fullname, email, phone_number, username, address, role FROM users"
+const getAllUsers = async (page = 1, limit = 10) => {
+    const offset = (page - 1) * limit;
+    
+    const [users] = await pool.query(
+        `SELECT id, fullname, email, phone_number, username, address, role 
+         FROM users
+         ORDER BY created_at DESC
+         LIMIT ? OFFSET ?`,
+        [limit, offset]
     );
-    return results;
+
+    const [totalCount] = await pool.query(
+        "SELECT COUNT(*) as total FROM users"
+    );
+
+    return {
+        users,
+        pagination: {
+            total: totalCount[0].total,
+            page,
+            limit,
+            totalPages: Math.ceil(totalCount[0].total / limit)
+        }
+    };
 };
 
 const updateUser = async (id, data) => {
