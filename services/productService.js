@@ -79,7 +79,7 @@ const getHairProducts = async () => {
                 GROUP_CONCAT(
                     JSON_OBJECT(
                         'color_id', hc.id,
-                        'nama', hc.nama,
+                        'nama', REPLACE(hc.nama, '"', '\\"'), -- Escape karakter "
                         'kategori', hc.kategori,
                         'level', hc.level,
                         'stok', hc.stok,
@@ -94,24 +94,39 @@ const getHairProducts = async () => {
             ORDER BY pb.nama, hp.nama
         `);
 
-        const formattedProducts = products.map(product => ({
-            product_id: product.id,
-            brand: {
-                id: product.brand_id,
-                nama: product.brand_nama
-            },
-            product: {
-                nama: product.product_nama,
-                jenis: product.jenis,
-                deskripsi: product.deskripsi,
-                harga_dasar: parseInt(product.harga_dasar)
-            },
-            available_colors: product.colors ? 
-                JSON.parse(`[${product.colors}]`).map(color => ({
-                    ...color,
-                    harga_total: parseInt(product.harga_dasar) + parseInt(color.tambahan_harga)
-                })) : []
-        }));
+        const formattedProducts = products.map(product => {
+            let availableColors = [];
+            if (product.colors) {
+                try {
+                    // Validasi JSON sebelum parsing
+                    const jsonString = `[${product.colors}]`;
+                    if (!isValidJSON(jsonString)) {
+                        throw new Error('Invalid JSON format');
+                    }
+                    availableColors = JSON.parse(jsonString).map(color => ({
+                        ...color,
+                        harga_total: parseInt(product.harga_dasar) + parseInt(color.tambahan_harga)
+                    }));
+                } catch (error) {
+                    console.error(`Error parsing colors for product ID ${product.id}:`, error.message);
+                }
+            }
+
+            return {
+                product_id: product.id,
+                brand: {
+                    id: product.brand_id,
+                    nama: product.brand_nama
+                },
+                product: {
+                    nama: product.product_nama,
+                    jenis: product.jenis,
+                    deskripsi: product.deskripsi,
+                    harga_dasar: parseInt(product.harga_dasar)
+                },
+                available_colors: availableColors
+            };
+        });
 
         cache.set(cacheKey, formattedProducts);
         return formattedProducts;
@@ -120,6 +135,16 @@ const getHairProducts = async () => {
         throw new Error('Gagal mengambil data produk rambut: ' + err.message);
     }
 };
+
+// Helper function untuk validasi JSON
+function isValidJSON(str) {
+    try {
+        JSON.parse(str);
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 const getProductsByCategory = async (kategoriId) => {
     const connection = await db.pool;

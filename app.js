@@ -9,6 +9,7 @@ const morgan = require('morgan');
 const compression = require('compression');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss');
+const responseTime = require('response-time'); // Tambahkan ini
 require('./config/cloudinary');
 
 const app = express();
@@ -111,6 +112,9 @@ const limiter = rateLimit({
   keyGenerator: (req) => req.ip + '-' + req.route?.path
 });
 app.use('/api/', limiter);
+
+// Response time middleware
+app.use(responseTime());
 
 // Performance monitoring
 app.use((req, res, next) => {

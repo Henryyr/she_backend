@@ -2,18 +2,17 @@ const { pool } = require('../db');
 
 const getAllUsers = async (page = 1, limit = 10) => {
     const offset = (page - 1) * limit;
-    
+
     const [users] = await pool.query(
         `SELECT id, fullname, email, phone_number, username, address, role 
          FROM users
-         WHERE role = 'pelanggan'
          ORDER BY created_at DESC
          LIMIT ? OFFSET ?`,
         [limit, offset]
     );
 
     const [totalCount] = await pool.query(
-        "SELECT COUNT(*) as total FROM users WHERE role = 'pelanggan'"
+        "SELECT COUNT(*) as total FROM users"
     );
 
     return {
@@ -65,7 +64,7 @@ const getRecentTransactions = async (limit = 5) => {
 
 const getAllTransactions = async (page = 1, limit = 10) => {
     const offset = (page - 1) * limit;
-    
+
     const [transactions] = await pool.query(`
         SELECT 
             t.id,
@@ -82,13 +81,11 @@ const getAllTransactions = async (page = 1, limit = 10) => {
                 ELSE CONCAT(UPPER(LEFT(t.status, 1)), LOWER(SUBSTRING(t.status, 2)))
             END as status
         FROM transaksi t
-        FORCE INDEX (idx_created_status)
-        JOIN users u USE INDEX (PRIMARY) ON t.user_id = u.id
+        JOIN users u ON t.user_id = u.id
         JOIN booking b ON t.booking_id = b.id
-        JOIN kategori_transaksi k USE INDEX (PRIMARY) ON t.kategori_transaksi_id = k.id
+        JOIN kategori_transaksi k ON t.kategori_transaksi_id = k.id
         JOIN booking_layanan bl ON b.id = bl.booking_id
         JOIN layanan l ON bl.layanan_id = l.id
-        WHERE t.status NOT IN ('expired', 'cancelled', 'failed')
         GROUP BY t.id
         ORDER BY t.created_at DESC
         LIMIT ? OFFSET ?
@@ -97,8 +94,6 @@ const getAllTransactions = async (page = 1, limit = 10) => {
     const [totalCount] = await pool.query(`
         SELECT COUNT(DISTINCT t.id) as total 
         FROM transaksi t
-        FORCE INDEX (idx_created_status)
-        WHERE t.status NOT IN ('expired', 'cancelled', 'failed')
     `);
 
     return {
@@ -125,10 +120,9 @@ const getAllBookings = async (page = 1, limit = 10) => {
             GROUP_CONCAT(l.nama SEPARATOR ', ') as services,
             b.status
         FROM booking b
-        FORCE INDEX (idx_created_status) -- pastikan index ini ada di tabel booking
-        JOIN users u USE INDEX (PRIMARY) ON b.user_id = u.id
-        JOIN booking_layanan bl USE INDEX (idx_booking_id) ON b.id = bl.booking_id
-        JOIN layanan l USE INDEX (PRIMARY) ON bl.layanan_id = l.id
+        JOIN users u ON b.user_id = u.id
+        JOIN booking_layanan bl ON b.id = bl.booking_id
+        JOIN layanan l ON bl.layanan_id = l.id
         GROUP BY b.id
         ORDER BY b.created_at DESC
         LIMIT ? OFFSET ?
@@ -137,7 +131,6 @@ const getAllBookings = async (page = 1, limit = 10) => {
     const [totalCount] = await pool.query(`
         SELECT COUNT(DISTINCT b.id) as total
         FROM booking b
-        FORCE INDEX (idx_created_status)
     `);
 
     return {

@@ -17,6 +17,13 @@ const getAllUsers = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const userData = await adminService.getAllUsers(page, limit);
+
+        // Tambahkan properti untuk navigasi pagination
+        userData.pagination.hasNextPage = page < userData.pagination.totalPages;
+        userData.pagination.hasPrevPage = page > 1;
+        userData.pagination.nextPage = userData.pagination.hasNextPage ? page + 1 : null;
+        userData.pagination.prevPage = userData.pagination.hasPrevPage ? page - 1 : null;
+
         res.json(userData);
     } catch (err) {
         res.status(500).json({ message: "Gagal mengambil data users", error: err });
@@ -50,6 +57,12 @@ const getAllTransactions = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const transactions = await adminService.getAllTransactions(page, limit);
+
+        transactions.pagination.hasNextPage = page < transactions.pagination.totalPages;
+        transactions.pagination.hasPrevPage = page > 1;
+        transactions.pagination.nextPage = transactions.pagination.hasNextPage ? page + 1 : null;
+        transactions.pagination.prevPage = transactions.pagination.hasPrevPage ? page - 1 : null;
+
         res.json(transactions);
     } catch (err) {
         res.status(500).json({ message: "Terjadi kesalahan", error: err });
@@ -61,10 +74,25 @@ const getAllBookings = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const bookings = await adminService.getAllBookings(page, limit);
+
+        bookings.pagination.hasNextPage = page < bookings.pagination.totalPages;
+        bookings.pagination.hasPrevPage = page > 1;
+        bookings.pagination.nextPage = bookings.pagination.hasNextPage ? page + 1 : null;
+        bookings.pagination.prevPage = bookings.pagination.hasPrevPage ? page - 1 : null;
+
         res.json(bookings);
     } catch (err) {
         res.status(500).json({ message: "Terjadi kesalahan", error: err });
     }
+};
+
+// Tambahkan fungsi untuk emit update dashboard
+const emitDashboardUpdate = async (io) => {
+    const dashboardData = await adminService.getDashboardStats();
+    io.emit('dashboard:update', {
+        title: "Dashboard She Salon",
+        ...dashboardData
+    });
 };
 
 module.exports = {
@@ -73,5 +101,6 @@ module.exports = {
     updateUser,
     deleteUser,
     getAllTransactions,
-    getAllBookings
+    getAllBookings,
+    emitDashboardUpdate
 };
