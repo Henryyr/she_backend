@@ -9,6 +9,7 @@ const morgan = require('morgan');
 const compression = require('compression');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss');
+const responseTime = require('response-time'); // Tambahkan ini
 require('./config/cloudinary');
 
 const app = express();
@@ -112,6 +113,9 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// Response time middleware
+app.use(responseTime());
+
 // Performance monitoring
 app.use((req, res, next) => {
   const start = Date.now();
@@ -126,7 +130,6 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/booking', require('./routes/bookingRoutes'));
-app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/layanan', require('./routes/layananRoutes'));
 app.use('/api/layanankategori', require('./routes/layanankategoriRoutes'));
 app.use('/api/auth', require('./routes/auth'));

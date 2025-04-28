@@ -1,10 +1,13 @@
 // server.js
+const http = require('http');
 const app = require('./app');
 const { connect } = require('./db');
 const validateEnv = require('./config/envValidator');
+const { Server } = require('socket.io');
 
 const PORT = process.env.PORT || 3000;
 let server;
+let io; // Tambahkan io agar bisa diekspor
 
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -23,10 +26,18 @@ async function startServer() {
         }
 
         await connect();
-        server = app.listen(PORT, () => {
+        server = http.createServer(app);
+        io = new Server(server, {
+            cors: {
+                origin: "*", // Atur sesuai kebutuhan frontend Anda
+                methods: ["GET", "POST"]
+            }
+        });
+
+        server.listen(PORT, () => {
             console.log(`🚀 Server running on http://localhost:${PORT}`);
         });
-        
+
         // Improved security timeouts
         server.timeout = 10000; // 10 seconds
         server.keepAliveTimeout = 5000;
@@ -39,7 +50,15 @@ async function startServer() {
         server.on('connection', socket => {
             socket.setKeepAlive(true, 60000); // 60 seconds
         });
-        
+
+        // Tambahkan log koneksi socket
+        io.on('connection', (socket) => {
+            console.log('Socket connected:', socket.id);
+        });
+
+        // Ekspor io agar bisa diakses di controller lain
+        module.exports.io = io;
+
     } catch (error) {
         console.error('❌ Failed to start server:', error);
         process.exit(1);

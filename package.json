@@ -40,6 +40,7 @@
     "redis": "^4.7.0",
     "response-time": "^2.3.3",
     "sequelize": "^6.37.5",
+    "socket.io": "^4.8.1",
     "twilio": "^5.4.5",
     "xss": "^1.0.15"
   },

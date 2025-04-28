@@ -9,10 +9,24 @@ const snap = new midtransClient.Snap({
 
 // Add Midtrans status mapping
 const MIDTRANS_STATUS = {
-    PENDING: ['pending'],
-    SUCCESS: ['capture', 'settlement'],
-    FAILED: ['deny', 'cancel', 'expire'],
-    REFUND: ['refund', 'partial_refund']
+    PAYMENT: {
+        PENDING: ['pending', 'challenge'],
+        AUTHORIZED: ['authorize'],
+        SUCCESS: ['capture', 'settlement', 'success'],
+        FAILED: ['deny', 'cancel', 'expire', 'failed', 'denied'],
+        REFUND: ['refund', 'partial_refund'],
+        CHARGEBACK: ['chargeback'],
+        REVERSED: ['reversal'],
+        CANCELLED: ['cancelled'],
+        EXPIRED: ['expired']
+    },
+    WITHDRAWAL: {
+        REQUESTED: ['requested'],
+        PROCESSING: ['processing'],
+        SUCCESS: ['success'],
+        FAILED: ['failed'],
+        CANCELLED: ['cancelled']
+    }
 };
 
 // Add helper function to validate Midtrans notification

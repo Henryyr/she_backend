@@ -1,5 +1,7 @@
 const bookingService = require('../services/bookingService');
 const emailService = require('../services/emailService');
+const { emitDashboardUpdate } = require('./adminController');
+const { io } = require('../server');
 
 const createBooking = async (req, res) => {
     console.log('[BookingController] Received booking request:', {
@@ -31,6 +33,7 @@ const createBooking = async (req, res) => {
         };
 
         const result = await bookingService.createBooking(bookingData);
+        await emitDashboardUpdate(io);
         res.json(result);
     } catch (err) {
         console.error('[BookingController] Error:', {
