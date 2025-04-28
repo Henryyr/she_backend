@@ -1,7 +1,7 @@
 const bookingService = require('../services/bookingService');
 const emailService = require('../services/emailService');
 const { emitDashboardUpdate } = require('./adminController');
-const { io } = require('../server');
+const { getIO } = require('../socketInstance');
 
 const createBooking = async (req, res) => {
     console.log('[BookingController] Received booking request:', {
@@ -33,25 +33,35 @@ const createBooking = async (req, res) => {
         };
 
         const result = await bookingService.createBooking(bookingData);
-        await emitDashboardUpdate(io);
+
+        // Emit update dashboard realtime jika booking berhasil
+        const io = getIO();
+        if (io) {
+            try {
+                await emitDashboardUpdate(io);
+            } catch (emitErr) {
+                console.error('[BookingController] Emit dashboard update failed:', emitErr);
+            }
+        }
+
         res.json(result);
-    } catch (err) {
+    } catch (error) {
         console.error('[BookingController] Error:', {
-            message: err.message,
+            message: error.message,
             body: JSON.stringify(req.body),
             timestamp: new Date().toISOString()
         });
         return res.status(400).json({
             error: 'Invalid JSON format',
-            details: err.message,
+            details: error.message,
             timestamp: new Date().toISOString()
         });
     }
 };
 
 const getAllBookings = async (req, res) => {
-    const { page = 1, limit = 10 } = req.query;
-    
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
     try {
         const results = await bookingService.getAllBookings(page, limit);
         res.json(results);

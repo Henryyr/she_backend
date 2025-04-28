@@ -4,6 +4,7 @@ const app = require('./app');
 const { connect } = require('./db');
 const validateEnv = require('./config/envValidator');
 const { Server } = require('socket.io');
+const { setIO } = require('./socketInstance');
 
 const PORT = process.env.PORT || 3000;
 let server;
@@ -34,6 +35,8 @@ async function startServer() {
             }
         });
 
+        setIO(io); // Set instance setelah inisialisasi
+
         server.listen(PORT, () => {
             console.log(`🚀 Server running on http://localhost:${PORT}`);
         });
@@ -56,9 +59,6 @@ async function startServer() {
             console.log('Socket connected:', socket.id);
         });
 
-        // Ekspor io agar bisa diakses di controller lain
-        module.exports.io = io;
-
     } catch (error) {
         console.error('❌ Failed to start server:', error);
         process.exit(1);
@@ -80,6 +80,9 @@ async function gracefulShutdown(signal) {
             console.log('Could not close connections in time, forcing shutdown');
             process.exit(1);
         }, 10000);
+    } else {
+        console.log('No server instance to close.');
+        process.exit(0);
     }
 }
 

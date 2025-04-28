@@ -25,8 +25,8 @@ const getAllUsers = async (req, res) => {
         userData.pagination.prevPage = userData.pagination.hasPrevPage ? page - 1 : null;
 
         res.json(userData);
-    } catch (err) {
-        res.status(500).json({ message: "Gagal mengambil data users", error: err });
+    } catch (error) {
+        res.status(500).json({ message: "Gagal mengambil data users", error: error.message });
     }
 };
 
@@ -64,8 +64,8 @@ const getAllTransactions = async (req, res) => {
         transactions.pagination.prevPage = transactions.pagination.hasPrevPage ? page - 1 : null;
 
         res.json(transactions);
-    } catch (err) {
-        res.status(500).json({ message: "Terjadi kesalahan", error: err });
+    } catch (error) {
+        res.status(500).json({ message: "Terjadi kesalahan", error: error.message });
     }
 };
 
@@ -81,18 +81,22 @@ const getAllBookings = async (req, res) => {
         bookings.pagination.prevPage = bookings.pagination.hasPrevPage ? page - 1 : null;
 
         res.json(bookings);
-    } catch (err) {
-        res.status(500).json({ message: "Terjadi kesalahan", error: err });
+    } catch (error) {
+        res.status(500).json({ message: "Terjadi kesalahan", error: error.message });
     }
 };
 
-// Tambahkan fungsi untuk emit update dashboard
+// Emit update dashboard ke semua client yang terhubung
 const emitDashboardUpdate = async (io) => {
-    const dashboardData = await adminService.getDashboardStats();
-    io.emit('dashboard:update', {
-        title: "Dashboard She Salon",
-        ...dashboardData
-    });
+    try {
+        const dashboardData = await adminService.getDashboardStats();
+        io.emit('dashboard:update', {
+            title: "Dashboard She Salon",
+            ...dashboardData
+        });
+    } catch (err) {
+        console.error('[AdminController] Emit dashboard update failed:', err);
+    }
 };
 
 module.exports = {
