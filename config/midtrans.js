@@ -2,7 +2,7 @@
 const midtransClient = require('midtrans-client');
 
 const snap = new midtransClient.Snap({
-    isProduction: false,
+    isProduction: process.env.NODE_ENV === 'production', // Otomatis mengikuti env
     serverKey: process.env.MIDTRANS_SERVER_KEY,
     clientKey: process.env.MIDTRANS_CLIENT_KEY
 });
