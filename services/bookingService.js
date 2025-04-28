@@ -95,44 +95,29 @@ const createBooking = async (data) => {
         }
 
         if (hair_color || smoothing_product || keratin_product) {
-            const queries = [];
-            const params = [];
-            
-            if (hair_color) {
-                queries.push(`
-                    SELECT 'hair_color' as type, hc.*, hp.harga_dasar, pb.nama as brand_nama
-                    FROM hair_colors hc
-                    JOIN hair_products hp ON hc.product_id = hp.id
-                    JOIN product_brands pb ON hp.brand_id = pb.id
-                    WHERE hc.id = ?
-                `);
-                params.push(hair_color.color_id);
-            }
-
-            if (smoothing_product) {
-                queries.push(`
-                    SELECT 'smoothing' as type, sp.*, pb.nama as brand_nama
-                    FROM smoothing_products sp
-                    JOIN product_brands pb ON sp.brand_id = pb.id
-                    WHERE sp.id = ? AND sp.brand_id = ?
-                `);
-                params.push(smoothing_product.product_id, smoothing_product.brand_id);
-            }
-
-            if (keratin_product) {
-                queries.push(`
-                    SELECT 'keratin' as type, kp.*, pb.nama as brand_nama
-                    FROM keratin_products kp
-                    JOIN product_brands pb ON kp.brand_id = pb.id
-                    WHERE kp.id = ? AND kp.brand_id = ?
-                `);
-                params.push(keratin_product.product_id, keratin_product.brand_id);
-            }
-
-            const [productResults] = await connection.query(
-                queries.join(' UNION ALL '),
-                params
-            );
+            const [productResults] = await connection.query(`
+                SELECT 'hair_color' as type, hc.*, hp.harga_dasar, pb.nama as brand_nama
+                FROM hair_colors hc
+                JOIN hair_products hp ON hc.product_id = hp.id
+                JOIN product_brands pb ON hp.brand_id = pb.id
+                WHERE hc.id = ?
+                UNION ALL
+                SELECT 'smoothing' as type, sp.*, NULL as harga_dasar, pb.nama as brand_nama
+                FROM smoothing_products sp
+                JOIN product_brands pb ON sp.brand_id = pb.id
+                WHERE sp.id = ? AND sp.brand_id = ?
+                UNION ALL
+                SELECT 'keratin' as type, kp.*, NULL as harga_dasar, pb.nama as brand_nama
+                FROM keratin_products kp
+                JOIN product_brands pb ON kp.brand_id = pb.id
+                WHERE kp.id = ? AND kp.brand_id = ?
+            `, [
+                hair_color ? hair_color.color_id : 0,
+                smoothing_product ? smoothing_product.product_id : 0,
+                smoothing_product ? smoothing_product.brand_id : 0,
+                keratin_product ? keratin_product.product_id : 0,
+                keratin_product ? keratin_product.brand_id : 0
+            ]);
 
             productResults.forEach(result => {
                 switch(result.type) {
@@ -218,9 +203,10 @@ const createBooking = async (data) => {
     }
 };
 
-const getAllBookings = async () => {
+const getAllBookings = async (page = 1, limit = 10) => {
     const connection = await pool.getConnection();
     try {
+        const offset = (page - 1) * limit;
         const [bookings] = await connection.query(`
             SELECT /*+ INDEX(b idx_booking_created) */ b.*,
                 GROUP_CONCAT(l.nama ORDER BY l.id) as layanan_names
@@ -229,8 +215,22 @@ const getAllBookings = async () => {
             LEFT JOIN layanan l ON bl.layanan_id = l.id
             GROUP BY b.id
             ORDER BY b.created_at DESC
-        `);
-        return bookings;
+            LIMIT ? OFFSET ?
+        `, [limit, offset]);
+
+        const [totalCount] = await connection.query(
+            "SELECT COUNT(*) as total FROM booking"
+        );
+
+        return {
+            bookings,
+            pagination: {
+                total: totalCount[0].total,
+                page,
+                limit,
+                totalPages: Math.ceil(totalCount[0].total / limit)
+            }
+        };
     } finally {
         connection.release();
     }
