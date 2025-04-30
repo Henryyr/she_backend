@@ -13,5 +13,6 @@ router.get('/users', adminController.getAllUsers);
 router.put('/users/:id', adminController.updateUser);
 router.delete('/users/:id', adminController.deleteUser);
 router.get('/bookings', adminController.getAllBookings);
+router.get('/bookings/user/:userId', adminController.getBookingsByUserId);
 
 module.exports = router;

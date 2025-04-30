@@ -150,6 +150,46 @@ const getAllBookings = async (page = 1, limit = 10) => {
     };
 };
 
+const getBookingsByUserId = async (userId, page = 1, limit = 10) => {
+    limit = Math.min(limit, 100);
+    const offset = (page - 1) * limit;
+
+    const [bookings] = await pool.query(`
+        SELECT 
+            b.id,
+            u.fullname as customer,
+            DATE_FORMAT(b.tanggal, '%d %b %Y') as date,
+            TIME_FORMAT(b.jam_mulai, '%H:%i') as start_time,
+            TIME_FORMAT(b.jam_selesai, '%H:%i') as end_time,
+            GROUP_CONCAT(l.nama SEPARATOR ', ') as services,
+            b.status
+        FROM booking b
+        JOIN users u ON b.user_id = u.id
+        JOIN booking_layanan bl ON b.id = bl.booking_id
+        JOIN layanan l ON bl.layanan_id = l.id
+        WHERE b.user_id = ?
+        GROUP BY b.id
+        ORDER BY b.created_at DESC
+        LIMIT ? OFFSET ?
+    `, [userId, limit, offset]);
+
+    const [totalCount] = await pool.query(`
+        SELECT COUNT(DISTINCT b.id) as total
+        FROM booking b
+        WHERE b.user_id = ?
+    `, [userId]);
+
+    return {
+        bookings,
+        pagination: {
+            total: totalCount[0].total,
+            page,
+            limit,
+            totalPages: Math.ceil(totalCount[0].total / limit)
+        }
+    };
+};
+
 // Mengambil statistik dashboard untuk emit realtime
 const getDashboardStats = async () => {
     try {
@@ -247,5 +287,6 @@ module.exports = {
     getAllTransactions,
     getDashboardStats,
     getAllBookings,
-    updateDashboardStats
+    updateDashboardStats,
+    getBookingsByUserId // tambahkan ini
 };

@@ -86,6 +86,24 @@ const getAllBookings = async (req, res) => {
     }
 };
 
+const getBookingsByUserId = async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const bookings = await adminService.getBookingsByUserId(userId, page, limit);
+
+        bookings.pagination.hasNextPage = page < bookings.pagination.totalPages;
+        bookings.pagination.hasPrevPage = page > 1;
+        bookings.pagination.nextPage = bookings.pagination.hasNextPage ? page + 1 : null;
+        bookings.pagination.prevPage = bookings.pagination.hasPrevPage ? page - 1 : null;
+
+        res.json(bookings);
+    } catch (error) {
+        res.status(500).json({ message: "Terjadi kesalahan", error: error.message });
+    }
+};
+
 // Emit update dashboard ke semua client yang terhubung
 const emitDashboardUpdate = async (io) => {
     try {
@@ -106,5 +124,6 @@ module.exports = {
     deleteUser,
     getAllTransactions,
     getAllBookings,
-    emitDashboardUpdate
+    emitDashboardUpdate,
+    getBookingsByUserId
 };
