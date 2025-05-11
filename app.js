@@ -132,7 +132,7 @@ app.use((req, res, next) => {
 app.use('/api/booking', require('./routes/bookingRoutes'));
 app.use('/api/layanan', require('./routes/layananRoutes'));
 app.use('/api/layanankategori', require('./routes/layanankategoriRoutes'));
-app.use('/api/auth', require('./routes/auth'));
+app.use('/api/user', require('./routes/authRoutes'));
 app.use('/api/transaksi', require('./routes/transaksiRoutes'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/testimoni', require('./routes/testimoniRoutes'));
