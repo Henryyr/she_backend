@@ -150,6 +150,32 @@ const getAllBookings = async (page = 1, limit = 10) => {
     };
 };
 
+const getTransactionsByUserId = async (userId, page, limit) => {
+    const offset = (page - 1) * limit;
+
+    const [rows, countResult] = await Promise.all([
+        db.transaction.findMany({
+            where: { userId },
+            skip: offset,
+            take: limit,
+            orderBy: { createdAt: 'desc' }
+        }),
+        db.transaction.count({ where: { userId } })
+    ]);
+
+    const totalPages = Math.ceil(countResult / limit);
+
+    return {
+        data: rows,
+        pagination: {
+            totalItems: countResult,
+            totalPages,
+            currentPage: page,
+            perPage: limit
+        }
+    };
+};
+
 const getBookingsByUserId = async (userId, page = 1, limit = 10) => {
     limit = Math.min(limit, 100);
     const offset = (page - 1) * limit;
@@ -285,8 +311,9 @@ module.exports = {
     deleteUser,
     getRecentTransactions,
     getAllTransactions,
+    getTransactionsByUserId,
     getDashboardStats,
     getAllBookings,
     updateDashboardStats,
-    getBookingsByUserId // tambahkan ini
+    getBookingsByUserId
 };
