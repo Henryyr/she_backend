@@ -1,58 +1,20 @@
-// routes/bookingRoutes.js
 const express = require('express');
 const router = express.Router();
 const bookingController = require('../controllers/bookingController');
 const { authenticate } = require('../middleware/auth');
-const { bookingLimiter } = require('../config/rateLimit'); // Updated import path
+const { bookingLimiter } = require('../config/rateLimit');
 
-// Add JSON sanitization middleware
-router.use(express.json({
-    verify: (req, res, buf) => {
-        try {
-            JSON.parse(buf);
-        } catch (e) {
-            res.status(400).json({ 
-                error: 'Invalid JSON format',
-                details: e.message,
-                timestamp: new Date().toISOString()
-            });
-            throw new Error('Invalid JSON');
-        }
-    }
-}));
+// Middleware modular
+const jsonSanitizer = require('../middleware/jsonSanitizer');
+const requestLogger = require('../middleware/requestLogger');
+const errorHandler = require('../middleware/errorHandler');
 
-// Add request logging middleware
-router.use((req, res, next) => {
-    console.log('[BookingRoutes] Incoming request:', {
-        method: req.method,
-        path: req.path,
-        ip: req.ip,
-        timestamp: new Date().toISOString()
-    });
-    next();
-});
+// Middleware
+router.use(jsonSanitizer);
+router.use(requestLogger);
+router.use(errorHandler);
 
-// Add error handler for rate limiter and JSON parsing errors
-router.use((err, req, res, next) => {
-    if (err instanceof Error) {
-        if (err.statusCode === 429) {
-            return res.status(429).json({ error: err.message });
-        }
-        // Handle JSON parsing errors
-        if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-            return res.status(400).json({ 
-                error: 'Invalid JSON format in request body',
-                details: err.message
-            });
-        }
-    }
-    // Only call next(err) if no response has been sent
-    if (!res.headersSent) {
-        next(err);
-    }
-});
-
-// Booking routes
+// Routes
 router.post('/', authenticate, bookingLimiter, bookingController.createBooking);
 router.get('/', authenticate, bookingController.getAllBookings);
 router.get('/:id', authenticate, bookingController.getBookingById);
