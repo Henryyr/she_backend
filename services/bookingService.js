@@ -9,11 +9,14 @@ const createBooking = async (data) => {
     const { user_id, layanan_id, tanggal, jam_mulai, hair_color } = data;
     let { smoothing_product, keratin_product } = data;
 
+    // Convert single layanan_id to array if it's not already an array
+    const layanan_ids = Array.isArray(layanan_id) ? layanan_id : [layanan_id];
+
     const connection = await pool.getConnection();
     console.log('Starting booking process...', { user_id, layanan_id, tanggal, jam_mulai });
 
     let layananWithCategory = []; // Define at the top level of the function
-    
+
     try {
         // Check rate limit with index hint
         const [requests] = await connection.query(
@@ -42,7 +45,7 @@ const createBooking = async (data) => {
                  FROM layanan l 
                  JOIN kategori_layanan lk ON l.kategori_id = lk.id 
                  WHERE l.id IN (?)`, 
-                [layanan_id]
+                [layanan_ids]
             )
         ]);
 
@@ -56,7 +59,9 @@ const createBooking = async (data) => {
         if (layananWithCategory.length === 0) {
             throw new Error("Layanan tidak ditemukan");
         }
-        if (layananWithCategory.length !== layanan_id.length) {
+        
+        // Modified this check to work with both single layanan_id and arrays
+        if (layananWithCategory.length !== layanan_ids.length) {
             throw new Error("Beberapa layanan tidak valid");
         }
 
@@ -94,48 +99,59 @@ const createBooking = async (data) => {
             keratin_product = { ...DEFAULT_PRODUCTS.keratin };
         }
 
-        if (hair_color || smoothing_product || keratin_product) {
-            const [productResults] = await connection.query(`
+        // Process product details separately for each type
+        let productResults = [];
+
+        if (hair_color) {
+            const [hairColorResults] = await connection.query(`
                 SELECT 'hair_color' as type, hc.*, hp.harga_dasar, pb.nama as brand_nama
                 FROM hair_colors hc
                 JOIN hair_products hp ON hc.product_id = hp.id
                 JOIN product_brands pb ON hp.brand_id = pb.id
                 WHERE hc.id = ?
-                UNION ALL
-                SELECT 'smoothing' as type, sp.*, NULL as harga_dasar, pb.nama as brand_nama
+            `, [hair_color.color_id]);
+            
+            productResults = [...productResults, ...hairColorResults];
+        }
+
+        if (smoothing_product) {
+            const [smoothingResults] = await connection.query(`
+                SELECT 'smoothing' as type, sp.*, pb.nama as brand_nama
                 FROM smoothing_products sp
                 JOIN product_brands pb ON sp.brand_id = pb.id
                 WHERE sp.id = ? AND sp.brand_id = ?
-                UNION ALL
-                SELECT 'keratin' as type, kp.*, NULL as harga_dasar, pb.nama as brand_nama
+            `, [smoothing_product.product_id, smoothing_product.brand_id]);
+            
+            productResults = [...productResults, ...smoothingResults];
+        }
+
+        if (keratin_product) {
+            const [keratinResults] = await connection.query(`
+                SELECT 'keratin' as type, kp.*, pb.nama as brand_nama
                 FROM keratin_products kp
                 JOIN product_brands pb ON kp.brand_id = pb.id
                 WHERE kp.id = ? AND kp.brand_id = ?
-            `, [
-                hair_color ? hair_color.color_id : 0,
-                smoothing_product ? smoothing_product.product_id : 0,
-                smoothing_product ? smoothing_product.brand_id : 0,
-                keratin_product ? keratin_product.product_id : 0,
-                keratin_product ? keratin_product.brand_id : 0
-            ]);
-
-            productResults.forEach(result => {
-                switch(result.type) {
-                    case 'hair_color':
-                        total_harga += parseFloat(result.harga_dasar) + parseFloat(result.tambahan_harga);
-                        product_detail.hair_color = result;
-                        break;
-                    case 'smoothing':
-                        total_harga += parseFloat(result.harga);
-                        product_detail.smoothing = result;
-                        break;
-                    case 'keratin':
-                        total_harga += parseFloat(result.harga);
-                        product_detail.keratin = result;
-                        break;
-                }
-            });
+            `, [keratin_product.product_id, keratin_product.brand_id]);
+            
+            productResults = [...productResults, ...keratinResults];
         }
+
+        productResults.forEach(result => {
+            switch(result.type) {
+                case 'hair_color':
+                    total_harga += parseFloat(result.harga_dasar) + parseFloat(result.tambahan_harga);
+                    product_detail.hair_color = result;
+                    break;
+                case 'smoothing':
+                    total_harga += parseFloat(result.harga);
+                    product_detail.smoothing = result;
+                    break;
+                case 'keratin':
+                    total_harga += parseFloat(result.harga);
+                    product_detail.keratin = result;
+                    break;
+            }
+        });
 
         const bookingNumber = await bookingHelper.generateBookingNumber();
         const total_estimasi = layananWithCategory.reduce((sum, l) => sum + l.estimasi_waktu, 0);
@@ -154,14 +170,14 @@ const createBooking = async (data) => {
 
         await connection.query(
             `INSERT INTO booking_layanan (booking_id, layanan_id) VALUES ?`,
-            [layanan_id.map(id => [booking_id, id])]
+            [layanan_ids.map(id => [booking_id, id])]
         );
 
         if (hair_color) {
             await connection.query(
                 `INSERT INTO booking_colors (booking_id, color_id, brand_id, harga_saat_booking)
                 VALUES (?, ?, ?, ?)`,
-                [booking_id, hair_color.color_id, hair_color.brand_id, hair_color.harga]
+                [booking_id, hair_color.color_id, hair_color.brand_id, product_detail.hair_color ? product_detail.hair_color.tambahan_harga : 0]
             );
         }
 
@@ -202,7 +218,6 @@ const createBooking = async (data) => {
         console.log('Connection released');
     }
 };
-
 const getAllBookings = async (page = 1, limit = 10) => {
     const connection = await pool.getConnection();
     try {
