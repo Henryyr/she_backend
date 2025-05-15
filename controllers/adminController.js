@@ -123,6 +123,103 @@ const getBookingsByUserId = async (req, res) => {
     }
 };
 
+// New Admin Booking CRUD Methods
+const getBookingById = async (req, res) => {
+    try {
+        const booking = await adminService.getBookingById(req.params.id);
+        if (!booking) {
+            return res.status(404).json({ message: 'Booking tidak ditemukan' });
+        }
+        res.json(booking);
+    } catch (error) {
+        console.error('Failed to get booking:', error);
+        res.status(500).json({ 
+            message: 'Error retrieving booking',
+            error: error.message 
+        });
+    }
+};
+
+const updateBooking = async (req, res) => {
+    try {
+        const updatedBooking = await adminService.updateBooking(req.params.id, req.body);
+        if (!updatedBooking) {
+            return res.status(404).json({ message: 'Booking tidak ditemukan' });
+        }
+        res.json({ message: 'Booking berhasil diperbarui', booking: updatedBooking });
+    } catch (error) {
+        console.error('Failed to update booking:', error);
+        res.status(500).json({ 
+            message: 'Error updating booking',
+            error: error.message 
+        });
+    }
+};
+
+const deleteBooking = async (req, res) => {
+    try {
+        const result = await adminService.deleteBooking(req.params.id);
+        if (!result) {
+            return res.status(404).json({ message: 'Booking tidak ditemukan' });
+        }
+        res.json({ message: 'Booking berhasil dihapus' });
+    } catch (error) {
+        console.error('Failed to delete booking:', error);
+        res.status(500).json({ 
+            message: 'Error deleting booking',
+            error: error.message 
+        });
+    }
+};
+
+const confirmBooking = async (req, res) => {
+    try {
+        const result = await adminService.updateBookingStatus(req.params.id, 'confirmed');
+        if (!result) {
+            return res.status(404).json({ message: 'Booking tidak ditemukan' });
+        }
+        res.json({ message: 'Booking berhasil dikonfirmasi' });
+    } catch (error) {
+        console.error('Failed to confirm booking:', error);
+        res.status(500).json({ 
+            message: 'Error confirming booking',
+            error: error.message 
+        });
+    }
+};
+
+const cancelBooking = async (req, res) => {
+    try {
+        const result = await adminService.updateBookingStatus(req.params.id, 'cancelled');
+        if (!result) {
+            return res.status(404).json({ message: 'Booking tidak ditemukan' });
+        }
+        res.json({ message: 'Booking berhasil dibatalkan' });
+    } catch (error) {
+        console.error('Failed to cancel booking:', error);
+        res.status(500).json({ 
+            message: 'Error cancelling booking',
+            error: error.message 
+        });
+    }
+};
+
+const completeBooking = async (req, res) => {
+    try {
+        const result = await adminService.completeBooking(req.params.id);
+        if (!result) {
+            return res.status(404).json({ message: 'Booking tidak ditemukan' });
+        }
+        res.json({ message: 'Treatment selesai', booking: result });
+    } catch (error) {
+        console.error('Failed to complete booking:', error);
+        res.status(500).json({ 
+            message: 'Error completing booking',
+            error: error.message 
+        });
+    }
+};
+
 // Emit update dashboard ke semua client yang terhubung
 const emitDashboardUpdate = async (io) => {
     try {
@@ -144,6 +241,12 @@ module.exports = {
     getAllTransactions,
     getTransactionsByUserId,
     getAllBookings,
+    getBookingById,
+    updateBooking,
+    deleteBooking,
+    confirmBooking,
+    cancelBooking,
+    completeBooking,
     emitDashboardUpdate,
     getBookingsByUserId
 };

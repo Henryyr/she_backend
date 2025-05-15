@@ -12,17 +12,21 @@ router.get('/dashboard', adminController.getDashboard);
 
 // transaksi
 router.get('/transaksi', adminController.getAllTransactions);
-router.get('/transactions/user/:userId', authenticate, adminController.getTransactionsByUserId);
+router.get('/transactions/user/:userId', adminController.getTransactionsByUserId);
 
 // users
 router.get('/users', adminController.getAllUsers);
 router.put('/users/:id', adminController.updateUser);
 router.delete('/users/:id', adminController.deleteUser);
 
-//booking
+// Admin Bookings - CRUD
 router.get('/bookings', adminController.getAllBookings);
 router.get('/bookings/user/:userId', adminController.getBookingsByUserId);
-
-
+router.get('/bookings/:id', adminController.getBookingById);
+router.put('/bookings/:id', adminController.updateBooking);
+router.delete('/bookings/:id', adminController.deleteBooking);
+router.post('/bookings/:id/confirm', adminController.confirmBooking);
+router.post('/bookings/:id/cancel', adminController.cancelBooking);
+router.post('/bookings/:id/complete', adminController.completeBooking);
 
 module.exports = router;
