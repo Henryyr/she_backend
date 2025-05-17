@@ -5,7 +5,8 @@ const { connect } = require('./db');
 const validateEnv = require('./config/envValidator');
 const { Server } = require('socket.io');
 const { setIO } = require('./socketInstance');
-const { initCronJobs } = require('./utils/cronJobs'); // import cron jobs
+const { initCronJobs } = require('./utils/cronJobs');
+const checkServerTimeZone = require('./utils/timeChecker');
 
 const PORT = process.env.PORT || 3000;
 let server;
@@ -45,6 +46,8 @@ async function startServer() {
 
             // Jalankan cron jobs setelah server ready
             initCronJobs();
+
+            checkServerTimeZone();
         });
 
         // Improved security timeouts
