@@ -18,7 +18,6 @@ router.use(errorHandler);
 router.post('/', authenticate, bookingLimiter, bookingController.createBooking);
 router.get('/', authenticate, bookingController.getAllBookings);
 router.get('/:id', authenticate, bookingController.getBookingById);
-router.get('/send-email', bookingController.sendTestEmail);
 router.post('/confirm/:bookingNumber', authenticate, bookingController.confirmBooking);
 router.post('/cancel/:bookingNumber', authenticate, bookingController.cancelBooking);
 router.patch('/:bookingNumber/complete', authenticate, bookingController.completeBooking);

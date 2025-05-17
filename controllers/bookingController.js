@@ -34,6 +34,17 @@ const createBooking = async (req, res) => {
 
         const result = await bookingService.createBooking(bookingData);
 
+        // Send booking confirmation email to user if user has email
+        try {
+            if (req.user.email) {
+                await emailService.sendBookingConfirmation(req.user.email, result);
+                console.log('[BookingController] Confirmation email sent to user:', req.user.email);
+            }
+        } catch (emailErr) {
+            console.error('[BookingController] Failed to send confirmation email:', emailErr);
+            // We don't want to fail the booking if email fails
+        }
+
         // Emit update dashboard realtime jika booking berhasil
         const io = getIO();
         if (io) {
@@ -86,20 +97,29 @@ const getBookingById = async (req, res) => {
     }
 };
 
-const sendTestEmail = async (req, res) => {
-    try {
-        await emailService.sendEmail();
-        res.send("Email sedang dikirim...");
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
-
 const confirmBooking = async (req, res) => {
     const { bookingNumber } = req.params;
     
     try {
         await bookingService.updateBookingStatus(bookingNumber, 'confirmed');
+        
+        // Get booking details to send confirmation email
+        const booking = await bookingService.getBookingById(bookingNumber);
+        
+        // Send email notification
+        if (booking && booking.user_email) {
+            try {
+                await emailService.sendEmail(
+                    booking.user_email,
+                    `Booking #${bookingNumber} Dikonfirmasi`,
+                    `Booking Anda dengan nomor ${bookingNumber} telah dikonfirmasi.`,
+                    `<h3>Booking Dikonfirmasi</h3><p>Booking Anda dengan nomor ${bookingNumber} telah dikonfirmasi.</p>`
+                );
+            } catch (emailErr) {
+                console.error('Failed to send confirmation email:', emailErr);
+            }
+        }
+        
         res.json({ message: 'Booking berhasil dikonfirmasi' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -111,6 +131,24 @@ const cancelBooking = async (req, res) => {
     
     try {
         await bookingService.updateBookingStatus(bookingNumber, 'canceled');
+        
+        // Get booking details to send cancellation email
+        const booking = await bookingService.getBookingById(bookingNumber);
+        
+        // Send email notification
+        if (booking && booking.user_email) {
+            try {
+                await emailService.sendEmail(
+                    booking.user_email,
+                    `Booking #${bookingNumber} Dibatalkan`,
+                    `Booking Anda dengan nomor ${bookingNumber} telah dibatalkan.`,
+                    `<h3>Booking Dibatalkan</h3><p>Booking Anda dengan nomor ${bookingNumber} telah dibatalkan.</p>`
+                );
+            } catch (emailErr) {
+                console.error('Failed to send cancellation email:', emailErr);
+            }
+        }
+        
         res.json({ message: 'Booking berhasil dibatalkan' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -144,6 +182,24 @@ const completeBooking = async (req, res) => {
         }
 
         await bookingService.completeBooking(bookingNumber);
+        
+        // Get booking details to send completion email
+        const booking = await bookingService.getBookingById(bookingNumber);
+        
+        // Send email notification
+        if (booking && booking.user_email) {
+            try {
+                await emailService.sendEmail(
+                    booking.user_email,
+                    `Treatment #${bookingNumber} Selesai`,
+                    `Treatment Anda dengan nomor ${bookingNumber} telah selesai. Terima kasih telah menggunakan layanan kami.`,
+                    `<h3>Treatment Selesai</h3><p>Treatment Anda dengan nomor ${bookingNumber} telah selesai. Terima kasih telah menggunakan layanan kami.</p>`
+                );
+            } catch (emailErr) {
+                console.error('Failed to send completion email:', emailErr);
+            }
+        }
+        
         res.json({ message: 'Treatment selesai' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -154,7 +210,6 @@ module.exports = {
     createBooking,
     getAllBookings,
     getBookingById,
-    sendTestEmail,
     confirmBooking,
     cancelBooking,
     deleteBooking,
