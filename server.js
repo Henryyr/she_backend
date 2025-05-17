@@ -5,10 +5,11 @@ const { connect } = require('./db');
 const validateEnv = require('./config/envValidator');
 const { Server } = require('socket.io');
 const { setIO } = require('./socketInstance');
+const { initCronJobs } = require('./utils/cronJobs'); // import cron jobs
 
 const PORT = process.env.PORT || 3000;
 let server;
-let io; // Tambahkan io agar bisa diekspor
+let io;
 
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -27,7 +28,9 @@ async function startServer() {
         }
 
         await connect();
+
         server = http.createServer(app);
+
         io = new Server(server, {
             cors: {
                 origin: "*", // Atur sesuai kebutuhan frontend Anda
@@ -35,10 +38,13 @@ async function startServer() {
             }
         });
 
-        setIO(io); // Set instance setelah inisialisasi
+        setIO(io);
 
         server.listen(PORT, () => {
             console.log(`🚀 Server running on http://localhost:${PORT}`);
+
+            // Jalankan cron jobs setelah server ready
+            initCronJobs();
         });
 
         // Improved security timeouts
