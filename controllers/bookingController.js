@@ -37,7 +37,7 @@ const createBooking = async (req, res) => {
         // Send booking confirmation email to user if user has email
         try {
             if (req.user.email) {
-                await emailService.sendBookingConfirmation(req.user.email, result);
+                await emailService.sendBookingInformation(req.user.email, result);
                 console.log('[BookingController] Confirmation email sent to user:', req.user.email);
             }
         } catch (emailErr) {
