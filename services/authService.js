@@ -4,7 +4,12 @@ const { pool } = require('../db');
 const { validatePassword } = require('../utils/validation');
 
 const registerUser = async (userData) => {
-    const { fullname, email, phone_number, username, password, confirmation_password, address, role = "pelanggan" } = userData;
+    const { fullname, email, phone_number, username, password, confirmation_password, address } = userData;
+
+    // Prevent malicious role injection
+    if (userData.role) {
+        throw { status: 403, message: "Tidak diizinkan mengatur role pengguna" };
+    }
 
     if (!fullname || !email || !username || !password || !confirmation_password) {
         throw { status: 400, message: "Semua data wajib diisi" };
@@ -18,50 +23,27 @@ const registerUser = async (userData) => {
         throw { status: 400, message: "Password harus minimal 8 karakter, mengandung huruf dan angka" };
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const sql = `INSERT INTO users (fullname, email, phone_number, username, password, address, role) VALUES (?, ?, ?, ?, ?, ?, ?)`;
-    
-    return pool.query(sql, [fullname, email, phone_number, username, hashedPassword, address, role]);
-};
-
-const register = async (userData) => {
-    const { email, username, password, fullname, phone_number, address } = userData;
-
-    // Prevent role injection from register
-    if (userData.role) {
-        throw { 
-            status: 403, 
-            message: "Tidak diizinkan mengatur role pengguna" 
-        };
-    }
-
-    // Force set role to 'user' for all registrations
-    const role = 'user';
-
-    // Validate email and username uniqueness
+    // Cek apakah email atau username sudah digunakan
     const [existingUser] = await pool.query(
-        "SELECT id FROM users WHERE email = ? OR username = ?", 
+        "SELECT id FROM users WHERE email = ? OR username = ?",
         [email, username]
     );
 
     if (existingUser.length > 0) {
-        throw { 
-            status: 400, 
-            message: "Email atau username sudah digunakan" 
-        };
+        throw { status: 400, message: "Email atau username sudah digunakan" };
     }
 
-    // Hash password and create user with forced 'user' role
     const hashedPassword = await bcrypt.hash(password, 10);
+    const role = 'pelanggan';
+
     const [result] = await pool.query(
-        `INSERT INTO users (email, username, password, fullname, phone_number, address, role) 
+        `INSERT INTO users (fullname, email, phone_number, username, password, address, role) 
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [email, username, hashedPassword, fullname, phone_number, address, role]
+        [fullname, email, phone_number, username, hashedPassword, address, role]
     );
 
-    return result.insertId;
+    return result;
 };
-
 const loginUser = async ({ username, password }) => {
     const [users] = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
 
@@ -76,11 +58,12 @@ const loginUser = async ({ username, password }) => {
         throw { status: 401, message: "Username atau password salah" };
     }
 
-    const token = jwt.sign(
-        { id: user.id, role: user.role }, 
-        process.env.JWT_SECRET,
-        { expiresIn: '24h' }
-    );
+const token = jwt.sign(
+    { id: user.id, email: user.email, role: user.role }, 
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+);
+
 
     return {
         token,
@@ -136,7 +119,6 @@ const cleanupExpiredTokens = async () => {
 
 module.exports = {
     registerUser,
-    register,
     loginUser,
     getProfile,
     blacklistToken,

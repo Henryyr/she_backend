@@ -23,8 +23,12 @@ router.delete('/users/:id', adminController.deleteUser);
 router.get('/bookings', adminController.getAllBookings);
 router.get('/bookings/user/:userId', adminController.getBookingsByUserId);
 router.get('/bookings/:id', adminController.getBookingById);
+router.post('/bookings', adminController.createBooking);  // New route to create bookings as admin
 router.put('/bookings/:id', adminController.updateBooking);
+router.patch('/bookings/:id/status', adminController.updateBookingStatus);  // New route for updating status
 router.delete('/bookings/:id', adminController.deleteBooking);
+
+// Specific booking actions
 router.post('/bookings/:id/confirm', adminController.confirmBooking);
 router.post('/bookings/:id/cancel', adminController.cancelBooking);
 router.post('/bookings/:id/complete', adminController.completeBooking);

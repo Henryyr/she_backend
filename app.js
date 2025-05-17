@@ -138,6 +138,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/testimoni', require('./routes/testimoniRoutes'));
 app.use('/api/transaksikategori', require('./routes/transaksikategoriRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
+app.use('/api/email', require('./routes/testRoutes'));
 
 // Global error handler
 app.use((err, _req, res, _next) => {
