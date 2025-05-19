@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { pool: db } = require('../db'); // ✅ FIXED
+const { pool } = require('../db');
 const TransaksiService = require('../services/transaksiService');
 const emailService = require('../services/emailService');
 
@@ -42,11 +42,11 @@ const sendBookingReminderEmails = () => {
             const dateString = reminderTime.toISOString().split('T')[0];
             const timeString = reminderTime.toTimeString().slice(0,5);
 
-            const [bookings] = await db.query(
-                `SELECT b.*, u.email, u.name FROM booking b
+            const [bookings] = await pool.query(
+                `SELECT b.*, u.email, u.username, u.fullname FROM booking b
                  JOIN users u ON b.user_id = u.id
                  WHERE b.tanggal = ? AND b.jam_mulai = ?`,
-                [dateString, timeString] // ✅ FIXED
+                [dateString, timeString]
             );
 
             for (const booking of bookings) {
@@ -55,6 +55,8 @@ const sendBookingReminderEmails = () => {
                     console.log(`[CRON] Reminder email sent to ${booking.email} for booking at ${booking.tanggal} ${booking.jam_mulai}`);
                 }
             }
+            
+            console.log(`[CRON] Processed ${bookings.length} booking reminders`);
         } catch (err) {
             console.error('[CRON] Error sending booking reminder emails:', err.message);
         }
