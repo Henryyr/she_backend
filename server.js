@@ -21,6 +21,29 @@ process.on('uncaughtException', (error) => {
     process.exit(1);
 });
 
+// Function to find available port
+async function findAvailablePort(startPort) {
+    return new Promise((resolve, reject) => {
+        const testServer = http.createServer();
+        
+        testServer.listen(startPort, () => {
+            const port = testServer.address().port;
+            testServer.close(() => {
+                resolve(port);
+            });
+        });
+        
+        testServer.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                // Try next port
+                findAvailablePort(startPort + 1).then(resolve).catch(reject);
+            } else {
+                reject(err);
+            }
+        });
+    });
+}
+
 async function startServer() {
     try {
         // Validate environment variables first
@@ -34,19 +57,32 @@ async function startServer() {
 
         io = new Server(server, {
             cors: {
-                origin: "*", // Atur sesuai kebutuhan frontend Anda
-                methods: ["GET", "POST"]
+                origin: process.env.FRONTEND_URL || "*", // Use env variable
+                methods: ["GET", "POST"],
+                credentials: true
             }
         });
 
         setIO(io);
 
-        server.listen(PORT, () => {
-            console.log(`🚀 Server running on http://localhost:${PORT}`);
+        // Find available port
+        let availablePort;
+        try {
+            availablePort = await findAvailablePort(PORT);
+        } catch (error) {
+            console.error('❌ Failed to find available port:', error);
+            process.exit(1);
+        }
 
-            // Jalankan cron jobs setelah server ready
+        server.listen(availablePort, () => {
+            console.log(`🚀 Server running on http://localhost:${availablePort}`);
+            
+            if (availablePort !== PORT) {
+                console.log(`⚠️  Originally tried port ${PORT}, but it was busy. Using port ${availablePort} instead.`);
+            }
+
+            // Initialize cron jobs after server is ready
             initCronJobs();
-
             checkServerTimeZone();
         });
 
@@ -63,9 +99,26 @@ async function startServer() {
             socket.setKeepAlive(true, 60000); // 60 seconds
         });
 
-        // Tambahkan log koneksi socket
+        // Socket connection logging
         io.on('connection', (socket) => {
             console.log('Socket connected:', socket.id);
+            
+            socket.on('disconnect', (reason) => {
+                console.log('Socket disconnected:', socket.id, 'reason:', reason);
+            });
+        });
+
+        // Handle server errors
+        server.on('error', (error) => {
+            if (error.code === 'EADDRINUSE') {
+                console.error(`❌ Port ${error.port} is already in use`);
+                console.log('💡 Try these commands to free up the port:');
+                console.log(`   lsof -ti:${error.port} | xargs kill -9`);
+                console.log(`   Or: pkill -f node`);
+            } else {
+                console.error('❌ Server error:', error);
+            }
+            process.exit(1);
         });
 
     } catch (error) {
@@ -76,26 +129,41 @@ async function startServer() {
 
 // Improved graceful shutdown
 async function gracefulShutdown(signal) {
-    console.log(`Received ${signal}, shutting down...`);
+    console.log(`\n🛑 Received ${signal}, starting graceful shutdown...`);
     
     if (server) {
+        console.log('📡 Closing Socket.IO connections...');
+        if (io) {
+            io.close();
+        }
+        
+        console.log('🔌 Closing HTTP server...');
         server.close(() => {
-            console.log('Server closed');
+            console.log('✅ Server closed successfully');
             process.exit(0);
         });
 
         // Force close after 10 seconds
         setTimeout(() => {
-            console.log('Could not close connections in time, forcing shutdown');
+            console.log('⏰ Could not close connections in time, forcing shutdown');
             process.exit(1);
         }, 10000);
     } else {
-        console.log('No server instance to close.');
+        console.log('ℹ️  No server instance to close.');
         process.exit(0);
     }
 }
 
-process.on('SIGTERM', (signal) => gracefulShutdown(signal));
-process.on('SIGINT', (signal) => gracefulShutdown(signal));
+// Handle graceful shutdown signals
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
-startServer().catch(console.error);
+// Add process cleanup on exit
+process.on('exit', (code) => {
+    console.log(`Process exiting with code: ${code}`);
+});
+
+startServer().catch((error) => {
+    console.error('❌ Critical startup error:', error);
+    process.exit(1);
+});

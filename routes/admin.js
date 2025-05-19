@@ -23,9 +23,9 @@ router.delete('/users/:id', adminController.deleteUser);
 router.get('/bookings', adminController.getAllBookings);
 router.get('/bookings/user/:userId', adminController.getBookingsByUserId);
 router.get('/bookings/:id', adminController.getBookingById);
-router.post('/bookings', adminController.createBooking);  // New route to create bookings as admin
+router.post('/bookings', adminController.createBooking);
 router.put('/bookings/:id', adminController.updateBooking);
-router.patch('/bookings/:id/status', adminController.updateBookingStatus);  // New route for updating status
+router.patch('/bookings/:id/status', adminController.updateBookingStatus);
 router.delete('/bookings/:id', adminController.deleteBooking);
 
 // Specific booking actions

@@ -261,7 +261,6 @@ const completeBooking = async (req, res) => {
     }
 };
 
-// Improved method: Update booking status with any valid status
 const updateBookingStatus = async (req, res) => {
     try {
         const { id } = req.params;

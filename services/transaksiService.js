@@ -1,7 +1,6 @@
 const { pool } = require('../db');
 const { sendEmail } = require('./emailService');
 const transactionReceiptTemplate = require('../html/transactionReceipt');
-const { getFrontendURL } = require('../utils/general');
 const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../config/midtrans');
 
 
@@ -85,12 +84,7 @@ class TransaksiService {
                         brand: "Salon",
                         category: "Perawatan"
                     }],
-                    customer_details: { user_id },
-                    callbacks: {
-                        finish: `${getFrontendURL()}/`,
-                        error: `${getFrontendURL()}/`,
-                        pending: `${getFrontendURL()}/`
-                    }
+                    customer_details: { user_id }
                 };
 
                 snapResponse = await snap.createTransaction(parameter);
@@ -313,12 +307,7 @@ class TransaksiService {
                     brand: "Salon",
                     category: "Perawatan"
                 }],
-                customer_details: { user_id },
-                callbacks: {
-                    finish: `${getFrontendURL()}/payment/result`,
-                    error: `${getFrontendURL()}/payment/error`,
-                    pending: `${getFrontendURL()}/payment/pending`
-                }
+                customer_details: { user_id }
             });
 
             await conn.query(

@@ -1,4 +1,4 @@
-const db = require('../db');
+const { pool } = require('../db');
 const NodeCache = require('node-cache');
 const cache = new NodeCache({ stdTTL: 300 }); // 5 minutes cache
 
@@ -7,7 +7,7 @@ const getAllProducts = async () => {
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         const [results] = await Promise.all([
             connection.query(`
@@ -19,7 +19,6 @@ const getAllProducts = async () => {
                     hp.harga_dasar as harga,
                     pb.nama as brand_nama
                 FROM hair_products hp
-                USE INDEX (idx_brand_id)
                 JOIN product_brands pb ON hp.brand_id = pb.id)
                 UNION ALL
                 (SELECT 
@@ -30,7 +29,6 @@ const getAllProducts = async () => {
                     sp.harga,
                     pb.nama as brand_nama
                 FROM smoothing_products sp
-                USE INDEX (idx_brand_id)
                 JOIN product_brands pb ON sp.brand_id = pb.id)
                 UNION ALL
                 (SELECT 
@@ -41,7 +39,6 @@ const getAllProducts = async () => {
                     kp.harga,
                     pb.nama as brand_nama
                 FROM keratin_products kp
-                USE INDEX (idx_brand_id)
                 JOIN product_brands pb ON kp.brand_id = pb.id)
             `)
         ]);
@@ -65,7 +62,7 @@ const getHairProducts = async () => {
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         const [products] = await connection.query(`
             SELECT 
@@ -87,7 +84,6 @@ const getHairProducts = async () => {
                     )
                 ) as colors
             FROM hair_products hp
-            USE INDEX (idx_brand_id)
             JOIN product_brands pb ON hp.brand_id = pb.id
             LEFT JOIN hair_colors hc ON hc.product_id = hp.id AND hc.stok > 0
             GROUP BY hp.id
@@ -147,7 +143,7 @@ function isValidJSON(str) {
 }
 
 const getProductsByCategory = async (kategoriId) => {
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         const [products] = await connection.query(
             `SELECT * FROM products WHERE kategori_id = ?`,
@@ -160,7 +156,7 @@ const getProductsByCategory = async (kategoriId) => {
 };
 
 const updateStock = async (id, stok) => {
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         await connection.query(
             'UPDATE products SET stok = ? WHERE id = ?',
@@ -173,7 +169,7 @@ const updateStock = async (id, stok) => {
 };
 
 const getHairColors = async () => {
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         const [colors] = await connection.query(`
             SELECT 
@@ -200,7 +196,7 @@ const getHairColors = async () => {
 };
 
 const getSmoothingProducts = async () => {
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         const [products] = await connection.query(`
             SELECT sp.*, pb.nama as brand_nama
@@ -216,7 +212,7 @@ const getSmoothingProducts = async () => {
 };
 
 const getKeratinProducts = async () => {
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         const [products] = await connection.query(`
             SELECT kp.*, pb.nama as brand_nama
@@ -232,7 +228,7 @@ const getKeratinProducts = async () => {
 };
 
 const getHairColorsByProduct = async (productId) => {
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         const [colors] = await connection.query(`
             SELECT 
@@ -254,7 +250,7 @@ const getHairColorsByProduct = async (productId) => {
 };
 
 const updateHairColorStock = async (id, stok) => {
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         await connection.beginTransaction();
 
@@ -289,7 +285,7 @@ const updateHairColorStock = async (id, stok) => {
 };
 
 const updateSmoothingStock = async (id, stok) => {
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         const [result] = await connection.query(
             'UPDATE smoothing_products SET stok = ? WHERE id = ?',
@@ -305,7 +301,7 @@ const updateSmoothingStock = async (id, stok) => {
 };
 
 const updateKeratinStock = async (id, stok) => {
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         const [result] = await connection.query(
             'UPDATE keratin_products SET stok = ? WHERE id = ?',
@@ -321,7 +317,7 @@ const updateKeratinStock = async (id, stok) => {
 };
 
 const addHairColor = async (product_id, nama, kategori, level, stok, tambahan_harga) => {
-    const connection = await db.pool;
+    const connection = await pool;
     try {
         const [result] = await connection.query(
             `INSERT INTO hair_colors 

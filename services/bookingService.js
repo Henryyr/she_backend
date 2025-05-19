@@ -218,23 +218,27 @@ const createBooking = async (data) => {
         console.log('Connection released');
     }
 };
-const getAllBookings = async (page = 1, limit = 10) => {
+
+const getAllBookings = async (page = 1, limit = 10, user_id) => {
     const connection = await pool.getConnection();
     try {
         const offset = (page - 1) * limit;
+        
         const [bookings] = await connection.query(`
             SELECT /*+ INDEX(b idx_booking_created) */ b.*,
                 GROUP_CONCAT(l.nama ORDER BY l.id) as layanan_names
             FROM booking b
             LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
             LEFT JOIN layanan l ON bl.layanan_id = l.id
+            WHERE b.user_id = ?
             GROUP BY b.id
             ORDER BY b.created_at DESC
             LIMIT ? OFFSET ?
-        `, [limit, offset]);
+        `, [user_id, limit, offset]);
 
         const [totalCount] = await connection.query(
-            "SELECT COUNT(*) as total FROM booking"
+            "SELECT COUNT(*) as total FROM booking WHERE user_id = ?",
+            [user_id]
         );
 
         return {

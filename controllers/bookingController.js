@@ -73,8 +73,10 @@ const createBooking = async (req, res) => {
 const getAllBookings = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
+    
     try {
-        const results = await bookingService.getAllBookings(page, limit);
+        // User hanya bisa melihat booking mereka sendiri
+        const results = await bookingService.getAllBookings(page, limit, req.user.id);
         res.json(results);
     } catch (err) {
         res.status(500).json({ error: err.message });
