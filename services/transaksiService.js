@@ -44,12 +44,8 @@ class TransaksiService {
                     throw { status: 400, message: "Booking ini sudah dibayar penuh" };
                 }
                 
-                if (is_dp && existing.dp_amount > 0) {
+                if (existing.dp_amount > 0) {
                     throw { status: 400, message: "DP untuk booking ini sudah dibuat" };
-                }
-                
-                if (!is_dp && existing.payment_status === 'DP') {
-                    throw { status: 400, message: "Silakan gunakan menu pelunasan untuk pembayaran penuh" };
                 }
             }
 
@@ -65,14 +61,16 @@ class TransaksiService {
 
             // Handle cash vs non-cash differently
             if (kategori_transaksi_id === 1) { 
+                // Cash payment - no DP, no online payment
                 paid_amount = 0; 
                 transactionStatus = 'pending'; 
                 payment_status = 'unpaid';
                 dp_amount = 0;
                 amountToPay = total_harga;
-            } else { // Online payment
+            } else { 
+                // Online payment - always DP (30%)
                 dp_amount = Math.round(total_harga * 0.3);
-                amountToPay = is_dp ? dp_amount : total_harga;
+                amountToPay = dp_amount; // Always pay DP amount for online payments
 
                 const parameter = {
                     transaction_details: { order_id, gross_amount: amountToPay },
@@ -80,7 +78,7 @@ class TransaksiService {
                         id: booking_id,
                         price: amountToPay,
                         quantity: 1,
-                        name: is_dp ? 'Booking Salon (DP 30%)' : 'Booking Salon (Full Payment)',
+                        name: 'Booking Salon (DP 30%)',
                         brand: "Salon",
                         category: "Perawatan"
                     }],
@@ -113,7 +111,7 @@ class TransaksiService {
                 payment_status,
                 total_harga,
                 amount_to_pay: amountToPay,
-                payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment'
+                payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment (DP)'
             };
         } catch (err) {
             console.error('[TransaksiService] createTransaction error:', err);
