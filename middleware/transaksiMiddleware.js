@@ -1,7 +1,7 @@
 const { isDevelopment } = require('../config/midtrans');
 
 const validateCreateTransaction = (req, res, next) => {
-    const { booking_id, kategori_transaksi_id, is_dp } = req.body;
+    const { booking_id, kategori_transaksi_id } = req.body;
 
     // Skip validasi jika dalam mode development atau testing
     if (isDevelopment || req.headers['x-test-mode'] === 'true') {
@@ -16,19 +16,24 @@ const validateCreateTransaction = (req, res, next) => {
     }
 
     // For cash transactions (kategori_transaksi_id === 1), is_dp should not be present
-    if (kategori_transaksi_id === 1 && is_dp !== undefined) {
+    if (kategori_transaksi_id === 1 && req.body.is_dp !== undefined) {
         return res.status(400).json({
             error: "Format tidak valid",
             details: "Pembayaran cash tidak menggunakan sistem DP"
         });
     }
 
-    // For non-cash transactions (kategori_transaksi_id === 2), is_dp must be boolean
-    if (kategori_transaksi_id === 2 && typeof is_dp !== 'boolean') {
+    // For non-cash transactions (kategori_transaksi_id === 2), is_dp is always true (implicitly)
+    if (kategori_transaksi_id === 2 && req.body.is_dp === false) {
         return res.status(400).json({
             error: "Format tidak valid",
-            details: "is_dp harus berupa boolean untuk pembayaran non-cash"
+            details: "Pembayaran non-cash hanya tersedia dengan sistem DP"
         });
+    }
+
+    // Set is_dp to true for non-cash transactions
+    if (kategori_transaksi_id === 2) {
+        req.body.is_dp = true;
     }
 
     next();
