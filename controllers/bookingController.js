@@ -2,6 +2,7 @@ const bookingService = require('../services/bookingService');
 const emailService = require('../services/emailService');
 const { emitDashboardUpdate } = require('./adminController');
 const { getIO } = require('../socketInstance');
+const { validateBookingTime, validateUserDailyBooking } = require('../helpers/bookingValidationHelper');
 
 const createBooking = async (req, res) => {
     console.log('[BookingController] Received booking request:', {
@@ -31,6 +32,22 @@ const createBooking = async (req, res) => {
             keratin_product: cleanBody.keratin_product,
             special_request: cleanBody.special_request || null
         };
+
+        // VALIDASI WAKTU BOOKING
+        try {
+            // 1. Validasi jam tidak bentrok dengan booking lain
+            await validateBookingTime(bookingData.tanggal, bookingData.jam_mulai, req.user.id);
+            
+            // 2. Validasi user tidak booking lebih dari 1x per hari
+            await validateUserDailyBooking(bookingData.tanggal, req.user.id);
+            
+        } catch (validationError) {
+            return res.status(409).json({
+                error: 'Konflik waktu booking',
+                message: validationError.message,
+                timestamp: new Date().toISOString()
+            });
+        }
 
         const result = await bookingService.createBooking(bookingData);
 
@@ -95,6 +112,55 @@ const getBookingById = async (req, res) => {
         res.status(500).json({ 
             message: 'Error retrieving booking',
             error: error.message 
+        });
+    }
+};
+
+// Method untuk mendapatkan jadwal yang tersedia
+const getAvailableSlots = async (req, res) => {
+    try {
+        const { tanggal } = req.query;
+        
+        if (!tanggal) {
+            return res.status(400).json({
+                error: 'Parameter tanggal diperlukan'
+            });
+        }
+
+        // Jam operasional salon (bisa disesuaikan)
+        const operatingHours = [
+            '09:00', '10:00', '11:00', '12:00', '13:00', 
+            '14:00', '15:00', '16:00', '17:00', '18:00'
+        ];
+
+        // Query untuk mendapatkan jam yang sudah dibooking
+        const sql = `
+            SELECT jam_mulai, COUNT(*) as booking_count
+            FROM booking 
+            WHERE tanggal = ? 
+            AND status NOT IN ('canceled', 'completed')
+            GROUP BY jam_mulai
+        `;
+
+        const db = require('../db');
+        const [bookedSlots] = await db.pool.query(sql, [tanggal]);
+        
+        // Filter jam yang masih tersedia
+        const bookedTimes = bookedSlots.map(slot => slot.jam_mulai);
+        const availableSlots = operatingHours.filter(time => !bookedTimes.includes(time));
+
+        res.json({
+            tanggal,
+            available_slots: availableSlots,
+            booked_slots: bookedTimes,
+            total_available: availableSlots.length
+        });
+
+    } catch (error) {
+        console.error('Error getting available slots:', error);
+        res.status(500).json({
+            error: 'Gagal mengambil jadwal tersedia',
+            message: error.message
         });
     }
 };
@@ -212,6 +278,7 @@ module.exports = {
     createBooking,
     getAllBookings,
     getBookingById,
+    getAvailableSlots,
     confirmBooking,
     cancelBooking,
     deleteBooking,
