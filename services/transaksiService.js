@@ -3,7 +3,6 @@ const { sendEmail } = require('./emailService');
 const transactionReceiptTemplate = require('../html/transactionReceipt');
 const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../config/midtrans');
 
-
 class TransaksiService {
     async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
         console.log('[TransaksiService] createTransaction started', { booking_id, kategori_transaksi_id, is_dp, user_id });
