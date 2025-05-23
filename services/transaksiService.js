@@ -71,51 +71,38 @@ async getTransactionStatus(order_id, user_id = null) {
     }
   }
 
-  async fetchMidtransStatus(order_id) {
-    const serverKey = process.env.MIDTRANS_SERVER_KEY;
-    const isProduction = process.env.NODE_ENV === 'production';
-    const baseUrl = isProduction 
-      ? 'https://api.midtrans.com' 
-      : 'https://api.sandbox.midtrans.com';
+async fetchMidtransStatus(order_id) {
+  try {
+    const response = await snap.transaction.status(order_id);
+    return response;
+  } catch (error) {
+    console.error('[TransaksiService] fetchMidtransStatus error:', error);
 
-    try {
-      const response = await axios.get(`${baseUrl}/v2/${order_id}/status`, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${Buffer.from(serverKey + ':').toString('base64')}`
-        },
-        timeout: 10000
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('[TransaksiService] fetchMidtransStatus error:', error.response?.data || error.message);
-
-      if (error.response?.status === 404) {
-        throw {
-          status: 404,
-          source: 'midtrans',
-          message: "Transaksi tidak ditemukan di Midtrans",
-          details: error.response.data
-        };
-      }
-
-      if (error.response?.status === 401) {
-        throw {
-          status: 401,
-          message: "Unauthorized - Periksa server key Midtrans",
-          details: "Invalid authorization"
-        };
-      }
-
+    if (error.status_code === 404) {
       throw {
-        status: error.response?.status || 500,
-        message: "Gagal mengambil data dari Midtrans",
-        details: error.response?.data || error.message
+        status: 404,
+        source: 'midtrans',
+        message: "Transaksi tidak ditemukan di Midtrans",
+        details: error
       };
     }
+
+    if (error.status_code === 401) {
+      throw {
+        status: 401,
+        message: "Unauthorized - Periksa server key Midtrans",
+        details: "Invalid authorization"
+      };
+    }
+
+    throw {
+      status: error.status_code || 500,
+      message: "Gagal mengambil data dari Midtrans",
+      details: error.message || error
+    };
   }
+}
+
 
   async getLocalTransactionData(order_id, user_id = null) {
     try {
