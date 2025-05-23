@@ -2,146 +2,200 @@ const { pool } = require('../db');
 const { sendEmail } = require('./emailService');
 const transactionReceiptTemplate = require('../html/transactionReceipt');
 const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../config/midtrans');
+const axios = require('axios');
 
 class TransaksiService {
-    async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
-   console.log('[TransaksiService] createTransaction started', { booking_id, kategori_transaksi_id, is_dp, user_id });
-   const conn = await pool.getConnection();
-   try {
-       await conn.beginTransaction();
+  async getTransactionStatus(order_id, user_id = null) {
+    console.log('[TransaksiService] getTransactionStatus started', { order_id, user_id });
+    try {
+      const midtransResponse = await this.fetchMidtransStatus(order_id);
+      const localTransaction = await this.getLocalTransactionData(order_id, user_id);
 
-       // Check booking status
-       const [bookingResult] = await conn.query(
-           `SELECT id, total_harga, status FROM booking WHERE id = ?`, 
-           [booking_id]
-       );
+      const combinedData = {
+        midtrans_data: {
+          status_code: midtransResponse.status_code,
+          transaction_id: midtransResponse.transaction_id,
+          gross_amount: midtransResponse.gross_amount,
+          currency: midtransResponse.currency,
+          order_id: midtransResponse.order_id,
+          payment_type: midtransResponse.payment_type,
+          transaction_status: midtransResponse.transaction_status,
+          fraud_status: midtransResponse.fraud_status,
+          status_message: midtransResponse.status_message,
+          transaction_time: midtransResponse.transaction_time,
+          settlement_time: midtransResponse.settlement_time,
+          expiry_time: midtransResponse.expiry_time,
+          va_numbers: midtransResponse.va_numbers || null,
+          payment_amounts: midtransResponse.payment_amounts || []
+        },
+        local_data: localTransaction,
+        summary: {
+          order_id: midtransResponse.order_id,
+          amount_paid: midtransResponse.gross_amount,
+          payment_status: this.mapMidtransStatus(midtransResponse.transaction_status),
+          transaction_time: midtransResponse.transaction_time,
+          settlement_time: midtransResponse.settlement_time,
+          payment_method: midtransResponse.payment_type,
+          is_success: ['settlement', 'capture'].includes(midtransResponse.transaction_status)
+        }
+      };
 
-       if (bookingResult.length === 0) {
-           throw { status: 404, message: "Booking tidak ditemukan" };
-       }
+      console.log('[TransaksiService] getTransactionStatus success', { order_id });
+      return combinedData;
 
-       const { total_harga, status: bookingStatus } = bookingResult[0];
+    } catch (error) {
+      console.error('[TransaksiService] getTransactionStatus error:', error);
+      if (error.status === 404 && error.source === 'midtrans') {
+        throw {
+          status: 404,
+          message: "Transaksi tidak ditemukan di Midtrans",
+          details: `Order ID: ${order_id}`
+        };
+      }
+      if (error.status === 404 && error.source === 'local') {
+        throw {
+          status: 404,
+          message: "Transaksi tidak ditemukan di sistem lokal",
+          details: `Order ID: ${order_id}`
+        };
+      }
+      throw {
+        status: error.status || 500,
+        message: error.message || "Gagal mengambil status transaksi",
+        details: process.env.NODE_ENV === 'development' ? error.details : undefined
+      };
+    }
+  }
 
-       if (bookingStatus === 'completed') {
-           throw { status: 400, message: "Booking sudah dibayar" };
-       }
+  async fetchMidtransStatus(order_id) {
+    const serverKey = process.env.MIDTRANS_SERVER_KEY;
+    const isProduction = process.env.NODE_ENV === 'production';
+    const baseUrl = isProduction
+      ? 'https://api.midtrans.com'
+      : 'https://api.sandbox.midtrans.com';
 
-       // Check existing transaction with more specific conditions
-       const [existingTransaction] = await conn.query(
-           `SELECT id, payment_status, status, dp_amount 
-            FROM transaksi 
-            WHERE booking_id = ? 
-            AND status NOT IN ('failed', 'expired', 'cancelled')`,
-           [booking_id]
-       );
+    try {
+      const response = await axios.get(`${baseUrl}/v2/${order_id}/status`, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${Buffer.from(serverKey + ':').toString('base64')}`
+        },
+        timeout: 10000
+      });
 
-       // Validate transaction state
-       if (existingTransaction.length > 0) {
-           const existing = existingTransaction[0];
-           
-           if (existing.payment_status === 'paid') {
-               throw { status: 400, message: "Booking ini sudah dibayar penuh" };
-           }
-           
-           if (existing.dp_amount > 0) {
-               throw { status: 400, message: "DP untuk booking ini sudah dibuat" };
-           }
-       }
+      return response.data;
 
-       const order_id = `BKG-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(booking_id).padStart(3, '0')}-${Math.random().toString(36).substr(2, 5)}`;
-       const booking_number = order_id;
-       
-       let paid_amount = 0;
-       let transactionStatus = 'pending';
-       let payment_status = 'unpaid';
-       let snapResponse = null;
-       let amountToPay = total_harga;
-       let dp_amount = 0;
+    } catch (error) {
+      console.error('[TransaksiService] fetchMidtransStatus error:', error.response?.data || error.message);
 
-       // Handle cash vs non-cash differently
-       if (kategori_transaksi_id === 1) { 
-           // Cash payment - no DP, no online payment
-           paid_amount = 0; 
-           transactionStatus = 'pending'; 
-           payment_status = 'unpaid';
-           dp_amount = 0;
-           amountToPay = total_harga;
-       } else { 
-           // Online payment - always DP (30%)
-           dp_amount = Math.round(total_harga * 0.3);
-           amountToPay = dp_amount; // Always pay DP amount for online payments
+      if (error.response?.status === 404) {
+        throw {
+          status: 404,
+          source: 'midtrans',
+          message: "Transaksi tidak ditemukan di Midtrans",
+          details: error.response.data
+        };
+      }
+      if (error.response?.status === 401) {
+        throw {
+          status: 401,
+          message: "Unauthorized - Periksa server key Midtrans",
+          details: "Invalid authorization"
+        };
+      }
+      throw {
+        status: error.response?.status || 500,
+        message: "Gagal mengambil data dari Midtrans",
+        details: error.response?.data || error.message
+      };
+    }
+  }
 
-           const parameter = {
-               transaction_details: { order_id, gross_amount: amountToPay },
-               item_details: [{
-                   id: booking_id,
-                   price: amountToPay,
-                   quantity: 1,
-                   name: 'Booking Salon (DP 30%)',
-                   brand: "Salon",
-                   category: "Perawatan"
-               }],
-               customer_details: { user_id }
-           };
+  async getLocalTransactionData(order_id, user_id = null) {
+    try {
+      let query = `
+        SELECT 
+          t.id,
+          t.booking_number,
+          t.midtrans_order_id,
+          t.pelunasan_order_id,
+          t.total_harga,
+          t.paid_amount,
+          t.dp_amount,
+          t.status AS transaction_status,
+          t.payment_status,
+          t.created_at,
+          t.updated_at,
+          t.user_id,
+          k.nama AS metode_pembayaran,
+          b.tanggal AS booking_date,
+          b.jam_mulai,
+          b.jam_selesai,
+          b.status AS booking_status,
+          u.nama AS user_name,
+          u.email AS user_email,
+          GROUP_CONCAT(l.nama ORDER BY l.nama SEPARATOR ', ') AS layanan_nama
+        FROM transaksi t
+        JOIN kategori_transaksi k ON t.kategori_transaksi_id = k.id
+        JOIN booking b ON t.booking_id = b.id
+        JOIN users u ON t.user_id = u.id
+        JOIN booking_layanan bl ON b.id = bl.booking_id
+        JOIN layanan l ON bl.layanan_id = l.id
+        WHERE (t.midtrans_order_id = ? OR t.pelunasan_order_id = ?)
+      `;
 
-           snapResponse = await snap.createTransaction(parameter);
-       }
+      const queryParams = [order_id, order_id];
 
-       // Insert transaksi
-       const [result] = await conn.query(
-           `INSERT INTO transaksi (
-               user_id, booking_id, total_harga, paid_amount, dp_amount, 
-               kategori_transaksi_id, status, midtrans_order_id, payment_status, booking_number
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-           [user_id, booking_id, total_harga, paid_amount, dp_amount, 
-            kategori_transaksi_id, transactionStatus, order_id, payment_status, booking_number]
-       );
+      if (user_id) {
+        query += ` AND t.user_id = ?`;
+        queryParams.push(user_id);
+      }
 
-       await conn.commit();
-       
-       console.log('[TransaksiService] createTransaction success', { transaksi_id: result.insertId });
-       return {
-           message: "Transaksi dibuat",
-           transaksi_id: result.insertId,
-           order_id: order_id,
-           midtrans_order_id: order_id,
-           status: transactionStatus,
-           snap_url: snapResponse ? snapResponse.redirect_url : null,
-           dp_amount,
-           remaining_amount: total_harga - dp_amount,
-           payment_status,
-           total_harga,
-           amount_to_pay: amountToPay,
-           payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment (DP)'
-       };
-   } catch (err) {
-       console.error('[TransaksiService] createTransaction error:', err);
-       await conn.rollback();
-       
-       // Format Midtrans specific errors
-       if (err.ApiResponse && err.ApiResponse.error_messages) {
-           throw {
-               status: 400,
-               message: "Gagal membuat transaksi",
-               details: err.ApiResponse.error_messages
-           };
-       }
-       
-       // Re-throw known errors
-       if (err.status) {
-           throw err;
-       }
+      query += ` GROUP BY t.id`;
 
-       // Handle unexpected errors
-       throw {
-           status: 500,
-           message: "Terjadi kesalahan saat membuat transaksi",
-           details: process.env.NODE_ENV === 'development' ? err.message : undefined
-       };
-   } finally {
-       conn.release();
-   }
-}
+      const [results] = await pool.query(query, queryParams);
+
+      if (results.length === 0) {
+        throw {
+          status: 404,
+          source: 'local',
+          message: "Transaksi tidak ditemukan di sistem",
+          details: `Order ID: ${order_id}`
+        };
+      }
+
+      return results[0];
+
+    } catch (error) {
+      if (error.source === 'local') {
+        throw error;
+      }
+      throw {
+        status: 500,
+        message: "Gagal mengambil data transaksi lokal",
+        details: error.message
+      };
+    }
+  }
+
+  mapMidtransStatus(midtransStatus) {
+    const statusMapping = {
+      'capture': 'success',
+      'settlement': 'success',
+      'success': 'success',
+      'pending': 'pending',
+      'deny': 'failed',
+      'cancel': 'cancelled',
+      'expire': 'expired',
+      'failed': 'failed',
+      'refund': 'refunded',
+      'partial_refund': 'partial_refund',
+      'chargeback': 'chargeback'
+    };
+
+    return statusMapping[midtransStatus] || 'unknown';
+  }
 
 async handleWebhook(webhookData) {
    console.log('[TransaksiService] handleWebhook started', webhookData);

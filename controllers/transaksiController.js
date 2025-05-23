@@ -9,7 +9,6 @@ class TransaksiController {
             
             const result = await TransaksiService.createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id);
             
-            // Tambahkan pesan khusus jika DP diprioritaskan
             let responseMessage = result;
             
             if (req.dpPrioritized) {
