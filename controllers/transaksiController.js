@@ -2,6 +2,22 @@ const TransaksiService = require('../services/transaksiService');
 const transactionReceiptTemplate = require('../html/transactionReceipt');
 
 class TransaksiController {
+    async getTransactionStatus(req, res) {
+    try {
+      const { order_id } = req.params;
+      const user_id = req.user ? req.user.id : null;
+
+      const result = await TransaksiService.getTransactionStatus(order_id, user_id);
+      
+      res.json(result);
+    } catch (error) {
+      res.status(error.status || 500).json({ 
+        error: error.message || "Internal Server Error",
+        details: process.env.NODE_ENV === 'development' ? error.details : undefined
+      });
+    }
+  }
+  
     async createTransaction(req, res) {
         try {
             const { booking_id, kategori_transaksi_id, is_dp } = req.body;

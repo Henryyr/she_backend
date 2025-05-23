@@ -1,10 +1,206 @@
 const { pool } = require('../db');
+const axios = require('axios');
 const { sendEmail } = require('./emailService');
 const transactionReceiptTemplate = require('../html/transactionReceipt');
 const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../config/midtrans');
 
 class TransaksiService {
-    async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
+async getTransactionStatus(order_id, user_id = null) {
+    console.log('[TransaksiService] getTransactionStatus started', { order_id, user_id });
+    
+    try {
+      const midtransResponse = await this.fetchMidtransStatus(order_id);
+      const localTransaction = await this.getLocalTransactionData(order_id, user_id);
+
+      const combinedData = {
+        midtrans_data: {
+          status_code: midtransResponse.status_code,
+          transaction_id: midtransResponse.transaction_id,
+          gross_amount: midtransResponse.gross_amount,
+          currency: midtransResponse.currency,
+          order_id: midtransResponse.order_id,
+          payment_type: midtransResponse.payment_type,
+          transaction_status: midtransResponse.transaction_status,
+          fraud_status: midtransResponse.fraud_status,
+          status_message: midtransResponse.status_message,
+          transaction_time: midtransResponse.transaction_time,
+          settlement_time: midtransResponse.settlement_time,
+          expiry_time: midtransResponse.expiry_time,
+          va_numbers: midtransResponse.va_numbers || null,
+          payment_amounts: midtransResponse.payment_amounts || []
+        },
+        local_data: localTransaction,
+        summary: {
+          order_id: midtransResponse.order_id,
+          amount_paid: midtransResponse.gross_amount,
+          payment_status: this.mapMidtransStatus(midtransResponse.transaction_status),
+          transaction_time: midtransResponse.transaction_time,
+          settlement_time: midtransResponse.settlement_time,
+          payment_method: midtransResponse.payment_type,
+          is_success: ['settlement', 'capture'].includes(midtransResponse.transaction_status)
+        }
+      };
+
+      console.log('[TransaksiService] getTransactionStatus success', { order_id });
+      return combinedData;
+
+    } catch (error) {
+      console.error('[TransaksiService] getTransactionStatus error:', error);
+
+      if (error.status === 404 && error.source === 'midtrans') {
+        throw {
+          status: 404,
+          message: "Transaksi tidak ditemukan di Midtrans",
+          details: `Order ID: ${order_id}`
+        };
+      }
+
+      if (error.status === 404 && error.source === 'local') {
+        throw {
+          status: 404,
+          message: "Transaksi tidak ditemukan di sistem lokal",
+          details: `Order ID: ${order_id}`
+        };
+      }
+
+      throw {
+        status: error.status || 500,
+        message: error.message || "Gagal mengambil status transaksi",
+        details: process.env.NODE_ENV === 'development' ? error.details : undefined
+      };
+    }
+  }
+
+  async fetchMidtransStatus(order_id) {
+    const serverKey = process.env.MIDTRANS_SERVER_KEY;
+    const isProduction = process.env.NODE_ENV === 'production';
+    const baseUrl = isProduction 
+      ? 'https://api.midtrans.com' 
+      : 'https://api.sandbox.midtrans.com';
+
+    try {
+      const response = await axios.get(`${baseUrl}/v2/${order_id}/status`, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${Buffer.from(serverKey + ':').toString('base64')}`
+        },
+        timeout: 10000
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('[TransaksiService] fetchMidtransStatus error:', error.response?.data || error.message);
+
+      if (error.response?.status === 404) {
+        throw {
+          status: 404,
+          source: 'midtrans',
+          message: "Transaksi tidak ditemukan di Midtrans",
+          details: error.response.data
+        };
+      }
+
+      if (error.response?.status === 401) {
+        throw {
+          status: 401,
+          message: "Unauthorized - Periksa server key Midtrans",
+          details: "Invalid authorization"
+        };
+      }
+
+      throw {
+        status: error.response?.status || 500,
+        message: "Gagal mengambil data dari Midtrans",
+        details: error.response?.data || error.message
+      };
+    }
+  }
+
+  async getLocalTransactionData(order_id, user_id = null) {
+    try {
+      let query = `
+        SELECT 
+          t.id,
+          t.booking_number,
+          t.midtrans_order_id,
+          t.pelunasan_order_id,
+          t.total_harga,
+          t.paid_amount,
+          t.dp_amount,
+          t.status AS transaction_status,
+          t.payment_status,
+          t.created_at,
+          t.updated_at,
+          t.user_id,
+          k.nama AS metode_pembayaran,
+          b.tanggal AS booking_date,
+          b.jam_mulai,
+          b.jam_selesai,
+          b.status AS booking_status,
+          u.fullname AS user_name,
+          u.email AS user_email,
+          GROUP_CONCAT(l.nama ORDER BY l.nama SEPARATOR ', ') AS layanan_nama
+        FROM transaksi t
+        JOIN kategori_transaksi k ON t.kategori_transaksi_id = k.id
+        JOIN booking b ON t.booking_id = b.id
+        JOIN users u ON t.user_id = u.id
+        JOIN booking_layanan bl ON b.id = bl.booking_id
+        JOIN layanan l ON bl.layanan_id = l.id
+        WHERE (t.midtrans_order_id = ? OR t.pelunasan_order_id = ?)
+      `;
+
+      const queryParams = [order_id, order_id];
+
+      if (user_id) {
+        query += ' AND t.user_id = ?';
+        queryParams.push(user_id);
+      }
+
+      query += ' GROUP BY t.id';
+
+      const [results] = await pool.query(query, queryParams);
+
+      if (results.length === 0) {
+        throw {
+          status: 404,
+          source: 'local',
+          message: "Transaksi tidak ditemukan di sistem",
+          details: `Order ID: ${order_id}`
+        };
+      }
+
+      return results[0];
+    } catch (error) {
+      if (error.source === 'local') throw error;
+
+      throw {
+        status: 500,
+        message: "Gagal mengambil data transaksi lokal",
+        details: error.message
+      };
+    }
+  }
+
+  mapMidtransStatus(midtransStatus) {
+    const statusMapping = {
+      'capture': 'success',
+      'settlement': 'success',
+      'success': 'success',
+      'pending': 'pending',
+      'deny': 'failed',
+      'cancel': 'cancelled',
+      'expire': 'expired',
+      'failed': 'failed',
+      'refund': 'refunded',
+      'partial_refund': 'partial_refund',
+      'chargeback': 'chargeback'
+    };
+
+    return statusMapping[midtransStatus] || 'unknown';
+  }
+
+async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
    console.log('[TransaksiService] createTransaction started', { booking_id, kategori_transaksi_id, is_dp, user_id });
    const conn = await pool.getConnection();
    try {

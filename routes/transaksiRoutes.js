@@ -22,4 +22,7 @@ router.post('/lunasi', authenticate, validatePayRemaining, TransaksiController.p
 // Route untuk mendapatkan transaksi user
 router.get('/', authenticate, TransaksiController.getUserTransactions);
 
+// Route dengan autentikasi
+router.get('/status/:order_id', authenticate, TransaksiController.getTransactionStatus);
+
 module.exports = router;
