@@ -52,19 +52,18 @@ const hasDuplicateCategory = (categories) => {
     return false;
 };
 
-// Validasi jam booking untuk mencegah double booking pada hari dan jam yang sama
-const validateBookingTime = async (tanggal, jam_mulai, user_id = null, booking_id = null) => {
+// Validasi jam booking untuk mencegah double booking pada hari dan jam yang sama (overlap)
+const validateBookingTime = async (tanggal, jam_mulai, estimasi_waktu, user_id = null, booking_id = null) => {
     try {
         let sql = `
-            SELECT booking_number, jam_mulai, u.username as user_name
+            SELECT booking_number, jam_mulai, jam_selesai, u.username as user_name
             FROM booking b
             JOIN users u ON b.user_id = u.id
             WHERE b.tanggal = ? 
-            AND b.jam_mulai = ? 
             AND b.status NOT IN ('canceled', 'completed')
         `;
         
-        const params = [tanggal, jam_mulai];
+        const params = [tanggal];
         
         // Jika untuk update booking, exclude booking yang sedang diupdate
         if (booking_id) {
@@ -79,14 +78,25 @@ const validateBookingTime = async (tanggal, jam_mulai, user_id = null, booking_i
         }
 
         const [results] = await db.pool.query(sql, params);
-        
-        if (results.length > 0) {
-            const existingBooking = results[0];
-            throw new Error(
-                `Jam ${jam_mulai} pada tanggal ${tanggal} sudah dibooking oleh ${existingBooking.user_name} (${existingBooking.booking_number}). Silakan pilih jam lain.`
-            );
+
+        // Hitung jam selesai booking baru
+        function toMinutes(timeStr) {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
         }
-        
+        const startMinutes = toMinutes(jam_mulai);
+        const endMinutes = startMinutes + estimasi_waktu;
+
+        for (const booking of results) {
+            const bStart = toMinutes(booking.jam_mulai.length === 5 ? booking.jam_mulai : booking.jam_mulai.slice(0, 5));
+            const bEnd = toMinutes(booking.jam_selesai.length === 5 ? booking.jam_selesai : booking.jam_selesai.slice(0, 5));
+            // Cek overlap
+            if (startMinutes < bEnd && endMinutes > bStart) {
+                throw new Error(
+                    `Jam ${jam_mulai} - ${new Date(0,0,0,0,startMinutes+estimasi_waktu).toTimeString().slice(0,5)} pada tanggal ${tanggal} bentrok dengan booking ${booking.user_name} (${booking.booking_number}) dari jam ${booking.jam_mulai} sampai ${booking.jam_selesai}.`
+                );
+            }
+        }
         return true;
     } catch (error) {
         throw error;

@@ -33,14 +33,39 @@ const createBooking = async (req, res) => {
             special_request: cleanBody.special_request || null
         };
 
+        // Hitung estimasi waktu booking (dalam menit)
+        let estimasi_waktu = 60;
+        try {
+            const db = require('../db');
+            const [allLayanan] = await db.pool.query(
+                `SELECT id, estimasi_waktu FROM layanan`
+            );
+            let layananIds = [];
+            if (bookingData.layanan_id) {
+                layananIds = Array.isArray(bookingData.layanan_id)
+                    ? bookingData.layanan_id
+                    : [bookingData.layanan_id];
+                const selectedLayanan = allLayanan.filter(l => layananIds.includes(String(l.id)) || layananIds.includes(Number(l.id)));
+                if (selectedLayanan.length > 0) {
+                    estimasi_waktu = selectedLayanan.reduce((sum, l) => sum + l.estimasi_waktu, 0);
+                }
+            }
+        } catch (e) {
+            // fallback default
+            estimasi_waktu = 60;
+        }
+
         // VALIDASI WAKTU BOOKING
         try {
-            // 1. Validasi jam tidak bentrok dengan booking lain
-            await validateBookingTime(bookingData.tanggal, bookingData.jam_mulai, req.user.id);
-            
+            // 1. Validasi jam tidak bentrok dengan booking lain (overlap)
+            await validateBookingTime(
+                bookingData.tanggal,
+                bookingData.jam_mulai,
+                estimasi_waktu,
+                req.user.id
+            );
             // 2. Validasi user tidak booking lebih dari 1x per hari
             await validateUserDailyBooking(bookingData.tanggal, req.user.id);
-            
         } catch (validationError) {
             return res.status(409).json({
                 error: 'Konflik waktu booking',
