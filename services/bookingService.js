@@ -189,6 +189,19 @@ const createBooking = async (data) => {
             kategori: categories.join(', ')
         });
 
+        // Hitung cancel_timer (detik sampai 30 menit setelah jam_mulai)
+        let cancel_timer = null;
+        try {
+            const now = new Date();
+            const tanggalStr = typeof tanggal === 'string' ? tanggal.split('T')[0] : tanggal;
+            const jamStr = jam_mulai.length === 5 ? jam_mulai : jam_mulai.slice(0, 5);
+            const startDateTime = new Date(`${tanggalStr}T${jamStr}:00+08:00`);
+            const batasCancel = new Date(startDateTime.getTime() + 30 * 60000);
+            cancel_timer = Math.max(0, Math.floor((batasCancel.getTime() - now.getTime()) / 1000));
+        } catch (e) {
+            cancel_timer = null;
+        }
+
         return {
             booking_id,
             booking_number: bookingNumber,
@@ -201,7 +214,8 @@ const createBooking = async (data) => {
             jam_selesai: jam_selesai_string,
             product_detail,
             special_request: data.special_request,
-            default_products: categories.includes('Smoothing') && !smoothing_product ? true : undefined
+            default_products: categories.includes('Smoothing') && !smoothing_product ? true : undefined,
+            cancel_timer // <--- tambahkan di sini
         };
 
     } catch (err) {
@@ -275,7 +289,40 @@ const getBookingById = async (id) => {
             throw new Error('Booking tidak ditemukan');
         }
 
-        return booking[0];
+        // Hitung cancel_timer (detik sampai 30 menit setelah jam_mulai)
+        let cancel_timer = null;
+        try {
+            const now = new Date();
+
+            // Ambil tanggal booking (YYYY-MM-DD) dan jam_mulai (HH:mm)
+            let tanggalStr = booking[0].tanggal;
+            if (typeof tanggalStr === 'string' && tanggalStr.includes('T')) {
+                tanggalStr = tanggalStr.split('T')[0];
+            } else if (tanggalStr instanceof Date) {
+                tanggalStr = tanggalStr.toISOString().split('T')[0];
+            }
+
+            let jamStr = booking[0].jam_mulai;
+            if (typeof jamStr === 'string' && jamStr.length > 5) {
+                jamStr = jamStr.slice(0, 5);
+            }
+
+            // Gunakan zona waktu Asia/Makassar (UTC+8)
+            // Koreksi: pastikan now juga di zona waktu UTC+8
+            const nowWITA = new Date(now.getTime() + (8 - now.getTimezoneOffset() / 60) * 60 * 60 * 1000 - (now.getTimezoneOffset() * 60 * 1000));
+            const startDateTime = new Date(`${tanggalStr}T${jamStr}:00+08:00`);
+            const batasCancel = new Date(startDateTime.getTime() + 30 * 60000);
+
+            // cancel_timer dihitung dari nowWITA ke batasCancel
+            cancel_timer = Math.max(0, Math.floor((batasCancel.getTime() - nowWITA.getTime()) / 1000));
+        } catch (e) {
+            cancel_timer = null;
+        }
+
+        return {
+            ...booking[0],
+            cancel_timer
+        };
     } catch (error) {
         throw new Error(`Error getting booking: ${error.message}`);
     } finally {
@@ -283,142 +330,18 @@ const getBookingById = async (id) => {
     }
 };
 
-const updateBookingStatus = async (id, status) => {
+const cancelBooking = async (id) => {
     const connection = await pool.getConnection();
     try {
-        const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
-        if (!validStatuses.includes(status)) {
-            throw new Error('Status tidak valid');
-        }
-
+        // Perbaiki status: gunakan 'cancelled' (2x L) sesuai enum/status di database
         const [result] = await connection.query(
-            'UPDATE booking SET status = ? WHERE id = ?',
-            [status, id]
+            "UPDATE booking SET status = ? WHERE id = ?",
+            ['cancelled', id]
         );
-
         if (result.affectedRows === 0) {
             throw new Error('Booking tidak ditemukan');
         }
-
-        return { message: 'Status booking berhasil diperbarui' };
-    } catch (error) {
-        throw new Error(`Error updating booking status: ${error.message}`);
-    } finally {
-        connection.release();
-    }
-};
-
-const deleteBooking = async (id) => {
-    const connection = await pool.getConnection();
-    try {
-        await connection.beginTransaction();
-
-        const [booking] = await connection.query(
-            'SELECT status FROM booking WHERE id = ?',
-            [id]
-        );
-
-        if (!booking[0]) {
-            throw new Error('Booking tidak ditemukan');
-        }
-
-        if (booking[0].status === 'completed') {
-            throw new Error('Tidak dapat menghapus booking yang sudah selesai');
-        }
-
-        await connection.query('DELETE FROM booking_layanan WHERE booking_id = ?', [id]);
-        await connection.query('DELETE FROM booking_colors WHERE booking_id = ?', [id]);
-        
-        const [result] = await connection.query('DELETE FROM booking WHERE id = ?', [id]);
-
-        await connection.commit();
-        return { message: 'Booking berhasil dihapus' };
-
-    } catch (error) {
-        await connection.rollback();
-        throw new Error(`Error deleting booking: ${error.message}`);
-    } finally {
-        connection.release();
-    }
-};
-
-const completeBooking = async (id) => {
-    const connection = await pool.getConnection();
-    try {
-        await connection.beginTransaction();
-
-        // Get booking details with product information
-        const [bookingDetails] = await connection.query(`
-            SELECT b.*, 
-                   bc.color_id, bc.brand_id as color_brand_id,
-                   bs.product_id as smoothing_id, bs.brand_id as smoothing_brand_id,
-                   bk.product_id as keratin_id, bk.brand_id as keratin_brand_id
-            FROM booking b
-            LEFT JOIN booking_colors bc ON b.id = bc.booking_id
-            LEFT JOIN booking_smoothing bs ON b.id = bs.booking_id
-            LEFT JOIN booking_keratin bk ON b.id = bk.booking_id
-            WHERE b.id = ? FOR UPDATE`,
-            [id]
-        );
-
-        if (!bookingDetails[0]) {
-            throw new Error('Booking tidak ditemukan');
-        }
-
-        const booking = bookingDetails[0];
-
-        if (booking.status === 'completed') {
-            throw new Error('Booking sudah selesai');
-        }
-
-        if (booking.status === 'cancelled') {
-            throw new Error('Tidak dapat menyelesaikan booking yang sudah dibatalkan');
-        }
-
-        // Update stocks based on products used
-        const stockUpdates = [];
-        
-        if (booking.color_id) {
-            stockUpdates.push(
-                updateHairColorStock(booking.color_id, booking.color_brand_id, -1)
-            );
-        }
-
-        if (booking.smoothing_id) {
-            stockUpdates.push(
-                updateSmoothingStock(booking.smoothing_id, booking.smoothing_brand_id, -1)
-            );
-        }
-
-        if (booking.keratin_id) {
-            stockUpdates.push(
-                updateKeratinStock(booking.keratin_id, booking.keratin_brand_id, -1)
-            );
-        }
-
-        // Wait for all stock updates to complete
-        await Promise.all(stockUpdates);
-
-        // Update booking status and completed_at
-        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        await connection.query(
-            `UPDATE booking 
-             SET status = 'completed', 
-                 completed_at = ?
-             WHERE id = ?`,
-            [now, id]
-        );
-
-        await connection.commit();
-        return { 
-            message: 'Booking berhasil diselesaikan',
-            booking_id: id,
-            completed_at: now
-        };
-
-    } catch (error) {
-        await connection.rollback();
-        throw new Error(`Error completing booking: ${error.message}`);
+        return { message: 'Booking berhasil dibatalkan', booking_id: id };
     } finally {
         connection.release();
     }
@@ -428,7 +351,5 @@ module.exports = {
     createBooking,
     getAllBookings,
     getBookingById,
-    updateBookingStatus,
-    deleteBooking,
-    completeBooking
+    cancelBooking
 };
