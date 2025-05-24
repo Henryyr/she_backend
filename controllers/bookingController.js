@@ -120,29 +120,34 @@ const getBookingById = async (req, res) => {
 const getAvailableSlots = async (req, res) => {
     try {
         const { tanggal, layanan_id } = req.query;
-        if (!tanggal || !layanan_id) {
-            return res.status(400).json({ error: 'Parameter tanggal dan layanan_id diperlukan' });
+        if (!tanggal) {
+            return res.status(400).json({ error: 'Parameter tanggal diperlukan' });
         }
 
-        // layanan_id bisa array atau string
-        const layananIds = Array.isArray(layanan_id)
-            ? layanan_id
-            : layanan_id.split(',').map(id => id.trim());
+        let duration = 60; // default 60 menit
+        let layananIds = [];
+
+        if (layanan_id) {
+            layananIds = Array.isArray(layanan_id)
+                ? layanan_id
+                : layanan_id.split(',').map(id => id.trim());
+
+            const db = require('../db');
+            const [layananRows] = await db.pool.query(
+                `SELECT SUM(estimasi_waktu) as total_estimasi FROM layanan WHERE id IN (?)`,
+                [layananIds]
+            );
+            if (layananRows[0]?.total_estimasi) {
+                duration = layananRows[0].total_estimasi;
+            }
+        }
 
         const db = require('../db');
-        // Ambil estimasi waktu total dari layanan yang dipilih
-        const [layananRows] = await db.pool.query(
-            `SELECT SUM(estimasi_waktu) as total_estimasi FROM layanan WHERE id IN (?)`,
-            [layananIds]
-        );
-        const duration = layananRows[0]?.total_estimasi || 60; // fallback 60 menit
-
         const operatingHours = [
             '09:00', '10:00', '11:00', '12:00', '13:00', 
             '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'
         ];
 
-        // Ambil semua booking aktif di tanggal tsb
         const [bookings] = await db.pool.query(
             `SELECT jam_mulai, jam_selesai FROM booking 
              WHERE tanggal = ? AND status NOT IN ('canceled', 'completed')`,
@@ -154,13 +159,12 @@ const getAvailableSlots = async (req, res) => {
         }
 
         const availableSlots = operatingHours.filter(time => {
-            const [h, m] = time.split(':').map(Number);
             const start = new Date(`${tanggal}T${time}:00`);
             const end = new Date(start.getTime() + duration * 60000);
 
             for (const b of bookings) {
-                const bStart = new Date(`${tanggal}T${b.jam_mulai}:00`);
-                const bEnd = new Date(`${tanggal}T${b.jam_selesai}:00`);
+                const bStart = new Date(`${tanggal}T${b.jam_mulai.length === 5 ? b.jam_mulai + ':00' : b.jam_mulai}`);
+                const bEnd = new Date(`${tanggal}T${b.jam_selesai.length === 5 ? b.jam_selesai + ':00' : b.jam_selesai}`);
                 if (isOverlap(start, end, bStart, bEnd)) {
                     return false;
                 }
@@ -168,11 +172,14 @@ const getAvailableSlots = async (req, res) => {
             return true;
         });
 
+        const bookedSlots = bookings.map(b => b.jam_mulai.length === 5 ? b.jam_mulai : b.jam_mulai.slice(0, 5));
+
         res.json({
             tanggal,
-            layanan_id: layananIds,
+            layanan_id: layananIds.length > 0 ? layananIds : undefined,
             estimasi_waktu: duration,
             available_slots: availableSlots,
+            booked_slots: bookedSlots,
             total_available: availableSlots.length
         });
     } catch (error) {
