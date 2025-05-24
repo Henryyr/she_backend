@@ -144,7 +144,7 @@ const getBookingById = async (req, res) => {
 // Method untuk mendapatkan jadwal yang tersedia
 const getAvailableSlots = async (req, res) => {
     try {
-        const { tanggal, layanan_id } = req.query;
+        const { tanggal, layanan_id, estimasi_waktu } = req.query;
         if (!tanggal) {
             return res.status(400).json({ error: 'Parameter tanggal diperlukan' });
         }
@@ -157,7 +157,10 @@ const getAvailableSlots = async (req, res) => {
             `SELECT id, nama, estimasi_waktu FROM layanan`
         );
 
-        if (layanan_id) {
+        // Jika estimasi_waktu dikirim dari frontend, gunakan itu
+        if (estimasi_waktu && !isNaN(Number(estimasi_waktu))) {
+            duration = Number(estimasi_waktu);
+        } else if (layanan_id) {
             layananIds = Array.isArray(layanan_id)
                 ? layanan_id
                 : layanan_id.split(',').map(id => id.trim());
@@ -185,7 +188,6 @@ const getAvailableSlots = async (req, res) => {
             return h * 60 + m;
         }
 
-        // Sort bookings by jam_mulai ascending
         bookings.sort((a, b) => toMinutes(a.jam_mulai) - toMinutes(b.jam_mulai));
 
         const availableSlots = [];
@@ -203,7 +205,6 @@ const getAvailableSlots = async (req, res) => {
             for (const b of bookings) {
                 const bStart = toMinutes(b.jam_mulai.length === 5 ? b.jam_mulai : b.jam_mulai.slice(0, 5));
                 const bEnd = toMinutes(b.jam_selesai.length === 5 ? b.jam_selesai : b.jam_selesai.slice(0, 5));
-                // Jika ada overlap, slot tidak available
                 if (startMinutes < bEnd && endMinutes > bStart) {
                     canBook = false;
                     break;
@@ -228,6 +229,106 @@ const getAvailableSlots = async (req, res) => {
         res.json({
             tanggal,
             layanan_id: layananIds.length > 0 ? layananIds : undefined,
+            estimasi_waktu: duration,
+            available_slots: availableSlots,
+            booked_slots: bookedSlots,
+            total_available: availableSlots.length
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Gagal mengambil jadwal tersedia', message: error.message });
+    }
+};
+
+// Method untuk mendapatkan jadwal yang tersedia (POST version)
+const postAvailableSlots = async (req, res) => {
+    try {
+        // Ambil data dari body, bukan query
+        const { tanggal, layanan_id, estimasi_waktu } = req.body;
+        if (!tanggal) {
+            return res.status(400).json({ error: 'Parameter tanggal diperlukan' });
+        }
+
+        let layananIds = [];
+        let duration = 60; // default 60 menit
+
+        const db = require('../db');
+        const [allLayanan] = await db.pool.query(
+            `SELECT id, nama, estimasi_waktu FROM layanan`
+        );
+
+        // Jika estimasi_waktu dikirim dari frontend, gunakan itu
+        if (estimasi_waktu && !isNaN(Number(estimasi_waktu))) {
+            duration = Number(estimasi_waktu);
+        } else if (layanan_id) {
+            layananIds = Array.isArray(layanan_id)
+                ? layanan_id
+                : layanan_id.split(',').map(id => id.trim());
+
+            const selectedLayanan = allLayanan.filter(l => layananIds.includes(String(l.id)));
+            if (selectedLayanan.length !== layananIds.length) {
+                return res.status(400).json({ error: 'Beberapa layanan tidak ditemukan' });
+            }
+            duration = selectedLayanan.reduce((sum, l) => sum + l.estimasi_waktu, 0);
+        }
+
+        const operatingHours = [
+            '09:00', '10:00', '11:00', '12:00', '13:00', 
+            '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'
+        ];
+
+        const [bookings] = await db.pool.query(
+            `SELECT jam_mulai, jam_selesai FROM booking 
+             WHERE tanggal = ? AND status NOT IN ('canceled', 'completed')`,
+            [tanggal]
+        );
+
+        function toMinutes(timeStr) {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        }
+
+        bookings.sort((a, b) => toMinutes(a.jam_mulai) - toMinutes(b.jam_mulai));
+
+        const availableSlots = [];
+        const bookedSlots = [];
+
+        for (const time of operatingHours) {
+            const startMinutes = toMinutes(time);
+            const endMinutes = startMinutes + duration;
+
+            // Cari booking berikutnya setelah slot ini
+            const nextBooking = bookings.find(b => toMinutes(b.jam_mulai) > startMinutes);
+
+            // Slot available jika TIDAK overlap dengan booking manapun
+            let canBook = true;
+            for (const b of bookings) {
+                const bStart = toMinutes(b.jam_mulai.length === 5 ? b.jam_mulai : b.jam_mulai.slice(0, 5));
+                const bEnd = toMinutes(b.jam_selesai.length === 5 ? b.jam_selesai : b.jam_selesai.slice(0, 5));
+                if (startMinutes < bEnd && endMinutes > bStart) {
+                    canBook = false;
+                    break;
+                }
+            }
+
+            // Jika ada booking berikutnya, layanan tidak boleh melewati jam booking berikutnya
+            if (canBook && nextBooking) {
+                const nextStart = toMinutes(nextBooking.jam_mulai.length === 5 ? nextBooking.jam_mulai : nextBooking.jam_mulai.slice(0, 5));
+                if (endMinutes > nextStart) {
+                    canBook = false;
+                }
+            }
+
+            if (canBook) {
+                availableSlots.push(time);
+            } else {
+                bookedSlots.push(time);
+            }
+        }
+
+        res.json({
+            tanggal,
+            layanan_id: layananIds.length > 0 ? layananIds : undefined,
+            estimasi_waktu: duration,
             available_slots: availableSlots,
             booked_slots: bookedSlots,
             total_available: availableSlots.length
@@ -354,5 +455,6 @@ module.exports = {
     confirmBooking,
     cancelBooking,
     deleteBooking,
-    completeBooking
+    completeBooking,
+    postAvailableSlots
 };

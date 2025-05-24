@@ -18,6 +18,7 @@ router.use(errorHandler);
 router.post('/', authenticate, bookingLimiter, bookingController.createBooking);
 router.get('/', authenticate, bookingController.getAllBookings);
 router.get('/available-slots', authenticate, bookingController.getAvailableSlots);
+router.post('/available-slots', authenticate, bookingController.postAvailableSlots);
 router.get('/:id', authenticate, bookingController.getBookingById);
 router.post('/confirm/:bookingNumber', authenticate, bookingController.confirmBooking);
 router.post('/cancel/:bookingNumber', authenticate, bookingController.cancelBooking);
