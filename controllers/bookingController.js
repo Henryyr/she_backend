@@ -124,25 +124,26 @@ const getAvailableSlots = async (req, res) => {
             return res.status(400).json({ error: 'Parameter tanggal diperlukan' });
         }
 
-        let duration = 60; // default 60 menit
         let layananIds = [];
+        let duration = 60; // default 60 menit
+
+        const db = require('../db');
+        const [allLayanan] = await db.pool.query(
+            `SELECT id, nama, estimasi_waktu FROM layanan`
+        );
 
         if (layanan_id) {
             layananIds = Array.isArray(layanan_id)
                 ? layanan_id
                 : layanan_id.split(',').map(id => id.trim());
 
-            const db = require('../db');
-            const [layananRows] = await db.pool.query(
-                `SELECT SUM(estimasi_waktu) as total_estimasi FROM layanan WHERE id IN (?)`,
-                [layananIds]
-            );
-            if (layananRows[0]?.total_estimasi) {
-                duration = layananRows[0].total_estimasi;
+            const selectedLayanan = allLayanan.filter(l => layananIds.includes(String(l.id)));
+            if (selectedLayanan.length !== layananIds.length) {
+                return res.status(400).json({ error: 'Beberapa layanan tidak ditemukan' });
             }
+            duration = selectedLayanan.reduce((sum, l) => sum + l.estimasi_waktu, 0);
         }
 
-        const db = require('../db');
         const operatingHours = [
             '09:00', '10:00', '11:00', '12:00', '13:00', 
             '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'
@@ -154,30 +155,54 @@ const getAvailableSlots = async (req, res) => {
             [tanggal]
         );
 
-        function isOverlap(startA, endA, startB, endB) {
-            return (startA < endB) && (endA > startB);
+        function toMinutes(timeStr) {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
         }
 
-        const availableSlots = operatingHours.filter(time => {
-            const start = new Date(`${tanggal}T${time}:00`);
-            const end = new Date(start.getTime() + duration * 60000);
+        // Sort bookings by jam_mulai ascending
+        bookings.sort((a, b) => toMinutes(a.jam_mulai) - toMinutes(b.jam_mulai));
 
+        const availableSlots = [];
+        const bookedSlots = [];
+
+        for (const time of operatingHours) {
+            const startMinutes = toMinutes(time);
+            const endMinutes = startMinutes + duration;
+
+            // Cari booking berikutnya setelah slot ini
+            const nextBooking = bookings.find(b => toMinutes(b.jam_mulai) > startMinutes);
+
+            // Slot available jika TIDAK overlap dengan booking manapun
+            let canBook = true;
             for (const b of bookings) {
-                const bStart = new Date(`${tanggal}T${b.jam_mulai.length === 5 ? b.jam_mulai + ':00' : b.jam_mulai}`);
-                const bEnd = new Date(`${tanggal}T${b.jam_selesai.length === 5 ? b.jam_selesai + ':00' : b.jam_selesai}`);
-                if (isOverlap(start, end, bStart, bEnd)) {
-                    return false;
+                const bStart = toMinutes(b.jam_mulai.length === 5 ? b.jam_mulai : b.jam_mulai.slice(0, 5));
+                const bEnd = toMinutes(b.jam_selesai.length === 5 ? b.jam_selesai : b.jam_selesai.slice(0, 5));
+                // Jika ada overlap, slot tidak available
+                if (startMinutes < bEnd && endMinutes > bStart) {
+                    canBook = false;
+                    break;
                 }
             }
-            return true;
-        });
 
-        const bookedSlots = bookings.map(b => b.jam_mulai.length === 5 ? b.jam_mulai : b.jam_mulai.slice(0, 5));
+            // Jika ada booking berikutnya, layanan tidak boleh melewati jam booking berikutnya
+            if (canBook && nextBooking) {
+                const nextStart = toMinutes(nextBooking.jam_mulai.length === 5 ? nextBooking.jam_mulai : nextBooking.jam_mulai.slice(0, 5));
+                if (endMinutes > nextStart) {
+                    canBook = false;
+                }
+            }
+
+            if (canBook) {
+                availableSlots.push(time);
+            } else {
+                bookedSlots.push(time);
+            }
+        }
 
         res.json({
             tanggal,
             layanan_id: layananIds.length > 0 ? layananIds : undefined,
-            estimasi_waktu: duration,
             available_slots: availableSlots,
             booked_slots: bookedSlots,
             total_available: availableSlots.length
