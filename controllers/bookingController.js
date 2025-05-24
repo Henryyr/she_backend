@@ -119,49 +119,64 @@ const getBookingById = async (req, res) => {
 // Method untuk mendapatkan jadwal yang tersedia
 const getAvailableSlots = async (req, res) => {
     try {
-        const { tanggal } = req.query;
-        
-        if (!tanggal) {
-            return res.status(400).json({
-                error: 'Parameter tanggal diperlukan'
-            });
+        const { tanggal, layanan_id } = req.query;
+        if (!tanggal || !layanan_id) {
+            return res.status(400).json({ error: 'Parameter tanggal dan layanan_id diperlukan' });
         }
 
-        // Jam operasional salon (bisa disesuaikan)
-        const operatingHours = [
-            '09:00', '10:00', '11:00', '12:00', '13:00', 
-            '14:00', '15:00', '16:00', '17:00', '18:00'
-        ];
-
-        // Query untuk mendapatkan jam yang sudah dibooking
-        const sql = `
-            SELECT jam_mulai, COUNT(*) as booking_count
-            FROM booking 
-            WHERE tanggal = ? 
-            AND status NOT IN ('canceled', 'completed')
-            GROUP BY jam_mulai
-        `;
+        // layanan_id bisa array atau string
+        const layananIds = Array.isArray(layanan_id)
+            ? layanan_id
+            : layanan_id.split(',').map(id => id.trim());
 
         const db = require('../db');
-        const [bookedSlots] = await db.pool.query(sql, [tanggal]);
-        
-        // Filter jam yang masih tersedia
-        const bookedTimes = bookedSlots.map(slot => slot.jam_mulai);
-        const availableSlots = operatingHours.filter(time => !bookedTimes.includes(time));
+        // Ambil estimasi waktu total dari layanan yang dipilih
+        const [layananRows] = await db.pool.query(
+            `SELECT SUM(estimasi_waktu) as total_estimasi FROM layanan WHERE id IN (?)`,
+            [layananIds]
+        );
+        const duration = layananRows[0]?.total_estimasi || 60; // fallback 60 menit
+
+        const operatingHours = [
+            '09:00', '10:00', '11:00', '12:00', '13:00', 
+            '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'
+        ];
+
+        // Ambil semua booking aktif di tanggal tsb
+        const [bookings] = await db.pool.query(
+            `SELECT jam_mulai, jam_selesai FROM booking 
+             WHERE tanggal = ? AND status NOT IN ('canceled', 'completed')`,
+            [tanggal]
+        );
+
+        function isOverlap(startA, endA, startB, endB) {
+            return (startA < endB) && (endA > startB);
+        }
+
+        const availableSlots = operatingHours.filter(time => {
+            const [h, m] = time.split(':').map(Number);
+            const start = new Date(`${tanggal}T${time}:00`);
+            const end = new Date(start.getTime() + duration * 60000);
+
+            for (const b of bookings) {
+                const bStart = new Date(`${tanggal}T${b.jam_mulai}:00`);
+                const bEnd = new Date(`${tanggal}T${b.jam_selesai}:00`);
+                if (isOverlap(start, end, bStart, bEnd)) {
+                    return false;
+                }
+            }
+            return true;
+        });
 
         res.json({
             tanggal,
+            layanan_id: layananIds,
+            estimasi_waktu: duration,
             available_slots: availableSlots,
-            booked_slots: bookedTimes,
             total_available: availableSlots.length
         });
-
     } catch (error) {
-        console.error('Error getting available slots:', error);
-        res.status(500).json({
-            error: 'Gagal mengambil jadwal tersedia',
-            message: error.message
-        });
+        res.status(500).json({ error: 'Gagal mengambil jadwal tersedia', message: error.message });
     }
 };
 

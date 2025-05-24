@@ -104,70 +104,74 @@ async fetchMidtransStatus(order_id) {
 }
 
 
-  async getLocalTransactionData(order_id, user_id = null) {
-    try {
-      let query = `
-        SELECT 
-          t.id,
-          t.booking_number,
-          t.midtrans_order_id,
-          t.pelunasan_order_id,
-          t.total_harga,
-          t.paid_amount,
-          t.dp_amount,
-          t.status AS transaction_status,
-          t.payment_status,
-          t.created_at,
-          t.updated_at,
-          t.user_id,
-          k.nama AS metode_pembayaran,
-          b.tanggal AS booking_date,
-          b.jam_mulai,
-          b.jam_selesai,
-          b.status AS booking_status,
-          u.fullname AS user_name,
-          u.email AS user_email,
-          GROUP_CONCAT(l.nama ORDER BY l.nama SEPARATOR ', ') AS layanan_nama
-        FROM transaksi t
-        JOIN kategori_transaksi k ON t.kategori_transaksi_id = k.id
-        JOIN booking b ON t.booking_id = b.id
-        JOIN users u ON t.user_id = u.id
-        JOIN booking_layanan bl ON b.id = bl.booking_id
-        JOIN layanan l ON bl.layanan_id = l.id
-        WHERE (t.midtrans_order_id = ? OR t.pelunasan_order_id = ?)
-      `;
+async getLocalTransactionData(order_id, user_id = null) {
+  try {
+    let query = `
+      SELECT 
+        t.id,
+        b.booking_number,         -- ambil dari booking
+        t.midtrans_order_id,
+        t.pelunasan_order_id,
+        t.total_harga,
+        t.paid_amount,
+        t.dp_amount,
+        t.status AS transaction_status,
+        t.payment_status,
+        t.created_at,
+        t.updated_at,
+        t.user_id,
+        k.nama AS metode_pembayaran,
+        b.tanggal AS booking_date,
+        b.jam_mulai,
+        b.jam_selesai,
+        b.status AS booking_status,
+        u.fullname AS user_name,
+        u.email AS user_email,
+        GROUP_CONCAT(l.nama ORDER BY l.nama SEPARATOR ', ') AS layanan_nama
+      FROM transaksi t
+      JOIN kategori_transaksi k ON t.kategori_transaksi_id = k.id
+      JOIN booking b ON t.booking_id = b.id
+      JOIN users u ON t.user_id = u.id
+      JOIN booking_layanan bl ON b.id = bl.booking_id
+      JOIN layanan l ON bl.layanan_id = l.id
+      WHERE (t.midtrans_order_id = ? OR t.pelunasan_order_id = ?)
+    `;
 
-      const queryParams = [order_id, order_id];
+    const queryParams = [order_id, order_id];
 
-      if (user_id) {
-        query += ' AND t.user_id = ?';
-        queryParams.push(user_id);
-      }
+    if (user_id) {
+      query += ' AND t.user_id = ?';
+      queryParams.push(user_id);
+    }
 
-      query += ' GROUP BY t.id';
+    query += ' GROUP BY t.id';
 
-      const [results] = await pool.query(query, queryParams);
+    const [results] = await pool.query(query, queryParams);
 
-      if (results.length === 0) {
-        throw {
-          status: 404,
-          source: 'local',
-          message: "Transaksi tidak ditemukan di sistem",
-          details: `Order ID: ${order_id}`
-        };
-      }
-
-      return results[0];
-    } catch (error) {
-      if (error.source === 'local') throw error;
-
+    if (results.length === 0) {
       throw {
-        status: 500,
-        message: "Gagal mengambil data transaksi lokal",
-        details: error.message
+        status: 404,
+        source: 'local',
+        message: "Transaksi tidak ditemukan di sistem",
+        details: `Order ID: ${order_id}`
       };
     }
+
+    const result = results[0];
+    result.order_id = result.booking_number;  // <-- ini bagian yang kamu minta
+    return result;
+
+  } catch (error) {
+    if (error.source === 'local') throw error;
+
+    throw {
+      status: 500,
+      message: "Gagal mengambil data transaksi lokal",
+      details: error.message
+    };
   }
+}
+
 
   mapMidtransStatus(midtransStatus) {
     const statusMapping = {
