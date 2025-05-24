@@ -243,39 +243,24 @@ const getAvailableSlots = async (req, res) => {
 const postAvailableSlots = async (req, res) => {
     try {
         // Ambil data dari body, bukan query
-        const { tanggal, layanan_id, estimasi_waktu } = req.body;
+        const { tanggal, estimasi_waktu } = req.body;
         if (!tanggal) {
             return res.status(400).json({ error: 'Parameter tanggal diperlukan' });
         }
 
-        let layananIds = [];
         let duration = 60; // default 60 menit
 
-        const db = require('../db');
-        const [allLayanan] = await db.pool.query(
-            `SELECT id, nama, estimasi_waktu FROM layanan`
-        );
-
-        // Jika estimasi_waktu dikirim dari frontend, gunakan itu
+        // estimasi_waktu dari frontend (wajib/opsional)
         if (estimasi_waktu && !isNaN(Number(estimasi_waktu))) {
             duration = Number(estimasi_waktu);
-        } else if (layanan_id) {
-            layananIds = Array.isArray(layanan_id)
-                ? layanan_id
-                : layanan_id.split(',').map(id => id.trim());
-
-            const selectedLayanan = allLayanan.filter(l => layananIds.includes(String(l.id)));
-            if (selectedLayanan.length !== layananIds.length) {
-                return res.status(400).json({ error: 'Beberapa layanan tidak ditemukan' });
-            }
-            duration = selectedLayanan.reduce((sum, l) => sum + l.estimasi_waktu, 0);
         }
 
+        const db = require('../db');
         const operatingHours = [
             '09:00', '10:00', '11:00', '12:00', '13:00', 
             '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'
         ];
-
+        
         const [bookings] = await db.pool.query(
             `SELECT jam_mulai, jam_selesai FROM booking 
              WHERE tanggal = ? AND status NOT IN ('canceled', 'completed')`,
@@ -327,7 +312,6 @@ const postAvailableSlots = async (req, res) => {
 
         res.json({
             tanggal,
-            layanan_id: layananIds.length > 0 ? layananIds : undefined,
             estimasi_waktu: duration,
             available_slots: availableSlots,
             booked_slots: bookedSlots,
