@@ -341,6 +341,7 @@ const addHairColor = async (product_id, nama, kategori, level, stok, tambahan_ha
     }
 };
 
+// Tidak ada createProduct, updateProduct, deleteProduct, getProductById di sini
 module.exports = {
     getAllProducts,
     getProductsByCategory,

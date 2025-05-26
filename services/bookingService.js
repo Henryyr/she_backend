@@ -1,6 +1,6 @@
 const { pool } = require('../db');
 const bookingValidationHelper = require('../helpers/bookingValidationHelper');
-const { updateHairColorStock, updateSmoothingStock, updateKeratinStock } = require('./stockService');
+const { updateHairColorStock, updateSmoothingStock, updateKeratinStock } = require('./admin/stockService');
 const { DEFAULT_PRODUCTS } = require('../config/product');
 const { RATE_LIMIT } = require('../config/rateLimit');
 const bookingHelper = require('../helpers/bookingHelper');

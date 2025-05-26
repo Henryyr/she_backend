@@ -21,4 +21,6 @@ router.post('/haircolor/stock', authenticate, isAdmin, productController.updateH
 router.post('/smoothing/stock', authenticate, isAdmin, productController.updateSmoothingStock);
 router.post('/keratin/stock', authenticate, isAdmin, productController.updateKeratinStock);
 
+// Tidak ada router.post('/products'), router.put('/products/:id'), router.delete('/products/:id'), router.get('/products/:id')
+
 module.exports = router;

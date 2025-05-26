@@ -5,7 +5,6 @@ const updateHairColorStock = async (connection, hairColor) => {
     );
 
     if (!result[0]) throw new Error('Stok hair color tidak ditemukan');
-    
     if (result[0].stok <= 0) {
         throw new Error('Stok warna habis');
     }
@@ -24,7 +23,6 @@ const updateSmoothingStock = async (connection, smoothingProduct) => {
     );
 
     if (!result[0]) throw new Error('Produk smoothing tidak ditemukan');
-    
     if (result[0].stok <= 0) {
         throw new Error('Stok smoothing habis');
     }
@@ -43,7 +41,6 @@ const updateKeratinStock = async (connection, keratinProduct) => {
     );
 
     if (!result[0]) throw new Error('Produk keratin tidak ditemukan');
-    
     if (result[0].stok <= 0) {
         throw new Error('Stok keratin habis');
     }
