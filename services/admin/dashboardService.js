@@ -28,15 +28,15 @@ const getDashboardStats = async () => {
         const calcPercentage = (current, last) => {
             const currentVal = parseFloat(current) || 0;
             const lastVal = parseFloat(last) || 0;
-            if (currentVal === 0 && lastVal === 0) return 0;
             if (lastVal === 0) {
-                const assumedLastValue = currentVal * 0.2;
-                const percentage = ((currentVal - assumedLastValue) / assumedLastValue * 100).toFixed(1);
-                return Math.min(100, parseFloat(percentage));
+                if (currentVal === 0) return "0.0";
+                return "+100.0";
             }
-            const percentage = ((currentVal - lastVal) / lastVal * 100).toFixed(1);
-            const boundedPercentage = Math.max(-100, Math.min(100, parseFloat(percentage)));
-            return boundedPercentage > 0 ? `+${boundedPercentage}` : boundedPercentage;
+            const percentage = ((currentVal - lastVal) / Math.abs(lastVal)) * 100;
+            const rounded = percentage.toFixed(1);
+            if (percentage > 0) return `+${rounded}`;
+            if (percentage < 0) return `${rounded}`;
+            return "0.0";
         };
 
         return {

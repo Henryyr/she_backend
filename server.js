@@ -8,7 +8,7 @@ const { setIO } = require('./socketInstance');
 const { initCronJobs } = require('./utils/cronJobs');
 const checkServerTimeZone = require('./utils/timeChecker');
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000; // Pastikan PORT bertipe number
 let server;
 let io;
 
@@ -21,27 +21,31 @@ process.on('uncaughtException', (error) => {
     process.exit(1);
 });
 
-// Function to find available port
+// Improved: findAvailablePort menggunakan loop, bukan rekursi
 async function findAvailablePort(startPort) {
-    return new Promise((resolve, reject) => {
-        const testServer = http.createServer();
-        
-        testServer.listen(startPort, () => {
-            const port = testServer.address().port;
-            testServer.close(() => {
-                resolve(port);
+    let port = startPort;
+    while (true) {
+        try {
+            await new Promise((resolve, reject) => {
+                const testServer = http.createServer();
+                testServer.once('error', err => {
+                    testServer.close();
+                    if (err.code === 'EADDRINUSE') {
+                        resolve(false);
+                    } else {
+                        reject(err);
+                    }
+                });
+                testServer.listen(port, () => {
+                    testServer.close(() => resolve(true));
+                });
             });
-        });
-        
-        testServer.on('error', (err) => {
-            if (err.code === 'EADDRINUSE') {
-                // Try next port
-                findAvailablePort(startPort + 1).then(resolve).catch(reject);
-            } else {
-                reject(err);
-            }
-        });
-    });
+            return port;
+        } catch (err) {
+            throw err;
+        }
+        port++;
+    }
 }
 
 async function startServer() {
@@ -65,6 +69,8 @@ async function startServer() {
 
         setIO(io);
 
+        // Log port yang akan dicoba
+        console.log(`🔎 Looking for available port starting from ${PORT}...`);
         // Find available port
         let availablePort;
         try {
@@ -76,7 +82,6 @@ async function startServer() {
 
         server.listen(availablePort, () => {
             console.log(`🚀 Server running on http://localhost:${availablePort}`);
-            
             if (availablePort !== PORT) {
                 console.log(`⚠️  Originally tried port ${PORT}, but it was busy. Using port ${availablePort} instead.`);
             }
@@ -108,6 +113,11 @@ async function startServer() {
             });
         });
 
+        // Tambahkan error handler untuk socket.io
+        io.on('error', (err) => {
+            console.error('Socket.IO error:', err);
+        });
+
         // Handle server errors
         server.on('error', (error) => {
             if (error.code === 'EADDRINUSE') {
@@ -127,26 +137,27 @@ async function startServer() {
     }
 }
 
-// Improved graceful shutdown
+// Improved graceful shutdown: tunggu semua koneksi close
 async function gracefulShutdown(signal) {
     console.log(`\n🛑 Received ${signal}, starting graceful shutdown...`);
-    
     if (server) {
         console.log('📡 Closing Socket.IO connections...');
         if (io) {
             io.close();
         }
-        
         console.log('🔌 Closing HTTP server...');
         server.close(() => {
             console.log('✅ Server closed successfully');
             process.exit(0);
         });
-
-        // Force close after 10 seconds
+        // Cek koneksi aktif, paksa shutdown jika masih ada setelah timeout
+        let forced = false;
         setTimeout(() => {
-            console.log('⏰ Could not close connections in time, forcing shutdown');
-            process.exit(1);
+            if (!forced) {
+                forced = true;
+                console.log('⏰ Could not close connections in time, forcing shutdown');
+                process.exit(1);
+            }
         }, 10000);
     } else {
         console.log('ℹ️  No server instance to close.');

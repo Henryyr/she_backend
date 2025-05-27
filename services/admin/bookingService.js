@@ -1,8 +1,8 @@
 const { pool } = require('../../db');
 const paginateQuery = require('../../helpers/paginateQuery');
 
-const getAllBookings = async (page = 1, limit = 10) => {
-    const sql = `
+const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) => {
+    let sql = `
         SELECT 
             b.id,
             u.fullname as customer,
@@ -15,17 +15,58 @@ const getAllBookings = async (page = 1, limit = 10) => {
         JOIN users u ON b.user_id = u.id
         JOIN booking_layanan bl ON b.id = bl.booking_id
         JOIN layanan l ON bl.layanan_id = l.id
+    `;
+    let whereClauses = [];
+    let params = [];
+
+    if (status) {
+        whereClauses.push('LOWER(TRIM(b.status)) = ?');
+        params.push(status.trim().toLowerCase());
+    }
+    if (startDate) {
+        whereClauses.push('DATE(b.tanggal) >= ?');
+        params.push(startDate);
+    }
+    if (endDate) {
+        whereClauses.push('DATE(b.tanggal) <= ?');
+        params.push(endDate);
+    }
+    if (whereClauses.length > 0) {
+        sql += ' WHERE ' + whereClauses.join(' AND ');
+    }
+
+    sql += `
         GROUP BY b.id
         ORDER BY b.created_at DESC
     `;
-    const countSql = `SELECT COUNT(DISTINCT b.id) as total FROM booking b`;
 
-    const { data, pagination } = await paginateQuery(pool, sql, countSql, [], [], page, limit);
+    let countSql = `SELECT COUNT(DISTINCT b.id) as total FROM booking b`;
+    let countWhereClauses = [];
+    let countParams = [];
+
+    if (status) {
+        countWhereClauses.push('LOWER(TRIM(b.status)) = ?');
+        countParams.push(status.trim().toLowerCase());
+    }
+    if (startDate) {
+        countWhereClauses.push('DATE(b.tanggal) >= ?');
+        countParams.push(startDate);
+    }
+    if (endDate) {
+        countWhereClauses.push('DATE(b.tanggal) <= ?');
+        countParams.push(endDate);
+    }
+    if (countWhereClauses.length > 0) {
+        countSql += ' WHERE ' + countWhereClauses.join(' AND ');
+    }
+
+    const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
+
     return { bookings: data, pagination };
 };
 
-const getBookingsByUserId = async (userId, page = 1, limit = 10) => {
-    const sql = `
+const getBookingsByUserId = async (userId, page = 1, limit = 10, status, startDate, endDate) => {
+    let sql = `
         SELECT 
             b.id,
             u.fullname as customer,
@@ -39,12 +80,43 @@ const getBookingsByUserId = async (userId, page = 1, limit = 10) => {
         JOIN booking_layanan bl ON b.id = bl.booking_id
         JOIN layanan l ON bl.layanan_id = l.id
         WHERE b.user_id = ?
+    `;
+    let params = [userId];
+
+    if (status) {
+        sql += ' AND b.status = ?';
+        params.push(status);
+    }
+    if (startDate) {
+        sql += ' AND DATE(b.tanggal) >= ?';
+        params.push(startDate);
+    }
+    if (endDate) {
+        sql += ' AND DATE(b.tanggal) <= ?';
+        params.push(endDate);
+    }
+
+    sql += `
         GROUP BY b.id
         ORDER BY b.created_at DESC
     `;
-    const countSql = `SELECT COUNT(DISTINCT b.id) as total FROM booking b WHERE b.user_id = ?`;
 
-    const { data, pagination } = await paginateQuery(pool, sql, countSql, [userId], [userId], page, limit);
+    let countSql = `SELECT COUNT(DISTINCT b.id) as total FROM booking b WHERE b.user_id = ?`;
+    let countParams = [userId];
+    if (status) {
+        countSql += ' AND b.status = ?';
+        countParams.push(status);
+    }
+    if (startDate) {
+        countSql += ' AND DATE(b.tanggal) >= ?';
+        countParams.push(startDate);
+    }
+    if (endDate) {
+        countSql += ' AND DATE(b.tanggal) <= ?';
+        countParams.push(endDate);
+    }
+
+    const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
     return { bookings: data, pagination };
 };
 
