@@ -1,5 +1,4 @@
 const productService = require('../services/productService');
-const { validateStock, validateProductData } = require('../utils/productUtils');
 
 const getAllProducts = async (req, res) => {
     try {
@@ -26,26 +25,6 @@ const getProductsByCategory = async (req, res) => {
         res.json(products);
     } catch (err) {
         res.status(500).json({ error: err.message });
-    }
-};
-
-const updateStock = async (req, res) => {
-    const { id } = req.params;
-    const { stok } = req.body;
-    
-    try {
-        validateStock(stok);
-        await productService.updateStock(id, stok);
-        res.json({
-            success: true,
-            message: 'Stok berhasil diupdate',
-            data: { id, stok }
-        });
-    } catch (err) {
-        res.status(err.name === 'ValidationError' ? 400 : 500).json({
-            success: false,
-            message: err.message
-        });
     }
 };
 
@@ -101,98 +80,33 @@ const getHairColorsByProduct = async (req, res) => {
     }
 };
 
-const updateHairColorStock = async (req, res) => {
-    const { id, stok } = req.body;
+const searchProducts = async (req, res) => {
     try {
-        if (!id) {
-            throw { name: 'ValidationError', message: 'ID warna harus diisi' };
-        }
-        validateStock(stok);
-
-        await productService.updateHairColorStock(id, stok);
+        const filters = {
+            nama: req.query.nama,
+            brand_id: req.query.brand_id,
+            jenis: req.query.jenis,
+            harga_min: req.query.harga_min ? parseInt(req.query.harga_min) : undefined,
+            harga_max: req.query.harga_max ? parseInt(req.query.harga_max) : undefined
+        };
+        const products = await productService.searchProducts(filters);
         res.json({
             success: true,
-            message: 'Stok warna berhasil diupdate',
-            data: { id, stok }
+            message: "Hasil pencarian produk",
+            data: products
         });
     } catch (err) {
-        res.status(err.name === 'ValidationError' ? 400 : 500).json({
-            success: false,
-            message: err.message
-        });
-    }
-};
-
-const updateSmoothingStock = async (req, res) => {
-    const { id, stok } = req.body;
-    try {
-        validateStock(stok);
-        await productService.updateSmoothingStock(id, stok);
-        res.json({
-            success: true,
-            message: 'Stok smoothing berhasil diupdate',
-            data: { id, stok }
-        });
-    } catch (err) {
-        res.status(err.name === 'ValidationError' ? 400 : 500).json({
-            success: false,
-            message: err.message
-        });
-    }
-};
-
-const updateKeratinStock = async (req, res) => {
-    const { id, stok } = req.body;
-    try {
-        validateStock(stok);
-        await productService.updateKeratinStock(id, stok);
-        res.json({
-            success: true,
-            message: 'Stok keratin berhasil diupdate',
-            data: { id, stok }
-        });
-    } catch (err) {
-        res.status(err.name === 'ValidationError' ? 400 : 500).json({
-            success: false,
-            message: err.message
-        });
-    }
-};
-
-const addHairColor = async (req, res) => {
-    const { product_id, nama, kategori, level, stok, tambahan_harga } = req.body;
-    try {
-        validateProductData({ nama, kategori, stok: tambahan_harga });
-        validateStock(stok);
-
-        const result = await productService.addHairColor(
-            product_id, nama, kategori, level, stok, tambahan_harga
-        );
-        
-        res.status(201).json({
-            success: true,
-            message: 'Warna berhasil ditambahkan',
-            data: result
-        });
-    } catch (err) {
-        res.status(err.name === 'ValidationError' ? 400 : 500).json({
-            success: false,
-            message: err.message
-        });
+        res.status(500).json({ success: false, message: err.message });
     }
 };
 
 module.exports = {
     getAllProducts,
     getProductsByCategory,
-    updateStock,
     getHairColors,
     getSmoothingProducts,
     getKeratinProducts,
     getHairProducts,
     getHairColorsByProduct,
-    updateHairColorStock,
-    updateSmoothingStock,
-    updateKeratinStock,
-    addHairColor
+    searchProducts
 };

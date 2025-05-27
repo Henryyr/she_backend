@@ -22,8 +22,8 @@ const handleExpiredTransactionsJob = () => {
     cron.schedule('0 */1 * * *', async () => {
         console.log('[CRON] handleExpiredTransactionsJob running at', new Date().toISOString());
         try {
-            const transaksiService = new TransaksiService();
-            await transaksiService.handleExpiredTransactions();
+            // FIX: Use TransaksiService directly (it's a singleton, not a class)
+            await TransaksiService.handleExpiredTransactions();
             console.log('[CRON] handleExpiredTransactionsJob completed successfully.');
         } catch (err) {
             console.error("[CRON] Expired transactions error:", err.message);
@@ -49,14 +49,23 @@ const sendBookingReminderEmails = () => {
                 [dateString, timeString]
             );
 
+            if (!bookings || bookings.length === 0) {
+                console.log('[CRON] No bookings found for reminders.');
+                return;
+            }
+
+            let sentCount = 0;
             for (const booking of bookings) {
-                if (booking.email) {
+                if (!booking.email) continue;
+                try {
                     await emailService.sendBookingInformation(booking.email, booking);
+                    sentCount++;
                     console.log(`[CRON] Reminder email sent to ${booking.email} for booking at ${booking.tanggal} ${booking.jam_mulai}`);
+                } catch (err) {
+                    console.error(`[CRON] Failed to send reminder to ${booking.email}:`, err.message);
                 }
             }
-            
-            console.log(`[CRON] Processed ${bookings.length} booking reminders`);
+            console.log(`[CRON] Processed ${sentCount} booking reminders`);
         } catch (err) {
             console.error('[CRON] Error sending booking reminder emails:', err.message);
         }

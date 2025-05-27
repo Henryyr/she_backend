@@ -199,7 +199,7 @@ async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
 
        // Check booking status
        const [bookingResult] = await conn.query(
-           `SELECT id, total_harga, status FROM booking WHERE id = ?`, 
+           `SELECT id, total_harga, status, promo_discount_percent, promo_discount_amount FROM booking WHERE id = ?`, 
            [booking_id]
        );
 
@@ -207,7 +207,7 @@ async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
            throw { status: 404, message: "Booking tidak ditemukan" };
        }
 
-       const { total_harga, status: bookingStatus } = bookingResult[0];
+       const { total_harga, status: bookingStatus, promo_discount_percent, promo_discount_amount } = bookingResult[0];
 
        if (bookingStatus === 'completed') {
            throw { status: 400, message: "Booking sudah dibayar" };
@@ -299,7 +299,12 @@ async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
            payment_status,
            total_harga,
            amount_to_pay: amountToPay,
-           payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment (DP)'
+           payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment (DP)',
+           promo: promo_discount_percent > 0 ? {
+               discount_percent: promo_discount_percent,
+               discount_amount: promo_discount_amount,
+               message: `Promo aktif: diskon ${promo_discount_percent}% untuk pelanggan aktif!`
+           } : undefined
        };
    } catch (err) {
        console.error('[TransaksiService] createTransaction error:', err);

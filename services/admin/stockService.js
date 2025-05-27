@@ -5,14 +5,10 @@ const updateHairColorStock = async (connection, hairColor) => {
     );
 
     if (!result[0]) throw new Error('Stok hair color tidak ditemukan');
-    if (result[0].stok <= 0) {
-        throw new Error('Stok warna habis');
-    }
-
-    // Deduct stock
+    // Tambah stok
     await connection.query(
-        'UPDATE hair_colors SET stok = stok - 1 WHERE id = ?',
-        [hairColor.color_id]
+        'UPDATE hair_colors SET stok = stok + ? WHERE id = ?',
+        [hairColor.qty, hairColor.color_id]
     );
 };
 
@@ -23,14 +19,10 @@ const updateSmoothingStock = async (connection, smoothingProduct) => {
     );
 
     if (!result[0]) throw new Error('Produk smoothing tidak ditemukan');
-    if (result[0].stok <= 0) {
-        throw new Error('Stok smoothing habis');
-    }
-
-    // Deduct stock
+    // Tambah stok
     await connection.query(
-        'UPDATE smoothing_products SET stok = stok - 1 WHERE id = ? AND brand_id = ?',
-        [smoothingProduct.product_id, smoothingProduct.brand_id]
+        'UPDATE smoothing_products SET stok = stok + ? WHERE id = ? AND brand_id = ?',
+        [smoothingProduct.qty, smoothingProduct.product_id, smoothingProduct.brand_id]
     );
 };
 
@@ -41,14 +33,10 @@ const updateKeratinStock = async (connection, keratinProduct) => {
     );
 
     if (!result[0]) throw new Error('Produk keratin tidak ditemukan');
-    if (result[0].stok <= 0) {
-        throw new Error('Stok keratin habis');
-    }
-
-    // Deduct stock
+    // Tambah stok
     await connection.query(
-        'UPDATE keratin_products SET stok = stok - 1 WHERE id = ? AND brand_id = ?',
-        [keratinProduct.product_id, keratinProduct.brand_id]
+        'UPDATE keratin_products SET stok = stok + ? WHERE id = ? AND brand_id = ?',
+        [keratinProduct.qty, keratinProduct.product_id, keratinProduct.brand_id]
     );
 };
 

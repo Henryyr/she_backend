@@ -92,47 +92,6 @@ class TransaksiController {
             });
         }
     }
-
-    // Method baru untuk mendapatkan opsi pembayaran dengan prioritas DP
-    async getPaymentOptions(req, res) {
-        try {
-            const paymentOptions = [
-                {
-                    id: 2,
-                    name: "DP (Down Payment)",
-                    description: "Bayar sebagian sekarang, sisanya nanti",
-                    priority: 1,
-                    recommended: true,
-                    benefits: [
-                        "Fleksibilitas pembayaran",
-                        "Booking terjamin",
-                        "Bisa bayar sisanya saat treatment"
-                    ]
-                },
-                {
-                    id: 1,
-                    name: "Cash (Tunai Penuh)",
-                    description: "Bayar penuh sekarang",
-                    priority: 2,
-                    recommended: false,
-                    benefits: [
-                        "Selesai dalam 1x pembayaran",
-                        "Tidak ada sisa pembayaran"
-                    ]
-                }
-            ];
-
-            res.json({
-                payment_options: paymentOptions,
-                default_option: paymentOptions[0], // DP as default
-                message: "DP (Down Payment) direkomendasikan untuk kemudahan transaksi"
-            });
-        } catch (error) {
-            res.status(500).json({ 
-                error: error.message || "Internal Server Error" 
-            });
-        }
-    }
 }
 
 module.exports = new TransaksiController();

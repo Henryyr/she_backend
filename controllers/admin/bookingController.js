@@ -5,7 +5,10 @@ const getAllBookings = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
-        const bookings = await bookingService.getAllBookings(page, limit);
+        const status = req.query.status ? req.query.status.trim().toLowerCase() : undefined;
+        const startDate = req.query.startDate;
+        const endDate = req.query.endDate;
+        const bookings = await bookingService.getAllBookings(page, limit, status, startDate, endDate);
 
         bookings.pagination.hasNextPage = page < bookings.pagination.totalPages;
         bookings.pagination.hasPrevPage = page > 1;
@@ -23,7 +26,10 @@ const getBookingsByUserId = async (req, res) => {
         const userId = req.params.userId;
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
-        const bookings = await bookingService.getBookingsByUserId(userId, page, limit);
+        const status = req.query.status ? req.query.status.trim().toLowerCase() : undefined;
+        const startDate = req.query.startDate;
+        const endDate = req.query.endDate;
+        const bookings = await bookingService.getBookingsByUserId(userId, page, limit, status, startDate, endDate);
 
         bookings.pagination.hasNextPage = page < bookings.pagination.totalPages;
         bookings.pagination.hasPrevPage = page > 1;

@@ -134,7 +134,7 @@ app.use('/api/layanan', require('./routes/layananRoutes'));
 app.use('/api/layanankategori', require('./routes/layanankategoriRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/transaksi', require('./routes/transaksiRoutes'));
-app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/testimoni', require('./routes/testimoniRoutes'));
 app.use('/api/transaksikategori', require('./routes/transaksikategoriRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));

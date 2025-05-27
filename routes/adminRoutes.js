@@ -37,5 +37,9 @@ router.post('/products', adminController.createProduct);
 router.put('/products/:id', adminController.updateProduct);
 router.delete('/products/:id', adminController.deleteProduct);
 router.get('/products/:type/:id', adminController.getProductById);
+// Stock update (admin only)
+router.post('/products/haircolor/stock', adminController.updateHairColorStock);
+router.post('/products/smoothing/stock', adminController.updateSmoothingStock);
+router.post('/products/keratin/stock', adminController.updateKeratinStock);
 
 module.exports = router;

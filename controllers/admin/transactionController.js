@@ -4,7 +4,10 @@ const getAllTransactions = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
-        const transactions = await transactionService.getAllTransactions(page, limit);
+        const status = req.query.status; // ambil status dari query
+        const startDate = req.query.startDate; // ambil startDate dari query
+        const endDate = req.query.endDate; // ambil endDate dari query
+        const transactions = await transactionService.getAllTransactions(page, limit, status, startDate, endDate);
 
         transactions.pagination.hasNextPage = page < transactions.pagination.totalPages;
         transactions.pagination.hasPrevPage = page > 1;
@@ -22,7 +25,10 @@ const getTransactionsByUserId = async (req, res) => {
         const userId = req.params.userId;
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
-        const transactions = await transactionService.getTransactionsByUserId(userId, page, limit);
+        const status = req.query.status; // ambil status dari query
+        const startDate = req.query.startDate; // ambil startDate dari query
+        const endDate = req.query.endDate; // ambil endDate dari query
+        const transactions = await transactionService.getTransactionsByUserId(userId, page, limit, status, startDate, endDate);
 
         transactions.pagination.hasNextPage = page < transactions.pagination.totalPages;
         transactions.pagination.hasPrevPage = page > 1;
