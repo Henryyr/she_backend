@@ -1,5 +1,5 @@
-const TestimoniService = require('../services/testimoniService');
-const { cloudinary, uploadOptions } = require('../config/cloudinary');
+const TestimoniService = require('../../services/user/testimoniService');
+const { cloudinary, uploadOptions } = require('../../config/cloudinary');
 
 class TestimoniController {
     static async createTestimoni(req, res) {

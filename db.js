@@ -33,5 +33,6 @@ const connect = async () => {
 
 module.exports = {
     pool,
-    connect
+    connect,
+    // query: async (sql, params) => { ... }
 };

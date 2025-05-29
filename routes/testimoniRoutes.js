@@ -25,7 +25,7 @@ function checkFileType(file, cb) {
     }
 }
 
-const TestimoniController = require('../controllers/testimoniController');
+const TestimoniController = require('../controllers/user/testimoniController');
 const router = express.Router();
 
 router.post('/', authenticate, upload.single('image'), TestimoniController.createTestimoni);

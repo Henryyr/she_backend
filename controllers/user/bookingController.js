@@ -1,8 +1,8 @@
-const bookingService = require('../services/bookingService');
-const emailService = require('../services/emailService');
-const { getIO } = require('../socketInstance');
-const dashboardService = require('../services/admin/dashboardService');
-const { validateBookingTime, validateUserDailyBooking } = require('../helpers/bookingValidationHelper');
+const bookingService = require('../../services/user/bookingService');
+const emailService = require('../../services/user/emailService');
+const { getIO } = require('../../socketInstance');
+const dashboardService = require('../../services/admin/dashboardService');
+const { validateBookingTime, validateUserDailyBooking } = require('../../helpers/bookingValidationHelper');
 
 const createBooking = async (req, res) => {
     try {

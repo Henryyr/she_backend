@@ -1,4 +1,4 @@
-const layananKategoriService = require('../services/layanankategoriService');
+const layananKategoriService = require('../../services/user/layanankategoriService');
 
 class LayananKategoriController {
     async getAll(req, res) {

@@ -1,10 +1,10 @@
-const { pool } = require('../db');
-const bookingValidationHelper = require('../helpers/bookingValidationHelper');
+const { pool } = require('../../db');
+const bookingValidationHelper = require('../../helpers/bookingValidationHelper');
 const stockService = require('./stockService');
-const { DEFAULT_PRODUCTS } = require('../config/product');
-const { RATE_LIMIT } = require('../config/rateLimit');
-const bookingHelper = require('../helpers/bookingHelper');
-const { getRandomPromo } = require('../helpers/promoHelper');
+const { DEFAULT_PRODUCTS } = require('../../config/product');
+const { RATE_LIMIT } = require('../../config/rateLimit');
+const bookingHelper = require('../../helpers/bookingHelper');
+const { getRandomPromo } = require('../../helpers/promoHelper');
 
 const createBooking = async (data) => {
     const { user_id, layanan_id, tanggal, jam_mulai, hair_color } = data;
@@ -339,7 +339,7 @@ const cancelBooking = async (id) => {
 };
 
 const postAvailableSlots = async (tanggal, estimasi_waktu = 60) => {
-    const db = require('../db');
+    const db = require('../../db');
     const operatingHours = [
         '09:00', '10:00', '11:00', '12:00', '13:00', 
         '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'

@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { validateCreateTransaction, validatePayRemaining } = require('../middleware/transaksiMiddleware');
-const TransaksiController = require('../controllers/transaksiController');
+const TransaksiController = require('../controllers/user/transaksiController');
 const router = express.Router();
 
 router.post('/', authenticate, validateCreateTransaction, TransaksiController.createTransaction);

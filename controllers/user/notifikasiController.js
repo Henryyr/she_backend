@@ -1,4 +1,4 @@
-const { getIO } = require('../socketInstance');
+const { getIO } = require('../../socketInstance');
 
 class NotifikasiController {
     // Kirim notifikasi realtime ke semua client

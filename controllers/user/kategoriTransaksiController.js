@@ -1,4 +1,4 @@
-const kategoriTransaksiService = require('../services/kategoriTransaksiService');
+const kategoriTransaksiService = require('../../services/user/kategoriTransaksiService');
 
 const getAllKategoriTransaksi = async (req, res) => {
     try {

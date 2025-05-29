@@ -1,7 +1,7 @@
-const { pool } = require('../db');
+const { pool } = require('../../db');
 const { sendEmail } = require('./emailService');
-const transactionReceiptTemplate = require('../html/transactionReceipt');
-const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../config/midtrans');
+const transactionReceiptTemplate = require('../../html/transactionReceipt');
+const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../../config/midtrans');
 
 class TransaksiService {
 async getTransactionStatus(order_id, user_id = null) {

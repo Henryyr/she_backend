@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-const bookingEmailTemplate = require('../html/booking-information');
+const bookingEmailTemplate = require('../../html/booking-information');
 
 // Email transporter setup
 const transporter = nodemailer.createTransport({
