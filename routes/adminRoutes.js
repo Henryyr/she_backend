@@ -38,9 +38,9 @@ router.put('/products/:id', adminController.updateProduct);
 router.delete('/products/:id', adminController.deleteProduct);
 router.get('/products/:type/:id', adminController.getProductById);
 // Stock update (admin only)
-router.post('/products/haircolor/stock', adminController.updateHairColorStock);
-router.post('/products/smoothing/stock', adminController.updateSmoothingStock);
-router.post('/products/keratin/stock', adminController.updateKeratinStock);
+router.post('/products/hair', adminController.updateHairColorStock);
+router.post('/products/smoothing', adminController.updateSmoothingStock);
+router.post('/products/keratin', adminController.updateKeratinStock);
 // Produk berdasarkan kategori (admin only)
 router.get('/products/hair', adminController.getAdminHairProducts);
 router.get('/products/smoothing', adminController.getAdminSmoothingProducts);
