@@ -324,8 +324,8 @@ const getAdminSmoothingProducts = async (req, res) => {
                 sp.nama as product_nama,
                 sp.jenis,
                 sp.harga,
-                sp.stok,
-                sp.deskripsi
+                sp.stok
+                -- sp.deskripsi removed
             FROM smoothing_products sp
             JOIN product_brands pb ON sp.brand_id = pb.id
             ORDER BY pb.nama, sp.nama
@@ -340,7 +340,7 @@ const getAdminSmoothingProducts = async (req, res) => {
             product: {
                 nama: product.product_nama,
                 jenis: product.jenis,
-                deskripsi: product.deskripsi,
+                // deskripsi: product.deskripsi, // removed
                 harga: Number(product.harga)
             },
             stok: Number(product.stok)
@@ -364,8 +364,8 @@ const getAdminKeratinProducts = async (req, res) => {
                 kp.nama as product_nama,
                 kp.jenis,
                 kp.harga,
-                kp.stok,
-                kp.deskripsi
+                kp.stok
+                -- kp.deskripsi removed
             FROM keratin_products kp
             JOIN product_brands pb ON kp.brand_id = pb.id
             ORDER BY pb.nama, kp.nama
@@ -380,7 +380,7 @@ const getAdminKeratinProducts = async (req, res) => {
             product: {
                 nama: product.product_nama,
                 jenis: product.jenis,
-                deskripsi: product.deskripsi,
+                // deskripsi: product.deskripsi, // removed
                 harga: Number(product.harga)
             },
             stok: Number(product.stok)
