@@ -1,10 +1,10 @@
-const { pool } = require('../db');
-const bookingValidationHelper = require('../helpers/bookingValidationHelper');
+const { pool } = require('../../db');
+const bookingValidationHelper = require('../../helpers/bookingValidationHelper');
 const stockService = require('./stockService');
-const { DEFAULT_PRODUCTS } = require('../config/product');
-const { RATE_LIMIT } = require('../config/rateLimit');
-const bookingHelper = require('../helpers/bookingHelper');
-const { getRandomPromo } = require('../helpers/promoHelper');
+const { DEFAULT_PRODUCTS } = require('../../config/product');
+const { RATE_LIMIT } = require('../../config/rateLimit');
+const bookingHelper = require('../../helpers/bookingHelper');
+const { getRandomPromo } = require('../../helpers/promoHelper');
 
 const createBooking = async (data) => {
     const { user_id, layanan_id, tanggal, jam_mulai, hair_color } = data;
@@ -30,6 +30,7 @@ const createBooking = async (data) => {
 
         await connection.beginTransaction();
 
+        // Cek apakah sudah ada booking sebelumnya
         const [[existingBookings], layananResults] = await Promise.all([
             connection.query(
                 'SELECT /*+ INDEX(booking idx_user_tanggal) */ id FROM booking WHERE user_id = ? AND tanggal = ? FOR UPDATE',
@@ -75,18 +76,28 @@ const createBooking = async (data) => {
             throw new Error("Beberapa layanan yang dipilih tidak memerlukan produk tambahan");
         }
 
+        // Cek jumlah booking user (hanya status aktif)
         const [bookingCountRows] = await connection.query(
-            `SELECT COUNT(*) as count FROM booking WHERE user_id = ? AND tanggal >= CURDATE() - INTERVAL 3 MONTH`,
+            `SELECT COUNT(*) as count FROM booking WHERE user_id = ? AND status NOT IN ('cancelled', 'expired', 'failed')`,
             [user_id]
         );
         const bookingCount = bookingCountRows[0]?.count || 0;
 
+        // Ambil booking terakhir user (cek promo terakhir, hanya status aktif)
         const [lastBookingRows] = await connection.query(
-            `SELECT id, promo_discount_percent FROM booking WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+            `SELECT id, tanggal, promo_discount_percent 
+             FROM booking 
+             WHERE user_id = ? AND status NOT IN ('cancelled', 'expired') 
+             ORDER BY created_at DESC LIMIT 1`,
             [user_id]
         );
-        const lastBookingHadPromo = lastBookingRows.length > 0 && lastBookingRows[0].promo_discount_percent > 0;
+        let lastBookingHadPromo = false;
+        if (lastBookingRows.length > 0) {
+            const lastBooking = lastBookingRows[0];
+            lastBookingHadPromo = lastBooking.promo_discount_percent > 0;
+        }
 
+        // Hitung total harga semua layanan
         let total_harga = layananWithCategory.reduce((sum, l) => sum + parseFloat(l.harga), 0);
         let product_detail = {};
 
@@ -148,9 +159,34 @@ const createBooking = async (data) => {
             }
         });
 
-        const { discount_percent, discount_amount } = getRandomPromo(bookingCount, lastBookingHadPromo, total_harga);
+        // Promo hanya untuk smoothing keratin (id=5) dan hanya jika booking hanya layanan_id=5
+        const isOnlySmoothingKeratin = layanan_ids.length === 1 && layanan_ids[0] === 5;
+        const { discount_percent, discount_amount, is_new_user, promo_target_layanan_id, promo_target_layanan_harga } =
+            getRandomPromo(
+                bookingCount,
+                lastBookingHadPromo,
+                total_harga,
+                layanan_ids,
+                layananWithCategory
+            );
 
-        if (discount_percent > 0) {
+        // Hanya berikan promo user baru jika booking hanya untuk layanan_id=5
+        let final_discount_amount = 0;
+        let final_discount_percent = 0;
+        let final_is_new_user = false;
+        let final_promo_target_layanan_id = undefined;
+        let final_promo_target_layanan_harga = undefined;
+
+        if (is_new_user && isOnlySmoothingKeratin && discount_amount > 0) {
+            final_discount_amount = discount_amount;
+            final_discount_percent = discount_percent;
+            final_is_new_user = true;
+            final_promo_target_layanan_id = promo_target_layanan_id;
+            final_promo_target_layanan_harga = promo_target_layanan_harga;
+            total_harga = total_harga - discount_amount;
+        } else if (!is_new_user && discount_percent > 0) {
+            final_discount_amount = discount_amount;
+            final_discount_percent = discount_percent;
             total_harga = total_harga - discount_amount;
         }
 
@@ -160,11 +196,12 @@ const createBooking = async (data) => {
         jam_selesai.setMinutes(jam_selesai.getMinutes() + total_estimasi);
         const jam_selesai_string = jam_selesai.toTimeString().split(' ')[0];
 
+        // Tambahkan promo_discount_percent dan promo_discount_amount ke query insert
         const [insertResult] = await connection.query(
             `INSERT INTO booking /*+ BATCH_INSERT */ 
             (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, promo_discount_percent, promo_discount_amount)
             VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
-            [user_id, tanggal, jam_mulai, jam_selesai_string, bookingNumber, total_harga, data.special_request, discount_percent, discount_amount]
+            [user_id, tanggal, jam_mulai, jam_selesai_string, bookingNumber, total_harga, data.special_request, final_discount_percent, final_discount_amount]
         );
 
         const booking_id = insertResult.insertId;
@@ -220,10 +257,15 @@ const createBooking = async (data) => {
             special_request: data.special_request,
             default_products: categories.includes('Smoothing') && !smoothing_product ? true : undefined,
             cancel_timer,
-            promo: discount_percent > 0 ? {
-                discount_percent,
-                discount_amount,
-                message: `Promo aktif: diskon ${discount_percent}% untuk pelanggan aktif!`
+            promo: final_discount_amount > 0 ? {
+                discount_percent: final_discount_percent,
+                discount_amount: final_discount_amount,
+                message: final_is_new_user
+                    ? "Selamat! Promo 20% hanya berlaku untuk layanan Smoothing Keratin pada booking pertama Anda."
+                    : `Promo aktif: diskon ${final_discount_percent}% untuk pelanggan aktif!`,
+                is_new_user: final_is_new_user,
+                promo_target_layanan_id: final_promo_target_layanan_id,
+                promo_target_layanan_harga: final_promo_target_layanan_harga
             } : undefined
         };
 
@@ -339,7 +381,7 @@ const cancelBooking = async (id) => {
 };
 
 const postAvailableSlots = async (tanggal, estimasi_waktu = 60) => {
-    const db = require('../db');
+    const db = require('../../db');
     const operatingHours = [
         '09:00', '10:00', '11:00', '12:00', '13:00', 
         '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'

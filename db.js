@@ -15,7 +15,7 @@ const dbConfig = {
     multipleStatements: true,
     maxIdle: 10, // max idle connections, reduce memory
     idleTimeout: 60000, // 60 seconds
-    timezone: process.env.NODE_ENV === 'production' ? '+00:00' : undefined // Only set in production
+    timezone: process.env.NODE_ENV === 'production' ? '+00:00' : undefined
 };
 
 const pool = mysql.createPool(dbConfig).promise();
@@ -33,5 +33,5 @@ const connect = async () => {
 
 module.exports = {
     pool,
-    connect
+    connect,
 };

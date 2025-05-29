@@ -1,4 +1,4 @@
-const productService = require('../services/productService');
+const productService = require('../../services/user/productService');
 
 const getAllProducts = async (req, res) => {
     try {
@@ -80,26 +80,6 @@ const getHairColorsByProduct = async (req, res) => {
     }
 };
 
-const searchProducts = async (req, res) => {
-    try {
-        const filters = {
-            nama: req.query.nama,
-            brand_id: req.query.brand_id,
-            jenis: req.query.jenis,
-            harga_min: req.query.harga_min ? parseInt(req.query.harga_min) : undefined,
-            harga_max: req.query.harga_max ? parseInt(req.query.harga_max) : undefined
-        };
-        const products = await productService.searchProducts(filters);
-        res.json({
-            success: true,
-            message: "Hasil pencarian produk",
-            data: products
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
-};
-
 module.exports = {
     getAllProducts,
     getProductsByCategory,
@@ -108,5 +88,4 @@ module.exports = {
     getKeratinProducts,
     getHairProducts,
     getHairColorsByProduct,
-    searchProducts
 };

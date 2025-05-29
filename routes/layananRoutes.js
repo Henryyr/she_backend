@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const layananController = require('../controllers/layananController');
+const layananController = require('../controllers/user/layananController');
 const { authenticate } = require('../middleware/auth');
 
 router.get('/', authenticate,  layananController.getAllLayanan);

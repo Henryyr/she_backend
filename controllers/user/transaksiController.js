@@ -1,5 +1,5 @@
-const TransaksiService = require('../services/transaksiService');
-const transactionReceiptTemplate = require('../html/transactionReceipt');
+const TransaksiService = require('../../services/user/transaksiService');
+const transactionReceiptTemplate = require('../../html/transactionReceipt');
 
 class TransaksiController {
     async getTransactionStatus(req, res) {

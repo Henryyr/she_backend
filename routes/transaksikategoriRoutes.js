@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getAllKategoriTransaksi } = require('../controllers/kategoriTransaksiController');
+const { getAllKategoriTransaksi } = require('../controllers/user/kategoriTransaksiController');
 const { authenticate } = require('../middleware/auth');
 
 // ✅ GET semua kategori transaksi

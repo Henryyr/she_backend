@@ -1,4 +1,4 @@
-const { pool } = require('../db');
+const { pool } = require('../../db');
 
 exports.getAll = async () => {
     const [results] = await pool.query('SELECT * FROM layanan');

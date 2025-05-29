@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const authService = require('../services/authService');
+const authService = require('../services/user/authService');
 const SECRET_KEY = process.env.JWT_SECRET;
 
 // Add error logging rate limit tracking

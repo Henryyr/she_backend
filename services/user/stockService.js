@@ -1,5 +1,5 @@
 // File baru untuk pengurangan stok oleh user (booking)
-const { pool } = require('../db');
+const { pool } = require('../../db');
 
 const reduceHairColorStock = async (color_id, qty = 1) => {
     const connection = await pool.getConnection();

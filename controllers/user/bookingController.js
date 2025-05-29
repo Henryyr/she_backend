@@ -1,8 +1,9 @@
-const bookingService = require('../services/bookingService');
-const emailService = require('../services/emailService');
-const { getIO } = require('../socketInstance');
-const dashboardService = require('../services/admin/dashboardService');
-const { validateBookingTime, validateUserDailyBooking } = require('../helpers/bookingValidationHelper');
+const bookingService = require('../../services/user/bookingService');
+const emailService = require('../../services/user/emailService');
+const { getIO } = require('../../socketInstance');
+const dashboardService = require('../../services/admin/dashboardService');
+const { validateBookingTime, validateUserDailyBooking } = require('../../helpers/bookingValidationHelper');
+const { getRandomPromo } = require('../../helpers/promoHelper');
 
 const createBooking = async (req, res) => {
     try {
@@ -149,10 +150,94 @@ const cancelBooking = async (req, res) => {
     }
 };
 
+const checkNewUserPromoEligibility = async (req, res) => {
+    try {
+        const user_id = req.user.id;
+        const { layanan_id, tanggal, jam_mulai } = req.query;
+
+        // Validasi parameter
+        if (!layanan_id || !tanggal || !jam_mulai) {
+            return res.status(400).json({ error: 'Parameter layanan_id, tanggal, dan jam_mulai diperlukan' });
+        }
+
+        // Pastikan layanan_id array angka
+        let layanan_ids = Array.isArray(layanan_id)
+            ? layanan_id.map(Number)
+            : typeof layanan_id === 'string'
+                ? layanan_id.split(',').map(id => Number(id.trim())).filter(Boolean)
+                : [Number(layanan_id)];
+
+        // Promo hanya untuk layanan_id = 5 (Smoothing Keratin)
+        const SMOOTHING_KERATIN_ID = 5;
+        if (layanan_ids.length !== 1 || layanan_ids[0] !== SMOOTHING_KERATIN_ID) {
+            return res.json({
+                eligible: false,
+                discount_percent: 20,
+                discount_amount: 0,
+                total_harga: 0,
+                harga_setelah_diskon: 0,
+                promo_target_layanan_id: SMOOTHING_KERATIN_ID,
+                promo_target_layanan_harga: 0,
+                message: "Anda tidak memenuhi syarat promo user baru"
+            });
+        }
+
+        const connection = await require('../../db').pool.getConnection();
+        try {
+            // Ambil harga layanan smoothing keratin
+            const [layananResults] = await connection.query(
+                `SELECT harga FROM layanan WHERE id = ?`, [SMOOTHING_KERATIN_ID]
+            );
+            if (layananResults.length === 0) {
+                return res.status(400).json({ error: 'Layanan tidak ditemukan' });
+            }
+            const total_harga = parseFloat(layananResults[0].harga);
+
+            // Cek apakah user baru (belum pernah booking aktif)
+            const [bookingCountRows] = await connection.query(
+                `SELECT COUNT(*) as count FROM booking WHERE user_id = ? AND status NOT IN ('cancelled', 'expired', 'failed')`,
+                [user_id]
+            );
+            const isNewUser = (bookingCountRows[0]?.count || 0) === 0;
+
+            if (isNewUser) {
+                const discount_percent = 20;
+                const discount_amount = Math.round(total_harga * 0.2);
+                return res.json({
+                    eligible: true,
+                    discount_percent,
+                    discount_amount,
+                    total_harga,
+                    harga_setelah_diskon: total_harga - discount_amount,
+                    promo_target_layanan_id: SMOOTHING_KERATIN_ID,
+                    promo_target_layanan_harga: total_harga,
+                    message: "Promo 20% hanya berlaku untuk layanan Smoothing Keratin pada booking pertama Anda."
+                });
+            } else {
+                return res.json({
+                    eligible: false,
+                    discount_percent: 20,
+                    discount_amount: 0,
+                    total_harga,
+                    harga_setelah_diskon: total_harga,
+                    promo_target_layanan_id: SMOOTHING_KERATIN_ID,
+                    promo_target_layanan_harga: total_harga,
+                    message: "Anda tidak memenuhi syarat promo user baru"
+                });
+            }
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
 module.exports = {
     createBooking,
     getAllBookings,
     getBookingById,
     postAvailableSlots,
-    cancelBooking
+    cancelBooking,
+    checkNewUserPromoEligibility
 };
