@@ -338,9 +338,75 @@ const cancelBooking = async (id) => {
     }
 };
 
+const postAvailableSlots = async (tanggal, estimasi_waktu = 60) => {
+    const db = require('../db');
+    const operatingHours = [
+        '09:00', '10:00', '11:00', '12:00', '13:00', 
+        '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'
+    ];
+
+    const [bookings] = await db.pool.query(
+        `SELECT jam_mulai, jam_selesai FROM booking 
+         WHERE tanggal = ? AND status NOT IN ('canceled', 'completed')`,
+        [tanggal]
+    );
+
+    function toMinutes(timeStr) {
+        const [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+    }
+
+    bookings.sort((a, b) => toMinutes(a.jam_mulai) - toMinutes(b.jam_mulai));
+
+    const availableSlots = [];
+    const bookedSlots = [];
+
+    for (const time of operatingHours) {
+        const startMinutes = toMinutes(time);
+        const endMinutes = startMinutes + estimasi_waktu;
+
+        // Cari booking berikutnya setelah slot ini
+        const nextBooking = bookings.find(b => toMinutes(b.jam_mulai) > startMinutes);
+
+        // Slot available jika TIDAK overlap dengan booking manapun
+        let canBook = true;
+        for (const b of bookings) {
+            const bStart = toMinutes(b.jam_mulai.length === 5 ? b.jam_mulai : b.jam_mulai.slice(0, 5));
+            const bEnd = toMinutes(b.jam_selesai.length === 5 ? b.jam_selesai : b.jam_selesai.slice(0, 5));
+            if (startMinutes < bEnd && endMinutes > bStart) {
+                canBook = false;
+                break;
+            }
+        }
+
+        // Jika ada booking berikutnya, layanan tidak boleh melewati jam booking berikutnya
+        if (canBook && nextBooking) {
+            const nextStart = toMinutes(nextBooking.jam_mulai.length === 5 ? nextBooking.jam_mulai : nextBooking.jam_mulai.slice(0, 5));
+            if (endMinutes > nextStart) {
+                canBook = false;
+            }
+        }
+
+        if (canBook) {
+            availableSlots.push(time);
+        } else {
+            bookedSlots.push(time);
+        }
+    }
+
+    return {
+        tanggal,
+        estimasi_waktu,
+        available_slots: availableSlots,
+        booked_slots: bookedSlots,
+        total_available: availableSlots.length
+    };
+};
+
 module.exports = {
     createBooking,
     getAllBookings,
     getBookingById,
-    cancelBooking
+    cancelBooking,
+    postAvailableSlots
 };
