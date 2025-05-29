@@ -1,34 +1,11 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
-const multer = require('multer');
-const path = require('path');
-
-// Ganti storage ke memory untuk sementara sebelum upload ke Cloudinary
-const upload = multer({ 
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 1000000 }, // 1MB limit
-    fileFilter: function(req, file, cb) {
-        checkFileType(file, cb);
-    }
-});
-
-// Check File Type
-function checkFileType(file, cb) {
-    const filetypes = /jpeg|jpg|png/;
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = filetypes.test(file.mimetype);
-
-    if (mimetype && extname) {
-        return cb(null, true);
-    } else {
-        cb('Error: Images Only!');
-    }
-}
+const { uploadImage } = require('../helpers/uploadHelper'); // gunakan helper baru
 
 const TestimoniController = require('../controllers/user/testimoniController');
 const router = express.Router();
 
-router.post('/', authenticate, upload.single('image'), TestimoniController.createTestimoni);
+router.post('/', authenticate, uploadImage.single('image'), TestimoniController.createTestimoni);
 router.get('/public', TestimoniController.getPublicTestimoni);
 router.get('/admin', authenticate, (req, res, next) => {
     if (req.user.role !== 'admin') {
