@@ -354,6 +354,156 @@ const deleteKeratinProduct = async (id) => {
     return result.affectedRows > 0;
 };
 
+const getAdminHairProducts = async () => {
+    const cacheKey = 'admin_hair_products_full';
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
+    const connection = await pool;
+    // Ambil produk hair
+    const [products] = await connection.query(`
+        SELECT 
+            hp.id as product_id,
+            pb.id as brand_id,
+            pb.nama as brand_nama,
+            hp.nama as product_nama,
+            hp.jenis,
+            hp.deskripsi,
+            hp.harga_dasar
+        FROM hair_products hp
+        JOIN product_brands pb ON hp.brand_id = pb.id
+        ORDER BY pb.nama, hp.nama
+    `);
+
+    // Ambil semua warna hair color
+    const [colors] = await connection.query(`
+        SELECT 
+            hc.id as color_id,
+            hc.product_id,
+            hc.nama,
+            hc.kategori,
+            hc.level,
+            hc.stok,
+            hc.tambahan_harga
+        FROM hair_colors hc
+    `);
+
+    // Gabungkan warna ke masing-masing produk
+    const data = products.map(product => {
+        const available_colors = colors
+            .filter(c => c.product_id === product.product_id)
+            .map(color => ({
+                nama: color.nama,
+                stok: color.stok !== null ? Number(color.stok) : null,
+                level: color.level,
+                color_id: color.color_id !== null ? Number(color.color_id) : null,
+                kategori: color.kategori,
+                tambahan_harga: color.tambahan_harga !== null ? Number(color.tambahan_harga) : null,
+                harga_total: color.tambahan_harga !== null && product.harga_dasar !== null
+                    ? Number(product.harga_dasar) + Number(color.tambahan_harga)
+                    : null
+            }));
+
+        return {
+            product_id: product.product_id,
+            brand: {
+                id: product.brand_id,
+                nama: product.brand_nama
+            },
+            product: {
+                nama: product.product_nama,
+                jenis: product.jenis,
+                deskripsi: product.deskripsi,
+                harga_dasar: Number(product.harga_dasar)
+            },
+            available_colors
+        };
+    });
+
+    cache.set(cacheKey, data);
+    return data;
+};
+
+const getAdminSmoothingProducts = async () => {
+    const cacheKey = 'admin_smoothing_products_full';
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
+    const connection = await pool;
+    const [products] = await connection.query(`
+        SELECT 
+            sp.id as product_id,
+            pb.id as brand_id,
+            pb.nama as brand_nama,
+            sp.nama as product_nama,
+            sp.jenis,
+            sp.harga,
+            sp.stok,
+            sp.deskripsi
+        FROM smoothing_products sp
+        JOIN product_brands pb ON sp.brand_id = pb.id
+        ORDER BY pb.nama, sp.nama
+    `);
+
+    const data = products.map(product => ({
+        product_id: product.product_id,
+        brand: {
+            id: product.brand_id,
+            nama: product.brand_nama
+        },
+        product: {
+            nama: product.product_nama,
+            jenis: product.jenis,
+            deskripsi: product.deskripsi,
+            harga: Number(product.harga)
+        },
+        stok: Number(product.stok)
+    }));
+
+    cache.set(cacheKey, data);
+    return data;
+};
+
+const getAdminKeratinProducts = async () => {
+    const cacheKey = 'admin_keratin_products_full';
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
+    const connection = await pool;
+    const [products] = await connection.query(`
+        SELECT 
+            kp.id as product_id,
+            pb.id as brand_id,
+            pb.nama as brand_nama,
+            kp.nama as product_nama,
+            kp.jenis,
+            kp.harga,
+            kp.stok,
+            kp.deskripsi
+        FROM keratin_products kp
+        JOIN product_brands pb ON kp.brand_id = pb.id
+        ORDER BY pb.nama, kp.nama
+    `);
+
+    const data = products.map(product => ({
+        product_id: product.product_id,
+        brand: {
+            id: product.brand_id,
+            nama: product.brand_nama
+        },
+        product: {
+            nama: product.product_nama,
+            jenis: product.jenis,
+            deskripsi: product.deskripsi,
+            harga: Number(product.harga)
+        },
+        stok: Number(product.stok)
+    }));
+
+    cache.set(cacheKey, data);
+    return data;
+};
+
 module.exports = {
     // GET ALL
     getAllProducts,
@@ -375,5 +525,9 @@ module.exports = {
     // CRUD KERATIN
     createKeratinProduct,
     updateKeratinProduct,
-    deleteKeratinProduct
+    deleteKeratinProduct,
+    // ADMIN GET
+    getAdminHairProducts,
+    getAdminSmoothingProducts,
+    getAdminKeratinProducts
 };

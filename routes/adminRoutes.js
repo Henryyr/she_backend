@@ -41,5 +41,9 @@ router.get('/products/:type/:id', adminController.getProductById);
 router.post('/products/haircolor/stock', adminController.updateHairColorStock);
 router.post('/products/smoothing/stock', adminController.updateSmoothingStock);
 router.post('/products/keratin/stock', adminController.updateKeratinStock);
+// Produk berdasarkan kategori (admin only)
+router.get('/products/hair', adminController.getAdminHairProducts);
+router.get('/products/smoothing', adminController.getAdminSmoothingProducts);
+router.get('/products/keratin', adminController.getAdminKeratinProducts);
 
 module.exports = router;
