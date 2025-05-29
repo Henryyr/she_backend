@@ -1,5 +1,4 @@
 const { pool } = require('../db');
-const axios = require('axios');
 const { sendEmail } = require('./emailService');
 const transactionReceiptTemplate = require('../html/transactionReceipt');
 const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../config/midtrans');
@@ -12,23 +11,26 @@ async getTransactionStatus(order_id, user_id = null) {
       const midtransResponse = await this.fetchMidtransStatus(order_id);
       const localTransaction = await this.getLocalTransactionData(order_id, user_id);
 
+      // Mask sensitive data from midtransResponse
+      const safeMidtransData = {
+        status_code: midtransResponse.status_code,
+        transaction_id: midtransResponse.transaction_id,
+        gross_amount: midtransResponse.gross_amount,
+        currency: midtransResponse.currency,
+        order_id: midtransResponse.order_id,
+        payment_type: midtransResponse.payment_type,
+        transaction_status: midtransResponse.transaction_status,
+        fraud_status: midtransResponse.fraud_status,
+        status_message: midtransResponse.status_message,
+        transaction_time: midtransResponse.transaction_time,
+        settlement_time: midtransResponse.settlement_time,
+        expiry_time: midtransResponse.expiry_time,
+        va_numbers: midtransResponse.va_numbers ? '[MASKED]' : null,
+        payment_amounts: midtransResponse.payment_amounts ? '[MASKED]' : null
+      };
+
       const combinedData = {
-        midtrans_data: {
-          status_code: midtransResponse.status_code,
-          transaction_id: midtransResponse.transaction_id,
-          gross_amount: midtransResponse.gross_amount,
-          currency: midtransResponse.currency,
-          order_id: midtransResponse.order_id,
-          payment_type: midtransResponse.payment_type,
-          transaction_status: midtransResponse.transaction_status,
-          fraud_status: midtransResponse.fraud_status,
-          status_message: midtransResponse.status_message,
-          transaction_time: midtransResponse.transaction_time,
-          settlement_time: midtransResponse.settlement_time,
-          expiry_time: midtransResponse.expiry_time,
-          va_numbers: midtransResponse.va_numbers || null,
-          payment_amounts: midtransResponse.payment_amounts || []
-        },
+        midtrans_data: safeMidtransData,
         local_data: localTransaction,
         summary: {
           order_id: midtransResponse.order_id,
@@ -566,7 +568,13 @@ async getUserTransactions(user_id) {
                t.created_at DESC
        `, [user_id]);
        
-       return results;
+       // Mask any sensitive fields if present (defensive)
+       return results.map(row => {
+           const safeRow = { ...row };
+           if ('va_numbers' in safeRow) safeRow.va_numbers = '[MASKED]';
+           if ('payment_amounts' in safeRow) safeRow.payment_amounts = '[MASKED]';
+           return safeRow;
+       });
    } catch (err) {
        throw {
            status: 500,

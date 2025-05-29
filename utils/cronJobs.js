@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { pool } = require('../db');
 const TransaksiService = require('../services/transaksiService');
 const emailService = require('../services/emailService');
+const authService = require('../services/authService'); // tambahkan import
 
 const cleanupOldData = () => {
     cron.schedule('0 0 * * *', async () => {
@@ -74,11 +75,28 @@ const sendBookingReminderEmails = () => {
     });
 };
 
+// Tambahkan cron job untuk cleanupExpiredTokens
+const cleanupExpiredTokensJob = () => {
+    cron.schedule('0 2 * * *', async () => {
+        // Setiap hari jam 02:00 WIB
+        console.log('[CRON] cleanupExpiredTokensJob running at', new Date().toISOString());
+        try {
+            await authService.cleanupExpiredTokens();
+            console.log('[CRON] cleanupExpiredTokensJob completed successfully.');
+        } catch (err) {
+            console.error("[CRON] cleanupExpiredTokensJob error:", err.message);
+        }
+    }, {
+        timezone: "Asia/Jakarta"
+    });
+};
+
 const initCronJobs = () => {
     console.log('[CRON] Initializing cron jobs...');
     cleanupOldData();
     handleExpiredTransactionsJob();
     sendBookingReminderEmails();
+    cleanupExpiredTokensJob(); // panggil di sini
     console.log('[CRON] All cron jobs scheduled.');
 };
 
