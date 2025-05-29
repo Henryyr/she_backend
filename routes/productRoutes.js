@@ -15,7 +15,4 @@ router.get('/hair/colors', authenticate, productController.getHairColors);
 
 // Endpoint untuk pencarian produk detail
 router.get('/search', authenticate, productController.searchProducts);
-
-// Tidak ada route POST, PUT, PATCH, DELETE di sisi user
-
 module.exports = router;
