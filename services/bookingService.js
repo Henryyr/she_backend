@@ -1,24 +1,20 @@
 const { pool } = require('../db');
 const bookingValidationHelper = require('../helpers/bookingValidationHelper');
-const { updateHairColorStock, updateSmoothingStock, updateKeratinStock } = require('./stockService');
+const stockService = require('./stockService');
 const { DEFAULT_PRODUCTS } = require('../config/product');
 const { RATE_LIMIT } = require('../config/rateLimit');
 const bookingHelper = require('../helpers/bookingHelper');
+const { getRandomPromo } = require('../helpers/promoHelper');
 
 const createBooking = async (data) => {
     const { user_id, layanan_id, tanggal, jam_mulai, hair_color } = data;
     let { smoothing_product, keratin_product } = data;
-
-    // Convert single layanan_id to array if it's not already an array
     const layanan_ids = Array.isArray(layanan_id) ? layanan_id : [layanan_id];
-
     const connection = await pool.getConnection();
-    console.log('Starting booking process...', { user_id, layanan_id, tanggal, jam_mulai });
 
-    let layananWithCategory = []; // Define at the top level of the function
+    let layananWithCategory = [];
 
     try {
-        // Check rate limit with index hint
         const [requests] = await connection.query(
             `SELECT /*+ INDEX(booking idx_user_created) */ COUNT(*) as count 
              FROM booking 
@@ -34,7 +30,6 @@ const createBooking = async (data) => {
 
         await connection.beginTransaction();
 
-        // Simple efficient queries with index hints
         const [[existingBookings], layananResults] = await Promise.all([
             connection.query(
                 'SELECT /*+ INDEX(booking idx_user_tanggal) */ id FROM booking WHERE user_id = ? AND tanggal = ? FOR UPDATE',
@@ -50,23 +45,19 @@ const createBooking = async (data) => {
         ]);
 
         if (existingBookings.length > 0) {
-            console.log('Double booking detected:', existingBookings);
             throw new Error("Anda sudah memiliki booking pada hari ini");
         }
 
-        layananWithCategory = layananResults[0]; // Assign the query results
+        layananWithCategory = layananResults[0];
 
         if (layananWithCategory.length === 0) {
             throw new Error("Layanan tidak ditemukan");
         }
-        
-        // Modified this check to work with both single layanan_id and arrays
         if (layananWithCategory.length !== layanan_ids.length) {
             throw new Error("Beberapa layanan tidak valid");
         }
 
         const categories = layananWithCategory.map(l => l.kategori_nama);
-        console.log('Categories to book:', categories);
 
         if (categories.includes('Cat Rambut') && !hair_color) {
             throw new Error('Layanan Cat Rambut membutuhkan pemilihan warna');
@@ -84,22 +75,29 @@ const createBooking = async (data) => {
             throw new Error("Beberapa layanan yang dipilih tidak memerlukan produk tambahan");
         }
 
-        console.log('Valid service categories:', categories);
+        const [bookingCountRows] = await connection.query(
+            `SELECT COUNT(*) as count FROM booking WHERE user_id = ? AND tanggal >= CURDATE() - INTERVAL 3 MONTH`,
+            [user_id]
+        );
+        const bookingCount = bookingCountRows[0]?.count || 0;
+
+        const [lastBookingRows] = await connection.query(
+            `SELECT id, promo_discount_percent FROM booking WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+            [user_id]
+        );
+        const lastBookingHadPromo = lastBookingRows.length > 0 && lastBookingRows[0].promo_discount_percent > 0;
 
         let total_harga = layananWithCategory.reduce((sum, l) => sum + parseFloat(l.harga), 0);
         let product_detail = {};
 
         if (categories.includes('Smoothing') && !smoothing_product) {
-            console.log('Using default smoothing product');
             smoothing_product = { ...DEFAULT_PRODUCTS.smoothing };
         }
 
         if (categories.includes('Keratin') && !keratin_product) {
-            console.log('Using default keratin product');
             keratin_product = { ...DEFAULT_PRODUCTS.keratin };
         }
 
-        // Process product details separately for each type
         let productResults = [];
 
         if (hair_color) {
@@ -110,7 +108,6 @@ const createBooking = async (data) => {
                 JOIN product_brands pb ON hp.brand_id = pb.id
                 WHERE hc.id = ?
             `, [hair_color.color_id]);
-            
             productResults = [...productResults, ...hairColorResults];
         }
 
@@ -121,7 +118,6 @@ const createBooking = async (data) => {
                 JOIN product_brands pb ON sp.brand_id = pb.id
                 WHERE sp.id = ? AND sp.brand_id = ?
             `, [smoothing_product.product_id, smoothing_product.brand_id]);
-            
             productResults = [...productResults, ...smoothingResults];
         }
 
@@ -132,7 +128,6 @@ const createBooking = async (data) => {
                 JOIN product_brands pb ON kp.brand_id = pb.id
                 WHERE kp.id = ? AND kp.brand_id = ?
             `, [keratin_product.product_id, keratin_product.brand_id]);
-            
             productResults = [...productResults, ...keratinResults];
         }
 
@@ -153,6 +148,12 @@ const createBooking = async (data) => {
             }
         });
 
+        const { discount_percent, discount_amount } = getRandomPromo(bookingCount, lastBookingHadPromo, total_harga);
+
+        if (discount_percent > 0) {
+            total_harga = total_harga - discount_amount;
+        }
+
         const bookingNumber = await bookingHelper.generateBookingNumber();
         const total_estimasi = layananWithCategory.reduce((sum, l) => sum + l.estimasi_waktu, 0);
         const jam_selesai = new Date(`${tanggal} ${jam_mulai}`);
@@ -161,9 +162,9 @@ const createBooking = async (data) => {
 
         const [insertResult] = await connection.query(
             `INSERT INTO booking /*+ BATCH_INSERT */ 
-            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`,
-            [user_id, tanggal, jam_mulai, jam_selesai_string, bookingNumber, total_harga, data.special_request]
+            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, promo_discount_percent, promo_discount_amount)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
+            [user_id, tanggal, jam_mulai, jam_selesai_string, bookingNumber, total_harga, data.special_request, discount_percent, discount_amount]
         );
 
         const booking_id = insertResult.insertId;
@@ -181,13 +182,29 @@ const createBooking = async (data) => {
             );
         }
 
+        if (hair_color) {
+            await stockService.reduceHairColorStock(hair_color.color_id, 1);
+        }
+        if (smoothing_product) {
+            await stockService.reduceSmoothingStock(smoothing_product.product_id, smoothing_product.brand_id, 1);
+        }
+        if (keratin_product) {
+            await stockService.reduceKeratinStock(keratin_product.product_id, keratin_product.brand_id, 1);
+        }
+
         await connection.commit();
-        console.log('Booking created successfully:', {
-            booking_id,
-            booking_number: bookingNumber,
-            total_harga,
-            kategori: categories.join(', ')
-        });
+
+        let cancel_timer = null;
+        try {
+            const now = new Date();
+            const tanggalStr = typeof tanggal === 'string' ? tanggal.split('T')[0] : tanggal;
+            const jamStr = jam_mulai.length === 5 ? jam_mulai : jam_mulai.slice(0, 5);
+            const startDateTime = new Date(`${tanggalStr}T${jamStr}:00+08:00`);
+            const batasCancel = new Date(startDateTime.getTime() + 30 * 60000);
+            cancel_timer = Math.max(0, Math.floor((batasCancel.getTime() - now.getTime()) / 1000));
+        } catch (e) {
+            cancel_timer = null;
+        }
 
         return {
             booking_id,
@@ -201,21 +218,20 @@ const createBooking = async (data) => {
             jam_selesai: jam_selesai_string,
             product_detail,
             special_request: data.special_request,
-            default_products: categories.includes('Smoothing') && !smoothing_product ? true : undefined
+            default_products: categories.includes('Smoothing') && !smoothing_product ? true : undefined,
+            cancel_timer,
+            promo: discount_percent > 0 ? {
+                discount_percent,
+                discount_amount,
+                message: `Promo aktif: diskon ${discount_percent}% untuk pelanggan aktif!`
+            } : undefined
         };
 
     } catch (err) {
-        console.error('Error in booking process:', {
-            error: err.message,
-            kategori: layananWithCategory.length > 0 ? layananWithCategory[0]?.kategori_nama : 'unknown',
-            products: { hair_color, smoothing_product, keratin_product }
-        });
         await connection.rollback();
-        console.log('Transaction rolled back');
         throw err;
     } finally {
         connection.release();
-        console.log('Connection released');
     }
 };
 
@@ -223,7 +239,6 @@ const getAllBookings = async (page = 1, limit = 10, user_id) => {
     const connection = await pool.getConnection();
     try {
         const offset = (page - 1) * limit;
-        
         const [bookings] = await connection.query(`
             SELECT /*+ INDEX(b idx_booking_created) */ b.*,
                 GROUP_CONCAT(l.nama ORDER BY l.id) as layanan_names
@@ -275,7 +290,31 @@ const getBookingById = async (id) => {
             throw new Error('Booking tidak ditemukan');
         }
 
-        return booking[0];
+        let cancel_timer = null;
+        try {
+            const now = new Date();
+            let tanggalStr = booking[0].tanggal;
+            if (typeof tanggalStr === 'string' && tanggalStr.includes('T')) {
+                tanggalStr = tanggalStr.split('T')[0];
+            } else if (tanggalStr instanceof Date) {
+                tanggalStr = tanggalStr.toISOString().split('T')[0];
+            }
+            let jamStr = booking[0].jam_mulai;
+            if (typeof jamStr === 'string' && jamStr.length > 5) {
+                jamStr = jamStr.slice(0, 5);
+            }
+            const nowWITA = new Date(now.getTime() + (8 - now.getTimezoneOffset() / 60) * 60 * 60 * 1000 - (now.getTimezoneOffset() * 60 * 1000));
+            const startDateTime = new Date(`${tanggalStr}T${jamStr}:00+08:00`);
+            const batasCancel = new Date(startDateTime.getTime() + 30 * 60000);
+            cancel_timer = Math.max(0, Math.floor((batasCancel.getTime() - nowWITA.getTime()) / 1000));
+        } catch (e) {
+            cancel_timer = null;
+        }
+
+        return {
+            ...booking[0],
+            cancel_timer
+        };
     } catch (error) {
         throw new Error(`Error getting booking: ${error.message}`);
     } finally {
@@ -283,142 +322,17 @@ const getBookingById = async (id) => {
     }
 };
 
-const updateBookingStatus = async (id, status) => {
+const cancelBooking = async (id) => {
     const connection = await pool.getConnection();
     try {
-        const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
-        if (!validStatuses.includes(status)) {
-            throw new Error('Status tidak valid');
-        }
-
         const [result] = await connection.query(
-            'UPDATE booking SET status = ? WHERE id = ?',
-            [status, id]
+            "UPDATE booking SET status = ? WHERE id = ?",
+            ['cancelled', id]
         );
-
         if (result.affectedRows === 0) {
             throw new Error('Booking tidak ditemukan');
         }
-
-        return { message: 'Status booking berhasil diperbarui' };
-    } catch (error) {
-        throw new Error(`Error updating booking status: ${error.message}`);
-    } finally {
-        connection.release();
-    }
-};
-
-const deleteBooking = async (id) => {
-    const connection = await pool.getConnection();
-    try {
-        await connection.beginTransaction();
-
-        const [booking] = await connection.query(
-            'SELECT status FROM booking WHERE id = ?',
-            [id]
-        );
-
-        if (!booking[0]) {
-            throw new Error('Booking tidak ditemukan');
-        }
-
-        if (booking[0].status === 'completed') {
-            throw new Error('Tidak dapat menghapus booking yang sudah selesai');
-        }
-
-        await connection.query('DELETE FROM booking_layanan WHERE booking_id = ?', [id]);
-        await connection.query('DELETE FROM booking_colors WHERE booking_id = ?', [id]);
-        
-        const [result] = await connection.query('DELETE FROM booking WHERE id = ?', [id]);
-
-        await connection.commit();
-        return { message: 'Booking berhasil dihapus' };
-
-    } catch (error) {
-        await connection.rollback();
-        throw new Error(`Error deleting booking: ${error.message}`);
-    } finally {
-        connection.release();
-    }
-};
-
-const completeBooking = async (id) => {
-    const connection = await pool.getConnection();
-    try {
-        await connection.beginTransaction();
-
-        // Get booking details with product information
-        const [bookingDetails] = await connection.query(`
-            SELECT b.*, 
-                   bc.color_id, bc.brand_id as color_brand_id,
-                   bs.product_id as smoothing_id, bs.brand_id as smoothing_brand_id,
-                   bk.product_id as keratin_id, bk.brand_id as keratin_brand_id
-            FROM booking b
-            LEFT JOIN booking_colors bc ON b.id = bc.booking_id
-            LEFT JOIN booking_smoothing bs ON b.id = bs.booking_id
-            LEFT JOIN booking_keratin bk ON b.id = bk.booking_id
-            WHERE b.id = ? FOR UPDATE`,
-            [id]
-        );
-
-        if (!bookingDetails[0]) {
-            throw new Error('Booking tidak ditemukan');
-        }
-
-        const booking = bookingDetails[0];
-
-        if (booking.status === 'completed') {
-            throw new Error('Booking sudah selesai');
-        }
-
-        if (booking.status === 'cancelled') {
-            throw new Error('Tidak dapat menyelesaikan booking yang sudah dibatalkan');
-        }
-
-        // Update stocks based on products used
-        const stockUpdates = [];
-        
-        if (booking.color_id) {
-            stockUpdates.push(
-                updateHairColorStock(booking.color_id, booking.color_brand_id, -1)
-            );
-        }
-
-        if (booking.smoothing_id) {
-            stockUpdates.push(
-                updateSmoothingStock(booking.smoothing_id, booking.smoothing_brand_id, -1)
-            );
-        }
-
-        if (booking.keratin_id) {
-            stockUpdates.push(
-                updateKeratinStock(booking.keratin_id, booking.keratin_brand_id, -1)
-            );
-        }
-
-        // Wait for all stock updates to complete
-        await Promise.all(stockUpdates);
-
-        // Update booking status and completed_at
-        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        await connection.query(
-            `UPDATE booking 
-             SET status = 'completed', 
-                 completed_at = ?
-             WHERE id = ?`,
-            [now, id]
-        );
-
-        await connection.commit();
-        return { 
-            message: 'Booking berhasil diselesaikan',
-            booking_id: id,
-            completed_at: now
-        };
-
-    } catch (error) {
-        await connection.rollback();
-        throw new Error(`Error completing booking: ${error.message}`);
+        return { message: 'Booking berhasil dibatalkan', booking_id: id };
     } finally {
         connection.release();
     }
@@ -428,7 +342,5 @@ module.exports = {
     createBooking,
     getAllBookings,
     getBookingById,
-    updateBookingStatus,
-    deleteBooking,
-    completeBooking
+    cancelBooking
 };

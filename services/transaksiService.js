@@ -1,5 +1,4 @@
 const { pool } = require('../db');
-const axios = require('axios');
 const { sendEmail } = require('./emailService');
 const transactionReceiptTemplate = require('../html/transactionReceipt');
 const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../config/midtrans');
@@ -12,23 +11,26 @@ async getTransactionStatus(order_id, user_id = null) {
       const midtransResponse = await this.fetchMidtransStatus(order_id);
       const localTransaction = await this.getLocalTransactionData(order_id, user_id);
 
+      // Mask sensitive data from midtransResponse
+      const safeMidtransData = {
+        status_code: midtransResponse.status_code,
+        transaction_id: midtransResponse.transaction_id,
+        gross_amount: midtransResponse.gross_amount,
+        currency: midtransResponse.currency,
+        order_id: midtransResponse.order_id,
+        payment_type: midtransResponse.payment_type,
+        transaction_status: midtransResponse.transaction_status,
+        fraud_status: midtransResponse.fraud_status,
+        status_message: midtransResponse.status_message,
+        transaction_time: midtransResponse.transaction_time,
+        settlement_time: midtransResponse.settlement_time,
+        expiry_time: midtransResponse.expiry_time,
+        va_numbers: midtransResponse.va_numbers ? '[MASKED]' : null,
+        payment_amounts: midtransResponse.payment_amounts ? '[MASKED]' : null
+      };
+
       const combinedData = {
-        midtrans_data: {
-          status_code: midtransResponse.status_code,
-          transaction_id: midtransResponse.transaction_id,
-          gross_amount: midtransResponse.gross_amount,
-          currency: midtransResponse.currency,
-          order_id: midtransResponse.order_id,
-          payment_type: midtransResponse.payment_type,
-          transaction_status: midtransResponse.transaction_status,
-          fraud_status: midtransResponse.fraud_status,
-          status_message: midtransResponse.status_message,
-          transaction_time: midtransResponse.transaction_time,
-          settlement_time: midtransResponse.settlement_time,
-          expiry_time: midtransResponse.expiry_time,
-          va_numbers: midtransResponse.va_numbers || null,
-          payment_amounts: midtransResponse.payment_amounts || []
-        },
+        midtrans_data: safeMidtransData,
         local_data: localTransaction,
         summary: {
           order_id: midtransResponse.order_id,
@@ -199,7 +201,7 @@ async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
 
        // Check booking status
        const [bookingResult] = await conn.query(
-           `SELECT id, total_harga, status FROM booking WHERE id = ?`, 
+           `SELECT id, total_harga, status, promo_discount_percent, promo_discount_amount FROM booking WHERE id = ?`, 
            [booking_id]
        );
 
@@ -207,7 +209,7 @@ async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
            throw { status: 404, message: "Booking tidak ditemukan" };
        }
 
-       const { total_harga, status: bookingStatus } = bookingResult[0];
+       const { total_harga, status: bookingStatus, promo_discount_percent, promo_discount_amount } = bookingResult[0];
 
        if (bookingStatus === 'completed') {
            throw { status: 400, message: "Booking sudah dibayar" };
@@ -299,7 +301,12 @@ async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
            payment_status,
            total_harga,
            amount_to_pay: amountToPay,
-           payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment (DP)'
+           payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment (DP)',
+           promo: promo_discount_percent > 0 ? {
+               discount_percent: promo_discount_percent,
+               discount_amount: promo_discount_amount,
+               message: `Promo aktif: diskon ${promo_discount_percent}% untuk pelanggan aktif!`
+           } : undefined
        };
    } catch (err) {
        console.error('[TransaksiService] createTransaction error:', err);
@@ -561,7 +568,13 @@ async getUserTransactions(user_id) {
                t.created_at DESC
        `, [user_id]);
        
-       return results;
+       // Mask any sensitive fields if present (defensive)
+       return results.map(row => {
+           const safeRow = { ...row };
+           if ('va_numbers' in safeRow) safeRow.va_numbers = '[MASKED]';
+           if ('payment_amounts' in safeRow) safeRow.payment_amounts = '[MASKED]';
+           return safeRow;
+       });
    } catch (err) {
        throw {
            status: 500,

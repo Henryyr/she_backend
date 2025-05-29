@@ -8,14 +8,7 @@ const errorLogTracker = {
     logInterval: 5 * 60 * 1000 // 5 minutes
 };
 
-// Run cleanup every 12 hours instead of every hour
-setInterval(async () => {
-    try {
-        await authService.cleanupExpiredTokens();
-    } catch (error) {
-        console.error('Token cleanup error:', error);
-    }
-}, 12 * 60 * 60 * 1000);
+// Hapus interval cleanupExpiredTokens
 
 const authenticate = async (req, res, next) => {
     try {
@@ -53,7 +46,12 @@ const authenticate = async (req, res, next) => {
 
                 return res.status(403).json({ error: errorMessage });
             }
-            req.user = user;
+            // Only attach safe user fields
+            req.user = {
+                id: user.id,
+                email: user.email,
+                role: user.role
+            };
             req.token = token;
             req.tokenExp = user.exp * 1000;
             next();

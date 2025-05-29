@@ -25,12 +25,21 @@ router.get('/bookings/user/:userId', adminController.getBookingsByUserId);
 router.get('/bookings/:id', adminController.getBookingById);
 router.post('/bookings', adminController.createBooking);
 router.put('/bookings/:id', adminController.updateBooking);
-router.patch('/bookings/:id/status', adminController.updateBookingStatus);
 router.delete('/bookings/:id', adminController.deleteBooking);
-
-// Specific booking actions
+// Booking status actions
 router.post('/bookings/:id/confirm', adminController.confirmBooking);
-router.post('/bookings/:id/cancel', adminController.cancelBooking);
 router.post('/bookings/:id/complete', adminController.completeBooking);
+router.post('/bookings/:id/cancel', adminController.cancelBooking);
+
+// Produk - CRUD stok (admin only)
+router.get('/products', adminController.getAllProducts);
+router.post('/products', adminController.createProduct);
+router.put('/products/:id', adminController.updateProduct);
+router.delete('/products/:id', adminController.deleteProduct);
+router.get('/products/:type/:id', adminController.getProductById);
+// Stock update (admin only)
+router.post('/products/haircolor/stock', adminController.updateHairColorStock);
+router.post('/products/smoothing/stock', adminController.updateSmoothingStock);
+router.post('/products/keratin/stock', adminController.updateKeratinStock);
 
 module.exports = router;
