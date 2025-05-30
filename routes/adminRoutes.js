@@ -1,24 +1,11 @@
 const express = require('express');
 const { authenticate, isAdmin } = require('../middleware/auth');
 const adminController = require('../controllers/admin/adminController');
-const rateLimit = require('express-rate-limit');
-const helmet = require('helmet');
 
 const router = express.Router();
 
 // Middleware autentikasi & admin check untuk semua route admin
 router.use(authenticate, isAdmin);
-
-// Tambahkan helmet untuk security headers
-router.use(helmet());
-
-// Rate limiter untuk admin routes
-const adminLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 menit
-    max: 100, // max 100 requests per window per IP
-    message: { success: false, message: 'Terlalu banyak permintaan, coba lagi nanti.' }
-});
-router.use(adminLimiter);
 
 // dashboard
 router.get('/dashboard', adminController.getDashboard);

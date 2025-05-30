@@ -353,7 +353,6 @@ const getAdminKeratinProducts = async (req, res) => {
             product: {
                 nama: product.product_nama,
                 jenis: product.jenis,
-                // deskripsi: product.deskripsi, // removed
                 harga: Number(product.harga)
             },
             stok: Number(product.stok)
