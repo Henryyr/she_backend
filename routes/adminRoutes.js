@@ -1,11 +1,24 @@
 const express = require('express');
 const { authenticate, isAdmin } = require('../middleware/auth');
 const adminController = require('../controllers/admin/adminController');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 
 const router = express.Router();
 
-// Semua routes admin harus melalui middleware authenticate dan isAdmin
+// Middleware autentikasi & admin check untuk semua route admin
 router.use(authenticate, isAdmin);
+
+// Tambahkan helmet untuk security headers
+router.use(helmet());
+
+// Rate limiter untuk admin routes
+const adminLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 menit
+    max: 100, // max 100 requests per window per IP
+    message: { success: false, message: 'Terlalu banyak permintaan, coba lagi nanti.' }
+});
+router.use(adminLimiter);
 
 // dashboard
 router.get('/dashboard', adminController.getDashboard);
@@ -32,11 +45,10 @@ router.post('/bookings/:id/complete', adminController.completeBooking);
 router.post('/bookings/:id/cancel', adminController.cancelBooking);
 
 // Produk - CRUD stok (admin only)
-router.get('/products', adminController.getAllProducts);
+router.get('/products', adminController.getAdminAllProducts);
 router.post('/products', adminController.createProduct);
 router.put('/products/:id', adminController.updateProduct);
 router.delete('/products/:id', adminController.deleteProduct);
-router.get('/products/:type/:id', adminController.getProductById);
 // Stock update (admin only)
 router.post('/products/hair', adminController.updateHairColorStock);
 router.post('/products/smoothing', adminController.updateSmoothingStock);
@@ -45,5 +57,6 @@ router.post('/products/keratin', adminController.updateKeratinStock);
 router.get('/products/hair', adminController.getAdminHairProducts);
 router.get('/products/smoothing', adminController.getAdminSmoothingProducts);
 router.get('/products/keratin', adminController.getAdminKeratinProducts);
+
 
 module.exports = router;
