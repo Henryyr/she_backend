@@ -1,21 +1,11 @@
 const { pool } = require('../../db');
 
 class TestimoniService {
-    async getAllTestimoni() {
-        try {
-            const [rows] = await pool.query('SELECT * FROM testimoni ORDER BY created_at DESC');
-            return rows;
-        } catch (error) {
-            console.error('Error getting testimonials:', error);
-            throw error;
-        }
-    }
-
     async createTestimoni(data) {
         try {
             const [result] = await pool.query(
-                'INSERT INTO testimoni (user_id, rating, komentar) VALUES (?, ?, ?)',
-                [data.user_id, data.rating, data.komentar]
+                'INSERT INTO testimoni (user_id, layanan_id, rating, comment, image_url) VALUES (?, ?, ?, ?, ?)',
+                [data.user_id, data.layanan_id, data.rating, data.comment, data.image_url]
             );
             return result;
         } catch (error) {
@@ -24,35 +14,14 @@ class TestimoniService {
         }
     }
 
-    async getTestimoniById(id) {
+    async getPublic() {
         try {
-            const [rows] = await pool.query('SELECT * FROM testimoni WHERE id = ?', [id]);
-            return rows[0];
-        } catch (error) {
-            console.error('Error getting testimonial by id:', error);
-            throw error;
-        }
-    }
-
-    async updateTestimoni(id, data) {
-        try {
-            const [result] = await pool.query(
-                'UPDATE testimoni SET rating = ?, komentar = ? WHERE id = ?',
-                [data.rating, data.komentar, id]
+            const [rows] = await pool.query(
+                'SELECT * FROM testimoni WHERE status = "approved" ORDER BY created_at DESC'
             );
-            return result;
+            return rows;
         } catch (error) {
-            console.error('Error updating testimonial:', error);
-            throw error;
-        }
-    }
-
-    async deleteTestimoni(id) {
-        try {
-            const [result] = await pool.query('DELETE FROM testimoni WHERE id = ?', [id]);
-            return result;
-        } catch (error) {
-            console.error('Error deleting testimonial:', error);
+            console.error('Error getting public testimonials:', error);
             throw error;
         }
     }

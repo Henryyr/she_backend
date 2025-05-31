@@ -4,7 +4,7 @@ const { cloudinary, uploadOptions } = require('../../config/cloudinary');
 class TestimoniController {
     static async createTestimoni(req, res) {
         try {
-            const { rating, comment } = req.body;
+            const { layanan_id, rating, comment } = req.body;
             let image_url = null;
 
             if (req.file) {
@@ -36,16 +36,18 @@ class TestimoniController {
             }
             
             const user_id = req.user.id;
-            const testimoni = await TestimoniService.create({ 
+            const testimoni = await TestimoniService.createTestimoni({ 
                 user_id,
+                layanan_id,
                 rating, 
                 comment,
-                image_url 
+                image_url
             });
             
             res.json({ 
                 message: "Testimoni berhasil ditambahkan dan menunggu approval", 
-                id: testimoni.insertId 
+                id: testimoni.insertId,
+                image_url // tambahkan ini agar url gambar muncul di response
             });
         } catch (err) {
             console.error('Error in createTestimoni:', err);
@@ -63,65 +65,6 @@ class TestimoniController {
         try {
             const testimonials = await TestimoniService.getPublic();
             res.json(testimonials);
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    }
-
-    static async getAllTestimoni(req, res) {
-        try {
-            const testimonials = await TestimoniService.getAll();
-            res.json(testimonials);
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    }
-
-    static async deleteTestimoni(req, res) {
-        try {
-            const { id } = req.params;
-            await TestimoniService.delete(id);
-            res.json({ message: "Testimoni berhasil dihapus" });
-        } catch (err) {
-            if (err.message === 'Not Found') {
-                return res.status(404).json({ error: "Testimoni tidak ditemukan" });
-            }
-            res.status(500).json({ error: err.message });
-        }
-    }
-
-    static async approveTestimoni(req, res) {
-        try {
-            const { id } = req.params;
-            const { is_public } = req.body;
-            await TestimoniService.approve(id, is_public);
-            res.json({ message: "Testimoni berhasil diapprove" });
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    }
-
-    static async updateStatus(req, res) {
-        try {
-            const { testimoni_id, status } = req.body;
-            
-            if (!testimoni_id || !status) {
-                return res.status(400).json({ 
-                    error: "testimoni_id dan status wajib diisi" 
-                });
-            }
-
-            if (!['approved', 'rejected'].includes(status)) {
-                return res.status(400).json({ 
-                    error: "Status hanya bisa 'approved' atau 'rejected'" 
-                });
-            }
-
-            await TestimoniService.updateStatus(testimoni_id, status);
-            
-            res.json({ 
-                message: `Testimoni berhasil di-${status}` 
-            });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }

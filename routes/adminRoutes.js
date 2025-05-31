@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticate, isAdmin } = require('../middleware/auth');
 const adminController = require('../controllers/admin/adminController');
+const adminTestimoniController = require('../controllers/admin/testimoniController');
 
 const router = express.Router();
 
@@ -45,5 +46,10 @@ router.post('/products/keratin', adminController.updateKeratinStock);
 router.get('/products/hair', adminController.getAdminHairProducts);
 router.get('/products/smoothing', adminController.getAdminSmoothingProducts);
 router.get('/products/keratin', adminController.getAdminKeratinProducts);
+
+// Admin Testimoni routes
+router.get('/testimoni', adminTestimoniController.getAllTestimoni);
+router.delete('/testimoni/:id', adminTestimoniController.deleteTestimoni);
+router.put('/testimoni/:id/status', adminTestimoniController.updateStatus);
 
 module.exports = router;
