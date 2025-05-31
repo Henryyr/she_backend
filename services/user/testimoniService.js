@@ -13,6 +13,19 @@ const createTestimoni = async (data) => {
     }
 };
 
+const createTestimoniWithConn = async (conn, data) => {
+    try {
+        const [result] = await conn.query(
+            'INSERT INTO testimoni (user_id, rating, comment, image_url) VALUES (?, ?, ?, ?)',
+            [data.user_id, data.rating, data.comment, data.image_url]
+        );
+        return result;
+    } catch (error) {
+        console.error('Error creating testimonial:', error);
+        throw error;
+    }
+};
+
 const getPublic = async () => {
     try {
         const [rows] = await pool.query(
@@ -27,5 +40,6 @@ const getPublic = async () => {
 
 module.exports = {
     createTestimoni,
+    createTestimoniWithConn,
     getPublic
 };
