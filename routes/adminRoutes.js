@@ -4,7 +4,7 @@ const adminController = require('../controllers/admin/adminController');
 
 const router = express.Router();
 
-// Semua routes admin harus melalui middleware authenticate dan isAdmin
+// Middleware autentikasi & admin check untuk semua route admin
 router.use(authenticate, isAdmin);
 
 // dashboard
@@ -32,11 +32,10 @@ router.post('/bookings/:id/complete', adminController.completeBooking);
 router.post('/bookings/:id/cancel', adminController.cancelBooking);
 
 // Produk - CRUD stok (admin only)
-router.get('/products', adminController.getAllProducts);
+router.get('/products', adminController.getAllProducts); // pastikan method ini ada di controller
 router.post('/products', adminController.createProduct);
 router.put('/products/:id', adminController.updateProduct);
 router.delete('/products/:id', adminController.deleteProduct);
-router.get('/products/:type/:id', adminController.getProductById);
 // Stock update (admin only)
 router.post('/products/hair', adminController.updateHairColorStock);
 router.post('/products/smoothing', adminController.updateSmoothingStock);
