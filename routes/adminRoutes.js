@@ -44,6 +44,9 @@ router.post('/products/keratin', adminController.updateKeratinStock);
 router.get('/products/hair', adminController.getAdminHairProducts);
 router.get('/products/smoothing', adminController.getAdminSmoothingProducts);
 router.get('/products/keratin', adminController.getAdminKeratinProducts);
-
+// Testimoni Admin
+router.get('/testimonis', adminController.getAllTestimoni);
+router.delete('/testimonis/:id', adminController.deleteTestimoni);
+router.put('/testimonis/:id/status', adminController.updateStatus);
 
 module.exports = router;
