@@ -1,10 +1,20 @@
 const TestimoniService = require('../../services/user/testimoniService');
 const { cloudinary, uploadOptions } = require('../../config/cloudinary');
+const { pool } = require('../../db');
 
 const createTestimoni = async (req, res) => {
+    const connection = await pool.getConnection();
     try {
-        const { layanan_id, rating, comment } = req.body;
+        let { layanan_id, rating, comment } = req.body;
         let image_url = null;
+
+        // Parse layanan_id as array if not already
+        if (typeof layanan_id === 'string') {
+            layanan_id = layanan_id.split(',').map(id => id.trim());
+        }
+        if (!Array.isArray(layanan_id)) {
+            layanan_id = [layanan_id];
+        }
 
         if (req.file) {
             console.log('Uploading image to Cloudinary...');
@@ -17,7 +27,6 @@ const createTestimoni = async (req, res) => {
             // Convert buffer to Base64
             const b64 = Buffer.from(req.file.buffer).toString('base64');
             const dataURI = `data:${req.file.mimetype};base64,${b64}`;
-            
             // Upload ke Cloudinary dengan optimisasi
             const result = await cloudinary.uploader.upload(dataURI, {
                 ...uploadOptions,
@@ -33,22 +42,38 @@ const createTestimoni = async (req, res) => {
             
             image_url = result.secure_url;
         }
-        
+
         const user_id = req.user.id;
-        const testimoni = await TestimoniService.createTestimoni({ 
+        await connection.beginTransaction();
+
+        // Insert ke testimoni (satu baris)
+        const testimoni = await TestimoniService.createTestimoniWithConn(connection, { 
             user_id,
-            layanan_id,
             rating, 
             comment,
             image_url
         });
-        
+
+        // Insert ke testimoni_layanan (banyak baris)
+        const testimoni_id = testimoni.insertId;
+        const values = layanan_id.map(id => [testimoni_id, Number(id)]);
+        await connection.query(
+            'INSERT INTO testimoni_layanan (testimoni_id, layanan_id) VALUES ?',
+            [values]
+        );
+
+        await connection.commit();
+
         res.json({ 
             message: "Testimoni berhasil ditambahkan dan menunggu approval", 
-            id: testimoni.insertId,
-            image_url // tambahkan ini agar url gambar muncul di response
+            data: {
+                id: testimoni_id,
+                layanan_id: layanan_id.map(Number),
+                image_url
+            }
         });
     } catch (err) {
+        await connection.rollback();
         console.error('Error in createTestimoni:', err);
         if (err.http_code) {
             console.error('Cloudinary error details:', {
@@ -57,12 +82,43 @@ const createTestimoni = async (req, res) => {
             });
         }
         res.status(500).json({ error: err.message });
+    } finally {
+        connection.release();
     }
 };
 
 const getPublicTestimoni = async (req, res) => {
     try {
+        // Ambil semua testimoni yang approved
         const testimonials = await TestimoniService.getPublic();
+
+        // Ambil semua testimoni_id
+        const testimoniIds = testimonials.map(t => t.id);
+        if (testimoniIds.length === 0) {
+            return res.json([]);
+        }
+
+        // Ambil semua relasi testimoni_layanan
+        const [relations] = await pool.query(
+            `SELECT tl.testimoni_id, tl.layanan_id, l.nama as layanan_nama
+             FROM testimoni_layanan tl
+             JOIN layanan l ON tl.layanan_id = l.id
+             WHERE tl.testimoni_id IN (${testimoniIds.map(() => '?').join(',')})`,
+            testimoniIds
+        );
+
+        // Mapping testimoni_id ke array layanan
+        const layananMap = {};
+        relations.forEach(r => {
+            if (!layananMap[r.testimoni_id]) layananMap[r.testimoni_id] = [];
+            layananMap[r.testimoni_id].push({ id: r.layanan_id, nama: r.layanan_nama });
+        });
+
+        // Gabungkan ke setiap testimoni
+        testimonials.forEach(t => {
+            t.layanans = layananMap[t.id] || [];
+        });
+
         res.json(testimonials);
     } catch (err) {
         res.status(500).json({ error: err.message });
