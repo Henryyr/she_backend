@@ -46,9 +46,4 @@ router.get('/products/hair', adminController.getAdminHairProducts);
 router.get('/products/smoothing', adminController.getAdminSmoothingProducts);
 router.get('/products/keratin', adminController.getAdminKeratinProducts);
 
-// Admin Testimoni routes
-router.get('/testimoni', adminController.getAllTestimoni);
-router.delete('/testimoni/:id', adminController.deleteTestimoni);
-router.put('/testimoni/:id/status', adminController.updateStatus);
-
 module.exports = router;
