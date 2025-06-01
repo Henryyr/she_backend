@@ -34,22 +34,31 @@ const createBooking = async (req, res) => {
                 timestamp: new Date().toISOString()
             });
         }
-        const result = await bookingService.createBooking(bookingData);
         try {
-            if (req.user.email) {
-                await emailService.sendBookingInformation(req.user.email, result);
-            }
-        } catch (emailErr) {}
-        const io = getIO();
-        if (io) {
+            const result = await bookingService.createBooking(bookingData);
             try {
-                await dashboardService.updateDashboardStats(io);
-            } catch (emitErr) {}
+                if (req.user.email) {
+                    await emailService.sendBookingInformation(req.user.email, result);
+                }
+            } catch (emailErr) {}
+            const io = getIO();
+            if (io) {
+                try {
+                    await dashboardService.updateDashboardStats(io);
+                } catch (emitErr) {}
+            }
+            res.json(result);
+        } catch (error) {
+            // Tangkap error validasi produk dan error lain dari service
+            return res.status(400).json({
+                error: 'Booking gagal',
+                details: error.message,
+                timestamp: new Date().toISOString()
+            });
         }
-        res.json(result);
     } catch (error) {
         return res.status(400).json({
-            error: 'Invalid JSON format',
+            error: 'Invalid request body',
             details: error.message,
             timestamp: new Date().toISOString()
         });
