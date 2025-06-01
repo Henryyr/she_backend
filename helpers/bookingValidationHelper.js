@@ -1,8 +1,9 @@
 const db = require('../db');
 
-const KATEGORI_DEFAULT_PRODUK = ['Smoothing', 'Keratin'];
 const KATEGORI_WAJIB_PRODUK = {
-    'Cat Rambut': ['hair_color']
+    'Cat Rambut': ['hair_color'],
+    'Smoothing': ['smoothing_product'],
+    'Keratin': ['keratin_product']
 };
 
 const isProductUnnecessary = (categories, hair_color, smoothing_product, keratin_product) => {
@@ -13,10 +14,7 @@ const isProductUnnecessary = (categories, hair_color, smoothing_product, keratin
     };
 
     for (const category of categories) {
-        if (KATEGORI_DEFAULT_PRODUK.includes(category)) {
-            continue;
-        }
-        
+        // Cek jika kategori butuh produk tertentu
         const requiredProducts = KATEGORI_WAJIB_PRODUK[category];
         if (requiredProducts) {
             for (const product of requiredProducts) {
