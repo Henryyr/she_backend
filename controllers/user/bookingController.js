@@ -146,7 +146,15 @@ const cancelBooking = async (req, res) => {
             });
         }
         const result = await bookingService.cancelBooking(id);
-        emitDashboardUpdate();
+
+        // Update dashboard stats (ganti emitDashboardUpdate)
+        const io = getIO();
+        if (io) {
+            try {
+                await dashboardService.updateDashboardStats(io);
+            } catch (emitErr) {}
+        }
+
         res.json({
             message: 'Booking berhasil dibatalkan',
             data: result
