@@ -246,6 +246,7 @@ const createBooking = async (data) => {
         return {
             booking_id,
             booking_number: bookingNumber,
+            layanan_id: layanan_ids,
             total_harga,
             status: 'pending',
             layanan: layananWithCategory.map(l => l.nama).join(' + '),
