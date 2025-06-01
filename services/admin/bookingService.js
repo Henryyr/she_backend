@@ -275,7 +275,7 @@ const updateBookingStatus = async (id, status) => {
     if (!validStatuses.includes(status)) {
         throw new Error('Status tidak valid');
     }
-    // Hapus updated_at = NOW() jika kolom updated_at tidak ada
+    // Update booking status
     const [result] = await pool.query(
         'UPDATE booking SET status = ? WHERE id = ?',
         [status, id]
@@ -283,6 +283,15 @@ const updateBookingStatus = async (id, status) => {
     if (result.affectedRows === 0) {
         return null;
     }
+
+    // Jika status completed, update juga status transaksi terkait
+    if (status === 'completed') {
+        await pool.query(
+            "UPDATE transaksi SET status = 'completed' WHERE booking_id = ?",
+            [id]
+        );
+    }
+
     return { id, status };
 };
 
