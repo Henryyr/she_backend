@@ -284,7 +284,8 @@ const getAllBookings = async (page = 1, limit = 10, user_id) => {
         const offset = (page - 1) * limit;
         const [bookings] = await connection.query(`
             SELECT /*+ INDEX(b idx_booking_created) */ b.*,
-                GROUP_CONCAT(l.nama ORDER BY l.id) as layanan_names
+                GROUP_CONCAT(l.nama ORDER BY l.id) as layanan_names,
+                GROUP_CONCAT(l.id) as layanan_ids
             FROM booking b
             LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
             LEFT JOIN layanan l ON bl.layanan_id = l.id
@@ -299,8 +300,19 @@ const getAllBookings = async (page = 1, limit = 10, user_id) => {
             [user_id]
         );
 
+        // Tambahkan layanan_id array ke setiap booking, hapus layanan_ids property
+        const bookingsWithLayananId = bookings.map(b => {
+            const { layanan_ids, ...rest } = b;
+            return {
+                ...rest,
+                layanan_id: layanan_ids
+                    ? layanan_ids.split(',').map(x => Number(x))
+                    : []
+            };
+        });
+
         return {
-            bookings,
+            bookings: bookingsWithLayananId,
             pagination: {
                 total: totalCount[0].total,
                 page,
@@ -354,8 +366,16 @@ const getBookingById = async (id) => {
             cancel_timer = null;
         }
 
+        // Parse layanan_ids ke array number dan hapus layanan_ids dari response
+        let layanan_id = [];
+        if (booking[0].layanan_ids) {
+            layanan_id = booking[0].layanan_ids.split(',').map(x => Number(x));
+        }
+        const { layanan_ids, ...rest } = booking[0];
+
         return {
-            ...booking[0],
+            ...rest,
+            layanan_id,
             cancel_timer
         };
     } catch (error) {
