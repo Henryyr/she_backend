@@ -58,42 +58,6 @@ const getBookingById = async (req, res) => {
     }
 };
 
-const createBooking = async (req, res) => {
-    try {
-        if (!req.body.user_id) {
-            return res.status(400).json({ message: 'User ID diperlukan untuk membuat booking' });
-        }
-
-        const bookingData = {
-            user_id: req.body.user_id,
-            layanan_id: req.body.layanan_id,
-            tanggal: req.body.tanggal,
-            jam_mulai: req.body.jam_mulai,
-            hair_color: req.body.hair_color,
-            smoothing_product: req.body.smoothing_product,
-            keratin_product: req.body.keratin_product,
-            special_request: req.body.special_request || null
-        };
-
-        const result = await bookingService.createBooking(bookingData);
-        
-        const io = require('../../socketInstance').getIO();
-        if (io) {
-            await emitDashboardUpdate(io);
-        }
-
-        res.status(201).json({
-            message: 'Booking berhasil dibuat',
-            booking: result
-        });
-    } catch (error) {
-        res.status(500).json({ 
-            message: 'Error creating booking',
-            error: error.message 
-        });
-    }
-};
-
 const createOfflineBooking = async (req, res) => {
     try {
         // Pastikan user_id ada
@@ -219,7 +183,6 @@ module.exports = {
     getAllBookings,
     getBookingsByUserId,
     getBookingById,
-    createBooking,
     updateBooking,
     deleteBooking,
     emitDashboardUpdate,
