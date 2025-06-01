@@ -2,15 +2,17 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const bookingEmailTemplate = require('../../html/booking-information');
+const invoiceEmailTemplate = require('../../html/transactionReceipt');
 
-// Email transporter setup
+// Email transporter setup (Namecheap SMTP)
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: 'mail.privateemail.com',
+  port: 465, // gunakan 465 untuk SSL, 587 untuk TLS
+  secure: true, // true untuk port 465, false untuk 587
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  silent: true,
   logger: false,
   debug: false
 });
@@ -29,7 +31,7 @@ const sendEmail = async (_to, _subject, _text, _html) => {
     if (!_to) throw new Error("Email tujuan kosong!");
 
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: `"She Salon" <${process.env.EMAIL_USER}>`,
       to: _to,
       subject: _subject,
       text: _text,
@@ -74,6 +76,7 @@ const sendTestEmailToUser = async (user) => {
 // Fungsi khusus kirim informasi booking ke user
 const sendBookingInformation = async (toEmail, bookingData) => {
   try {
+    // Memanggil sendEmail dengan template booking
     await sendEmail(
       toEmail,
       bookingEmailTemplate.subject,
@@ -87,8 +90,27 @@ const sendBookingInformation = async (toEmail, bookingData) => {
   }
 };
 
+// Fungsi kirim invoice
+const sendInvoice = async (toEmail, customerName, invoiceData) => {
+  try {
+    const invoiceHTML = await invoiceEmailTemplate(invoiceData);
+    await sendEmail(
+      toEmail,
+      'Invoice Booking Anda di She Salon',
+      `Halo ${customerName}, berikut invoice booking Anda.`,
+      invoiceHTML
+    );
+    console.log('✅ Invoice berhasil dikirim ke:', toEmail);
+    return true;
+  } catch (error) {
+    console.error('❌ Gagal mengirim invoice:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   sendEmail,
   sendTestEmailToUser,
-  sendBookingInformation
+  sendBookingInformation,
+  sendInvoice
 };

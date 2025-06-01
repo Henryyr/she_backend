@@ -1,5 +1,5 @@
 const { pool } = require('../../db');
-const { sendEmail } = require('./emailService');
+const { sendEmail, sendInvoice } = require('./emailService'); // <-- tambahkan sendInvoice
 const transactionReceiptTemplate = require('../../html/transactionReceipt');
 const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../../config/midtrans');
 
@@ -427,8 +427,27 @@ async handleWebhook(webhookData) {
                'Pembayaran anda telah berhasil',
                emailHtml
            );
+
+           // Kirim invoice jika pembayaran sudah lunas
+           if (paymentStatus === 'paid') {
+               const invoiceHtml = await transactionReceiptTemplate({
+                   booking_number: transaksi.booking_number,
+                   paymentStatus,
+                   layanan_nama: transaksi.layanan_nama,
+                   tanggal: transaksi.tanggal,
+                   jam_mulai: transaksi.jam_mulai,
+                   jam_selesai: transaksi.jam_selesai,
+                   gross_amount,
+                   total_harga: transaksi.total_harga,
+                   newPaidAmount
+               });
+               await sendInvoice(
+                   transaksi.email,
+                   transaksi.user_name || transaksi.email,
+                   invoiceHtml
+               );
+           }
        } else if (transaction_status === "expired" || transaction_status === "cancelled" || transaction_status === "deny") {
-           // Soft delete: update status instead of deleting
            let softDeleteStatus = 'cancelled';
            if (transaction_status === "expired") softDeleteStatus = 'expired';
            if (transaction_status === "deny") softDeleteStatus = 'failed';
