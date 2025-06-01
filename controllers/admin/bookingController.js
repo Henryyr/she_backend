@@ -1,5 +1,6 @@
 const bookingService = require('../../services/admin/bookingService');
 const dashboardService = require('../../services/admin/dashboardService');
+const userBookingService = require('../../services/user/bookingService');
 
 const getAllBookings = async (req, res) => {
     try {
@@ -93,6 +94,49 @@ const createBooking = async (req, res) => {
     }
 };
 
+const createOfflineBooking = async (req, res) => {
+    try {
+        // Pastikan user_id ada
+        if (!req.body.user_id) {
+            return res.status(400).json({ message: 'User ID diperlukan untuk booking offline' });
+        }
+        // Ambil data booking dari body
+        const bookingData = {
+            user_id: req.body.user_id,
+            layanan_id: req.body.layanan_id,
+            tanggal: req.body.tanggal,
+            jam_mulai: req.body.jam_mulai,
+            hair_color: req.body.hair_color,
+            smoothing_product: req.body.smoothing_product,
+            keratin_product: req.body.keratin_product,
+            special_request: req.body.special_request || null
+        };
+        // Proses booking menggunakan service user (tanpa email)
+        const result = await userBookingService.createBooking(bookingData);
+
+        // Hilangkan promo jika ada
+        if (result && result.promo) {
+            delete result.promo;
+        }
+
+        // Emit dashboard update jika ada socket
+        const io = require('../../socketInstance').getIO();
+        if (io) {
+            await emitDashboardUpdate(io);
+        }
+
+        res.status(201).json({
+            message: 'Booking offline berhasil dibuat',
+            booking: result
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: 'Error creating offline booking',
+            error: error.message
+        });
+    }
+};
+
 const updateBooking = async (req, res) => {
     try {
         const updatedBooking = await bookingService.updateBooking(req.params.id, req.body);
@@ -181,5 +225,6 @@ module.exports = {
     emitDashboardUpdate,
     confirmBooking,
     completeBooking,
-    cancelBooking
+    cancelBooking,
+    createOfflineBooking
 };

@@ -23,6 +23,7 @@ router.delete('/users/:id', adminController.deleteUser);
 router.get('/bookings', adminController.getAllBookings);
 router.get('/bookings/user/:userId', adminController.getBookingsByUserId);
 router.get('/bookings/:id', adminController.getBookingById);
+router.post('/bookings/offline', adminController.createOfflineBooking);
 router.post('/bookings', adminController.createBooking);
 router.put('/bookings/:id', adminController.updateBooking);
 router.delete('/bookings/:id', adminController.deleteBooking);
