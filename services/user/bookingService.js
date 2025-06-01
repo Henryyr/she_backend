@@ -1,7 +1,6 @@
 const { pool } = require('../../db');
 const bookingValidationHelper = require('../../helpers/bookingValidationHelper');
 const stockService = require('./stockService');
-const { DEFAULT_PRODUCTS } = require('../../config/product');
 const { RATE_LIMIT } = require('../../config/rateLimit');
 const bookingHelper = require('../../helpers/bookingHelper');
 const { getRandomPromo } = require('../../helpers/promoHelper');
@@ -100,14 +99,6 @@ const createBooking = async (data) => {
         // Hitung total harga semua layanan
         let total_harga = layananWithCategory.reduce((sum, l) => sum + parseFloat(l.harga), 0);
         let product_detail = {};
-
-        if (categories.includes('Smoothing') && !smoothing_product) {
-            smoothing_product = { ...DEFAULT_PRODUCTS.smoothing };
-        }
-
-        if (categories.includes('Keratin') && !keratin_product) {
-            keratin_product = { ...DEFAULT_PRODUCTS.keratin };
-        }
 
         let productResults = [];
 
@@ -256,7 +247,6 @@ const createBooking = async (data) => {
             jam_selesai: jam_selesai_string,
             product_detail,
             special_request: data.special_request,
-            default_products: categories.includes('Smoothing') && !smoothing_product ? true : undefined,
             cancel_timer,
             promo: final_discount_amount > 0 ? {
                 discount_percent: final_discount_percent,
