@@ -107,6 +107,15 @@ const getPublicTestimoni = async (req, res) => {
             testimoniIds
         );
 
+        // Ambil username untuk semua user_id unik
+        const userIds = [...new Set(testimonials.map(t => t.user_id))];
+        const [users] = await pool.query(
+            `SELECT id, username FROM users WHERE id IN (${userIds.map(() => '?').join(',')})`,
+            userIds
+        );
+        const userMap = {};
+        users.forEach(u => { userMap[u.id] = u.username; });
+
         // Mapping testimoni_id ke array layanan
         const layananMap = {};
         relations.forEach(r => {
@@ -114,9 +123,10 @@ const getPublicTestimoni = async (req, res) => {
             layananMap[r.testimoni_id].push({ id: r.layanan_id, nama: r.layanan_nama });
         });
 
-        // Gabungkan ke setiap testimoni
+        // Gabungkan ke setiap testimoni + username
         testimonials.forEach(t => {
             t.layanans = layananMap[t.id] || [];
+            t.username = userMap[t.user_id] || null;
         });
 
         res.json(testimonials);
