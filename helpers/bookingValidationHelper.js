@@ -13,8 +13,8 @@ const isProductUnnecessary = (categories, hair_color, smoothing_product, keratin
         keratin_product
     };
 
+    // Produk yang wajib diisi sesuai kategori
     for (const category of categories) {
-        // Cek jika kategori butuh produk tertentu
         const requiredProducts = KATEGORI_WAJIB_PRODUK[category];
         if (requiredProducts) {
             for (const product of requiredProducts) {
@@ -24,6 +24,18 @@ const isProductUnnecessary = (categories, hair_color, smoothing_product, keratin
             }
         }
     }
+
+    // Tidak boleh ada produk yang diisi jika kategorinya tidak dipilih
+    if (!categories.includes('Cat Rambut') && hair_color) {
+        throw new Error('Produk hair_color hanya boleh diisi jika memilih layanan Cat Rambut');
+    }
+    if (!categories.includes('Smoothing') && smoothing_product) {
+        throw new Error('Produk smoothing_product hanya boleh diisi jika memilih layanan Smoothing');
+    }
+    if (!categories.includes('Keratin') && keratin_product) {
+        throw new Error('Produk keratin_product hanya boleh diisi jika memilih layanan Keratin');
+    }
+
     return false;
 };
 

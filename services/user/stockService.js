@@ -1,11 +1,13 @@
 // File baru untuk pengurangan stok oleh user (booking)
 const { pool } = require('../../db');
 
-const reduceHairColorStock = async (color_id, qty = 1) => {
-    const connection = await pool.getConnection();
+const reduceHairColorStock = async (color_id, qty = 1, trxConnection = null) => {
+    console.log(`[StockService] Mengurangi stok hair_color id=${color_id} qty=${qty}`);
+    const connection = trxConnection || await pool.getConnection();
+    let ownConnection = !trxConnection;
     try {
         const [result] = await connection.query(
-            'SELECT stok FROM hair_colors WHERE id = ?',
+            'SELECT stok FROM hair_colors WHERE id = ? FOR UPDATE',
             [color_id]
         );
         if (!result[0]) throw new Error('Stok hair color tidak ditemukan');
@@ -14,16 +16,18 @@ const reduceHairColorStock = async (color_id, qty = 1) => {
             'UPDATE hair_colors SET stok = stok - ? WHERE id = ?',
             [qty, color_id]
         );
+        console.log(`[StockService] Sukses update stok hair_color id=${color_id}`);
     } finally {
-        connection.release();
+        if (ownConnection) connection.release();
     }
 };
 
-const reduceSmoothingStock = async (product_id, brand_id, qty = 1) => {
-    const connection = await pool.getConnection();
+const reduceSmoothingStock = async (product_id, brand_id, qty = 1, trxConnection = null) => {
+    const connection = trxConnection || await pool.getConnection();
+    let ownConnection = !trxConnection;
     try {
         const [result] = await connection.query(
-            'SELECT stok FROM smoothing_products WHERE id = ? AND brand_id = ?',
+            'SELECT stok FROM smoothing_products WHERE id = ? AND brand_id = ? FOR UPDATE',
             [product_id, brand_id]
         );
         if (!result[0]) throw new Error('Produk smoothing tidak ditemukan');
@@ -33,15 +37,16 @@ const reduceSmoothingStock = async (product_id, brand_id, qty = 1) => {
             [qty, product_id, brand_id]
         );
     } finally {
-        connection.release();
+        if (ownConnection) connection.release();
     }
 };
 
-const reduceKeratinStock = async (product_id, brand_id, qty = 1) => {
-    const connection = await pool.getConnection();
+const reduceKeratinStock = async (product_id, brand_id, qty = 1, trxConnection = null) => {
+    const connection = trxConnection || await pool.getConnection();
+    let ownConnection = !trxConnection;
     try {
         const [result] = await connection.query(
-            'SELECT stok FROM keratin_products WHERE id = ? AND brand_id = ?',
+            'SELECT stok FROM keratin_products WHERE id = ? AND brand_id = ? FOR UPDATE',
             [product_id, brand_id]
         );
         if (!result[0]) throw new Error('Produk keratin tidak ditemukan');
@@ -51,7 +56,7 @@ const reduceKeratinStock = async (product_id, brand_id, qty = 1) => {
             [qty, product_id, brand_id]
         );
     } finally {
-        connection.release();
+        if (ownConnection) connection.release();
     }
 };
 

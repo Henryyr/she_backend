@@ -6,6 +6,7 @@ const { validateBookingTime, validateUserDailyBooking } = require('../../helpers
 const { getRandomPromo } = require('../../helpers/promoHelper');
 
 const createBooking = async (req, res) => {
+    console.log('[BookingController] Masuk createBooking', { body: req.body, user: req.user });
     try {
         const cleanBody = JSON.parse(JSON.stringify(req.body));
         if (!cleanBody || Object.keys(cleanBody).length === 0) {
@@ -36,6 +37,7 @@ const createBooking = async (req, res) => {
         }
         try {
             const result = await bookingService.createBooking(bookingData);
+            console.log('[BookingController] Booking berhasil', result);
             try {
                 if (req.user.email) {
                     await emailService.sendBookingInformation(req.user.email, result);
@@ -49,17 +51,20 @@ const createBooking = async (req, res) => {
             }
             res.json(result);
         } catch (error) {
+            console.error('[BookingController] Booking gagal:', error);
             // Tangkap error validasi produk dan error lain dari service
             return res.status(400).json({
                 error: 'Booking gagal',
-                details: error.message,
+                details: error.message || error.toString(),
                 timestamp: new Date().toISOString()
             });
         }
     } catch (error) {
+        console.error('[BookingController] Error luar:', error);
+        // Tangkap error parsing JSON atau error lain di luar blok try di atas
         return res.status(400).json({
             error: 'Invalid request body',
-            details: error.message,
+            details: error.message || error.toString(),
             timestamp: new Date().toISOString()
         });
     }
