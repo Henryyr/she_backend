@@ -59,8 +59,11 @@ const createBooking = async (data) => {
 
         const categories = layananWithCategory.map(l => l.kategori_nama);
 
-        if (categories.includes('Cat Rambut') && !hair_color) {
-            throw new Error('Layanan Cat Rambut membutuhkan pemilihan warna');
+        // Validasi produk hanya jika kategori memang membutuhkan produk
+        if (categories.includes('Cat Rambut')) {
+            if (!hair_color) {
+                throw new Error('Layanan Cat Rambut membutuhkan pemilihan warna');
+            }
         }
 
         if (bookingValidationHelper.isIncompatibleCombo(categories)) {
@@ -71,9 +74,8 @@ const createBooking = async (data) => {
             throw new Error("Tidak bisa booking layanan dari kategori yang sama sekaligus. Silakan booking terpisah.");
         }
 
-        if (bookingValidationHelper.isProductUnnecessary(categories, hair_color, smoothing_product, keratin_product)) {
-            throw new Error("Beberapa layanan yang dipilih tidak memerlukan produk tambahan");
-        }
+        // Validasi produk hanya jika kategori memang membutuhkan produk
+        bookingValidationHelper.isProductUnnecessary(categories, hair_color, smoothing_product, keratin_product);
 
         // Cek jumlah booking user (hanya status aktif)
         const [bookingCountRows] = await connection.query(
@@ -102,35 +104,49 @@ const createBooking = async (data) => {
 
         let productResults = [];
 
-        if (hair_color) {
-            const [hairColorResults] = await connection.query(`
-                SELECT 'hair_color' as type, hc.*, hp.harga_dasar, pb.nama as brand_nama
-                FROM hair_colors hc
-                JOIN hair_products hp ON hc.product_id = hp.id
-                JOIN product_brands pb ON hp.brand_id = pb.id
-                WHERE hc.id = ?
-            `, [hair_color.color_id]);
-            productResults = [...productResults, ...hairColorResults];
-        }
+        try {
+            if (hair_color) {
+                const [hairColorResults] = await connection.query(`
+                    SELECT 'hair_color' as type, hc.*, hp.harga_dasar, pb.nama as brand_nama
+                    FROM hair_colors hc
+                    JOIN hair_products hp ON hc.product_id = hp.id
+                    JOIN product_brands pb ON hp.brand_id = pb.id
+                    WHERE hc.id = ? AND hc.product_id = ? AND hp.brand_id = ?
+                `, [hair_color.color_id, hair_color.product_id, hair_color.brand_id]);
+                if (!hairColorResults || hairColorResults.length === 0) {
+                    throw new Error('Warna rambut yang dipilih tidak ditemukan');
+                }
+                productResults = [...productResults, ...hairColorResults];
+            }
 
-        if (smoothing_product) {
-            const [smoothingResults] = await connection.query(`
-                SELECT 'smoothing' as type, sp.*, pb.nama as brand_nama
-                FROM smoothing_products sp
-                JOIN product_brands pb ON sp.brand_id = pb.id
-                WHERE sp.id = ? AND sp.brand_id = ?
-            `, [smoothing_product.product_id, smoothing_product.brand_id]);
-            productResults = [...productResults, ...smoothingResults];
-        }
+            if (smoothing_product) {
+                const [smoothingResults] = await connection.query(`
+                    SELECT 'smoothing' as type, sp.*, pb.nama as brand_nama
+                    FROM smoothing_products sp
+                    JOIN product_brands pb ON sp.brand_id = pb.id
+                    WHERE sp.id = ? AND sp.brand_id = ?
+                `, [smoothing_product.product_id, smoothing_product.brand_id]);
+                if (!smoothingResults || smoothingResults.length === 0) {
+                    throw new Error('Produk smoothing yang dipilih tidak ditemukan');
+                }
+                productResults = [...productResults, ...smoothingResults];
+            }
 
-        if (keratin_product) {
-            const [keratinResults] = await connection.query(`
-                SELECT 'keratin' as type, kp.*, pb.nama as brand_nama
-                FROM keratin_products kp
-                JOIN product_brands pb ON kp.brand_id = pb.id
-                WHERE kp.id = ? AND kp.brand_id = ?
-            `, [keratin_product.product_id, keratin_product.brand_id]);
-            productResults = [...productResults, ...keratinResults];
+            if (keratin_product) {
+                const [keratinResults] = await connection.query(`
+                    SELECT 'keratin' as type, kp.*, pb.nama as brand_nama
+                    FROM keratin_products kp
+                    JOIN product_brands pb ON kp.brand_id = pb.id
+                    WHERE kp.id = ? AND kp.brand_id = ?
+                `, [keratin_product.product_id, keratin_product.brand_id]);
+                if (!keratinResults || keratinResults.length === 0) {
+                    throw new Error('Produk keratin yang dipilih tidak ditemukan');
+                }
+                productResults = [...productResults, ...keratinResults];
+            }
+        } catch (err) {
+            await connection.rollback();
+            throw err;
         }
 
         productResults.forEach(result => {
@@ -149,6 +165,9 @@ const createBooking = async (data) => {
                     break;
             }
         });
+
+        // Bulatkan total_harga hanya di sini, sebelum digunakan untuk insert dan response
+        total_harga = Math.round(total_harga);
 
         // Promo hanya untuk smoothing keratin (id=5) dan hanya jika booking hanya layanan_id=5
         const isOnlySmoothingKeratin = layanan_ids.length === 1 && layanan_ids[0] === 5;
@@ -174,11 +193,11 @@ const createBooking = async (data) => {
             final_is_new_user = true;
             final_promo_target_layanan_id = promo_target_layanan_id;
             final_promo_target_layanan_harga = promo_target_layanan_harga;
-            total_harga = total_harga - discount_amount;
+            total_harga = Math.round(total_harga - discount_amount);
         } else if (!is_new_user && discount_percent > 0) {
             final_discount_amount = discount_amount;
             final_discount_percent = discount_percent;
-            total_harga = total_harga - discount_amount;
+            total_harga = Math.round(total_harga - discount_amount);
         }
 
         const bookingNumber = await bookingHelper.generateBookingNumber();
@@ -211,13 +230,13 @@ const createBooking = async (data) => {
         }
 
         if (hair_color) {
-            await stockService.reduceHairColorStock(hair_color.color_id, 1);
+            await stockService.reduceHairColorStock(hair_color.color_id, 1, connection);
         }
         if (smoothing_product) {
-            await stockService.reduceSmoothingStock(smoothing_product.product_id, smoothing_product.brand_id, 1);
+            await stockService.reduceSmoothingStock(smoothing_product.product_id, smoothing_product.brand_id, 1, connection);
         }
         if (keratin_product) {
-            await stockService.reduceKeratinStock(keratin_product.product_id, keratin_product.brand_id, 1);
+            await stockService.reduceKeratinStock(keratin_product.product_id, keratin_product.brand_id, 1, connection);
         }
 
         await connection.commit();
@@ -232,6 +251,17 @@ const createBooking = async (data) => {
             cancel_timer = Math.max(0, Math.floor((batasCancel.getTime() - now.getTime()) / 1000));
         } catch (e) {
             cancel_timer = null;
+        }
+
+        // Hapus stok dari product_detail sebelum return
+        if (product_detail.hair_color && product_detail.hair_color.stok !== undefined) {
+            delete product_detail.hair_color.stok;
+        }
+        if (product_detail.smoothing && product_detail.smoothing.stok !== undefined) {
+            delete product_detail.smoothing.stok;
+        }
+        if (product_detail.keratin && product_detail.keratin.stok !== undefined) {
+            delete product_detail.keratin.stok;
         }
 
         return {

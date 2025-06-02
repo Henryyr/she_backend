@@ -12,8 +12,9 @@ const uploadOptions = {
     folder: 'testimoni',
     allowed_formats: ['jpg', 'png', 'jpeg'],
     transformation: [
-        { width: 800, height: 800, crop: 'limit' },
-        { fetch_format: 'auto', quality: 'auto' }
+        { width: 1000, crop: 'scale' },
+        { quality: 'auto' },
+        { fetch_format: 'auto' }
     ]
 };
 

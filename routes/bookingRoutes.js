@@ -12,7 +12,6 @@ const errorHandler = require('../middleware/errorHandler');
 // Middleware
 router.use(jsonSanitizer);
 router.use(requestLogger);
-router.use(errorHandler);
 
 // Routes
 router.post('/', authenticate, bookingLimiter, bookingController.createBooking);
@@ -21,5 +20,8 @@ router.post('/available-slots', authenticate, bookingController.postAvailableSlo
 router.get('/new-user-promo', authenticate, bookingController.checkNewUserPromoEligibility);
 router.get('/:id', authenticate, bookingController.getBookingById);
 router.put('/:id/cancel', authenticate, bookingController.cancelBooking);
+
+// Error handler harus paling bawah
+router.use(errorHandler);
 
 module.exports = router;

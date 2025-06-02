@@ -41,7 +41,7 @@ app.use((req, res, next) => {
 
 // CORS
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? ['https://shesalon.web.app']
+  ? ['https://shesalon.store']
   : (process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
       : ['http://localhost:3000']);
@@ -162,6 +162,8 @@ app.use((err, _req, res, _next) => {
   }
 
   if (res.headersSent) {
+    // Jika headers sudah dikirim, log error saja
+    console.error('Unhandled error after headers sent:', err);
     return;
   }
 

@@ -2,14 +2,18 @@ const multer = require('multer');
 const path = require('path');
 
 function checkFileType(file, cb) {
-    const filetypes = /jpeg|jpg|png/;
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = filetypes.test(file.mimetype);
+    const allowedTypes = ['jpeg', 'jpg', 'png'];
 
-    if (mimetype && extname) {
-        return cb(null, true);
+    const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
+    const mime = file.mimetype.split('/')[1];
+
+    const isExtAllowed = allowedTypes.includes(ext);
+    const isMimeAllowed = allowedTypes.includes(mime);
+
+    if (isExtAllowed && isMimeAllowed) {
+        cb(null, true);
     } else {
-        cb('Error: Images Only!');
+        cb(new Error('Error: Only JPEG, JPG, and PNG images are allowed!'));
     }
 }
 
