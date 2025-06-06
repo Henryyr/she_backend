@@ -1,4 +1,6 @@
 const authService = require('../../services/user/authService');
+const emailService = require('../../services/user/emailService');
+
 const register = async (req, res) => {
     try {
         const result = await authService.registerUser(req.body);
@@ -47,9 +49,38 @@ const getProfile = async (req, res) => {
     }
 };
 
+const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: "Email wajib diisi" });
+        }
+        const result = await authService.requestPasswordReset(email);
+        if (result && result.token && result.user) {
+            await emailService.sendPasswordResetEmail(result.user.email, result.user.fullname, result.token);
+        }
+        // Always return success for security
+        res.json({ message: "Jika email terdaftar, link reset password telah dikirim." });
+    } catch (error) {
+        res.status(500).json({ error: "Gagal memproses permintaan reset password" });
+    }
+};
+
+const resetPassword = async (req, res) => {
+    try {
+        const { token, password, confirmation_password } = req.body;
+        await authService.resetPassword(token, password, confirmation_password);
+        res.json({ message: "Password berhasil direset. Silakan login dengan password baru Anda." });
+    } catch (error) {
+        res.status(error.status || 500).json({ error: error.message });
+    }
+};
+
 module.exports = {
     register,
     login,
     logout,
-    getProfile
+    getProfile,
+    forgotPassword,
+    resetPassword
 };

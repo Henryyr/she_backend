@@ -41,7 +41,15 @@ const bookingLimiter = rateLimit({
     legacyHeaders: false
 });
 
+// Forgot password limiter
+const forgotLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5, // max 5 request per 15 menit per IP
+    message: { error: "Terlalu banyak permintaan reset password, coba lagi nanti." }
+});
+
 module.exports = {
     RATE_LIMIT,
-    bookingLimiter
+    bookingLimiter,
+    forgotLimiter
 };

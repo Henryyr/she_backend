@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { pool } = require('../../db');
 const { validatePassword } = require('../../utils/validation');
 const https = require('https');
+const crypto = require('crypto');
 
 // --- Brute force protection ---
 const loginAttempts = {};
@@ -227,11 +228,65 @@ const cleanupExpiredTokens = async () => {
     }
 };
 
+const PASSWORD_RESET_EXPIRY_MINUTES = 60;
+
+// Generate and save password reset token
+const requestPasswordReset = async (email) => {
+    // Cari user
+    const [users] = await pool.query('SELECT id, fullname, email FROM users WHERE email = ?', [email]);
+    if (users.length === 0) {
+        // Untuk keamanan, jangan bocorkan email tidak ditemukan
+        return;
+    }
+    const user = users[0];
+    // Generate token unik
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires_at = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MINUTES * 60 * 1000);
+
+    // Simpan ke tabel password_resets (hapus token lama user ini)
+    await pool.query('DELETE FROM password_resets WHERE user_id = ?', [user.id]);
+    await pool.query(
+        'INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)',
+        [user.id, token, expires_at]
+    );
+    return { token, user };
+};
+
+// Validasi token dan reset password
+const resetPassword = async (token, newPassword, confirmationPassword) => {
+    if (!token || !newPassword || !confirmationPassword) {
+        throw { status: 400, message: "Data tidak lengkap" };
+    }
+    if (newPassword !== confirmationPassword) {
+        throw { status: 400, message: "Konfirmasi password tidak cocok" };
+    }
+    if (!validatePassword(newPassword)) {
+        throw { status: 400, message: "Password harus minimal 8 karakter, mengandung huruf dan angka" };
+    }
+    // Cari token valid
+    const [rows] = await pool.query(
+        'SELECT pr.user_id, u.email FROM password_resets pr JOIN users u ON pr.user_id = u.id WHERE pr.token = ? AND pr.expires_at > NOW()',
+        [token]
+    );
+    if (rows.length === 0) {
+        throw { status: 400, message: "Token tidak valid atau sudah kadaluarsa" };
+    }
+    const user_id = rows[0].user_id;
+    // Update password user
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user_id]);
+    // Hapus token
+    await pool.query('DELETE FROM password_resets WHERE user_id = ?', [user_id]);
+    return true;
+};
+
 module.exports = {
     registerUser,
     loginUser,
     getProfile,
     blacklistToken,
     isTokenBlacklisted,
-    cleanupExpiredTokens // tetap diekspor untuk dipakai cron
+    cleanupExpiredTokens, // tetap diekspor untuk dipakai cron
+    requestPasswordReset,
+    resetPassword,
 };
