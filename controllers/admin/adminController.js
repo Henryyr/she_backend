@@ -4,6 +4,7 @@ const bookingController = require('./bookingController');
 const transactionController = require('./transactionController');
 const productController = require('./productController');
 const testimoniController = require('./testimoniController');
+const voucherController = require('./voucherController')
 
 module.exports = {
     ...dashboardController,
@@ -11,5 +12,6 @@ module.exports = {
     ...bookingController,
     ...transactionController,
     ...productController,
-    ...testimoniController
+    ...testimoniController,
+    ...voucherController
 };
