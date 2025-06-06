@@ -286,7 +286,7 @@ module.exports = {
     getProfile,
     blacklistToken,
     isTokenBlacklisted,
-    cleanupExpiredTokens, // tetap diekspor untuk dipakai cron
+    cleanupExpiredTokens,
     requestPasswordReset,
     resetPassword,
 };

@@ -48,5 +48,8 @@ router.get('/products/keratin', adminController.getAdminKeratinProducts);
 router.get('/testimonis', adminController.getAllTestimoni);
 router.delete('/testimonis/:id', adminController.deleteTestimoni);
 router.put('/testimonis/:id/status', adminController.updateStatus);
+// Vouchers Admin
+router.get('/vouchers', adminController.getAllVouchers);
+router.post('/vouchers', adminController.createVoucher);
 
 module.exports = router;
