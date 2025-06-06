@@ -3,6 +3,7 @@ require('dotenv').config();
 
 const bookingEmailTemplate = require('../../html/booking-information');
 const invoiceEmailTemplate = require('../../html/transactionReceipt');
+const resetPasswordTemplate = require('../../html/reset-password');
 
 // Email transporter setup (Namecheap SMTP)
 const transporter = nodemailer.createTransport({
@@ -108,9 +109,23 @@ const sendInvoice = async (toEmail, customerName, invoiceData) => {
   }
 };
 
+// Fungsi khusus kirim email reset password
+const sendPasswordResetEmail = async (toEmail, fullname, resetToken) => {
+  try {
+    const resetUrl = `https://shesalon.store/reset-password?token=${resetToken}`;
+    const { subject, text, html } = resetPasswordTemplate({ fullname, resetUrl });
+    await sendEmail(toEmail, subject, text, html);
+    console.log(`[EmailService] Password reset email sent to: ${toEmail}`);
+  } catch (error) {
+    console.error('[EmailService] Error sending password reset email:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   sendEmail,
   sendTestEmailToUser,
   sendBookingInformation,
-  sendInvoice
+  sendInvoice,
+  sendPasswordResetEmail
 };
