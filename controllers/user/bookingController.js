@@ -23,7 +23,8 @@ const createBooking = async (req, res) => {
             hair_color: cleanBody.hair_color,
             smoothing_product: cleanBody.smoothing_product,
             keratin_product: cleanBody.keratin_product,
-            special_request: cleanBody.special_request || null
+            special_request: cleanBody.special_request || null,
+            voucher_code: cleanBody.voucher_code || null
         };
         try {
             await validateBookingTime(bookingData.tanggal, bookingData.jam_mulai, req.user.id);
