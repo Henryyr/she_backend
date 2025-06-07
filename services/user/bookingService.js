@@ -14,8 +14,16 @@ const createBooking = async (data) => {
   const connection = await pool.getConnection();
 
   let layananWithCategory = [];
-  let voucher = null;
-  let promo = null;
+  let voucher = {
+    id: null,
+    discount: 0,
+    message: "Tidak ada voucher yang diterapkan.",
+  };
+  let promo = {
+    discount_percent: 0,
+    discount_amount: 0,
+    message: "Tidak ada promo yang diterapkan.",
+  };
 
   try {
     const [requests] = await connection.query(
@@ -218,8 +226,6 @@ const createBooking = async (data) => {
           message: `Voucher "${voucher_code}" tidak valid: ${voucherError.message}.`,
         };
       }
-    } else {
-      voucher = null; // No voucher applied
     }
 
     // Bulatkan final_price hanya di sini, sebelum digunakan untuk insert dan response
