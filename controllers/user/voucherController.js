@@ -1,3 +1,5 @@
+const voucherService = require("../../services/user/voucherService");
+
 const validateVoucher = async (req, res) => {
   try {
     const { code } = req.body;
@@ -8,4 +10,9 @@ const validateVoucher = async (req, res) => {
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }
+};
+
+
+module.exports = {
+  validateVoucher,
 };
