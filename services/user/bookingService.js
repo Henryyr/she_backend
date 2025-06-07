@@ -192,24 +192,30 @@ const createBooking = async (data) => {
     });
 
     // Apply voucher discount
+    let discount = 0;
+    let final_price = total_harga;
+    let voucher_id = null;
+
     if (voucher_code) {
       try {
         const voucherResult = await voucherService.validateVoucher(
           voucher_code,
           total_harga
         );
+        voucher_id = voucherResult.voucherId;
+        discount = voucherResult.discount;
+        final_price = voucherResult.finalPrice;
         voucher = {
-          id: voucherResult.voucherId,
-          discount: voucherResult.discount,
+          id: voucher_id,
+          discount,
         };
-        total_harga = voucherResult.finalPrice;
       } catch (voucherError) {
         throw new Error(`Voucher tidak valid: ${voucherError.message}`);
       }
     }
 
-    // Bulatkan total_harga hanya di sini, sebelum digunakan untuk insert dan response
-    total_harga = Math.round(total_harga);
+    // Bulatkan final_price hanya di sini, sebelum digunakan untuk insert dan response
+    final_price = Math.round(final_price);
 
     // Promo hanya untuk smoothing keratin (id=5) dan hanya jika booking hanya layanan_id=5
     const isOnlySmoothingKeratin =
@@ -223,7 +229,7 @@ const createBooking = async (data) => {
     } = getRandomPromo(
       bookingCount,
       lastBookingHadPromo,
-      total_harga,
+      final_price,
       layanan_ids,
       layananWithCategory
     );
@@ -241,11 +247,11 @@ const createBooking = async (data) => {
       final_is_new_user = true;
       final_promo_target_layanan_id = promo_target_layanan_id;
       final_promo_target_layanan_harga = promo_target_layanan_harga;
-      total_harga = Math.round(total_harga - discount_amount);
+      final_price = Math.round(final_price - discount_amount);
     } else if (!is_new_user && discount_percent > 0) {
       final_discount_amount = discount_amount;
       final_discount_percent = discount_percent;
-      total_harga = Math.round(total_harga - discount_amount);
+      final_price = Math.round(final_price - discount_amount);
     }
 
     const bookingNumber = await bookingHelper.generateBookingNumber();
@@ -259,8 +265,8 @@ const createBooking = async (data) => {
 
     const [insertResult] = await connection.query(
       `INSERT INTO booking /*+ BATCH_INSERT */ 
-            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, promo_discount_percent, promo_discount_amount)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
+            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, promo_discount_percent, promo_discount_amount, voucher_id, discount, final_price)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         user_id,
         tanggal,
@@ -268,9 +274,12 @@ const createBooking = async (data) => {
         jam_selesai_string,
         bookingNumber,
         total_harga,
-        null,
+        data.special_request || null,
         final_discount_percent,
         final_discount_amount,
+        voucher_id,
+        discount,
+        final_price,
       ]
     );
 
@@ -359,7 +368,7 @@ const createBooking = async (data) => {
       booking_id,
       booking_number: bookingNumber,
       layanan_id: layanan_ids,
-      total_harga,
+      total_harga: final_price,
       status: "pending",
       layanan: layananWithCategory.map((l) => l.nama).join(" + "),
       kategori: categories.join(" + "),
@@ -367,7 +376,7 @@ const createBooking = async (data) => {
       jam_mulai,
       jam_selesai: jam_selesai_string,
       product_detail,
-      special_request: null,
+      special_request: data.special_request || null,
       voucher,
       cancel_timer,
     };
