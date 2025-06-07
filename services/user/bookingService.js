@@ -14,7 +14,7 @@ const createBooking = async (data) => {
   const connection = await pool.getConnection();
 
   let layananWithCategory = [];
-  let voucherDiscount = 0;
+  let voucher = null;
 
   try {
     const [requests] = await connection.query(
@@ -198,7 +198,10 @@ const createBooking = async (data) => {
           voucher_code,
           total_harga
         );
-        voucherDiscount = voucherResult.discount;
+        voucher = {
+          id: voucherResult.voucherId,
+          discount: voucherResult.discount,
+        };
         total_harga = voucherResult.finalPrice;
       } catch (voucherError) {
         throw new Error(`Voucher tidak valid: ${voucherError.message}`);
@@ -254,11 +257,10 @@ const createBooking = async (data) => {
     jam_selesai.setMinutes(jam_selesai.getMinutes() + total_estimasi);
     const jam_selesai_string = jam_selesai.toTimeString().split(" ")[0];
 
-    // Tambahkan promo_discount_percent dan promo_discount_amount ke query insert
     const [insertResult] = await connection.query(
       `INSERT INTO booking /*+ BATCH_INSERT */ 
-            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, promo_discount_percent, promo_discount_amount, voucher_discount)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, promo_discount_percent, promo_discount_amount)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
       [
         user_id,
         tanggal,
@@ -266,10 +268,9 @@ const createBooking = async (data) => {
         jam_selesai_string,
         bookingNumber,
         total_harga,
-        data.special_request,
+        null,
         final_discount_percent,
         final_discount_amount,
-        voucherDiscount,
       ]
     );
 
@@ -366,22 +367,9 @@ const createBooking = async (data) => {
       jam_mulai,
       jam_selesai: jam_selesai_string,
       product_detail,
-      special_request: data.special_request,
+      special_request: null,
+      voucher,
       cancel_timer,
-      voucher_discount: voucherDiscount > 0 ? voucherDiscount : undefined,
-      promo:
-        final_discount_amount > 0
-          ? {
-              discount_percent: final_discount_percent,
-              discount_amount: final_discount_amount,
-              message: final_is_new_user
-                ? "Selamat! Promo 20% hanya berlaku untuk layanan Smoothing Keratin pada booking pertama Anda."
-                : `Promo aktif: diskon ${final_discount_percent}% untuk pelanggan aktif!`,
-              is_new_user: final_is_new_user,
-              promo_target_layanan_id: final_promo_target_layanan_id,
-              promo_target_layanan_harga: final_promo_target_layanan_harga,
-            }
-          : undefined,
     };
   } catch (err) {
     await connection.rollback();
