@@ -18,9 +18,9 @@ const validateVoucher = async (code, originalPrice) => {
 
   let discount = 0;
   if (voucher.discount_type === "percentage") {
-    discount = (originalPrice * voucher.discount_value) / 100;
+    discount = Math.round((originalPrice * voucher.discount_value) / 100);
   } else {
-    discount = voucher.discount_value;
+    discount = Math.round(voucher.discount_value);
   }
 
   const finalPrice = Math.max(0, originalPrice - discount);
