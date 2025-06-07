@@ -1,6 +1,4 @@
-const { pool } = require("../../db");
-
-const validateVoucher = async (code, originalPrice) => {
+const validateVoucher = async (code) => {
   const [vouchers] = await pool.query(
     `SELECT * FROM vouchers WHERE code = ? AND is_active = 1`,
     [code]
@@ -16,17 +14,12 @@ const validateVoucher = async (code, originalPrice) => {
   if (voucher.usage_limit !== null && voucher.used_count >= voucher.usage_limit)
     throw new Error("Voucher sudah habis digunakan");
 
-  let discount = 0;
-  if (voucher.discount_type === "percentage") {
-    discount = Math.round((originalPrice * voucher.discount_value) / 100);
-  } else {
-    discount = Math.round(voucher.discount_value);
-  }
-
-  const finalPrice = Math.max(0, originalPrice - discount);
-  return { discount, finalPrice, voucherId: voucher.id };
-};
-
-module.exports = {
-  validateVoucher,
+  return {
+    code: voucher.code,
+    description: voucher.description,
+    discount_type: voucher.discount_type,
+    discount_value: voucher.discount_value,
+    valid_from: voucher.valid_from,
+    valid_until: voucher.valid_until,
+  };
 };
