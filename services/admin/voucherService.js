@@ -35,7 +35,19 @@ const getAllVouchers = async () => {
   return vouchers;
 };
 
+const deleteVoucherByVoucherId = async (id) => {
+  const [result] = await pool.query(
+    `DELETE FROM vouchers WHERE id = ?`,
+    [id]
+  );
+
+  return result.affectedRows > 0;
+};
+
+
+
 module.exports = {
   createVoucher,
   getAllVouchers,
+  deleteVoucherByVoucherId
 };
