@@ -10,11 +10,17 @@ const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) 
             TIME_FORMAT(b.jam_mulai, '%H:%i') as start_time,
             TIME_FORMAT(b.jam_selesai, '%H:%i') as end_time,
             GROUP_CONCAT(l.nama SEPARATOR ', ') as services,
-            b.status
+            b.status,
+            t.total_harga,
+            t.dp_amount,
+            t.paid_amount,
+            (t.total_harga - IFNULL(t.paid_amount, 0)) AS sisa_bayar,
+            t.payment_status
         FROM booking b
         JOIN users u ON b.user_id = u.id
         JOIN booking_layanan bl ON b.id = bl.booking_id
         JOIN layanan l ON bl.layanan_id = l.id
+        LEFT JOIN transaksi t ON t.booking_id = b.id
     `;
     let whereClauses = [];
     let params = [];
