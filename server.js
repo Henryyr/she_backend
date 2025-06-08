@@ -8,7 +8,8 @@ const { setIO } = require('./socketInstance');
 const { initCronJobs } = require('./utils/cronJobs');
 const checkServerTimeZone = require('./utils/timeChecker');
 
-const PORT = Number(process.env.PORT) || 3000; // Pastikan PORT bertipe number
+const PORT = Number(process.env.PORT) || 3000;
+
 let server;
 let io;
 
@@ -21,26 +22,22 @@ process.on('uncaughtException', (error) => {
     process.exit(1);
 });
 
-// Improved: findAvailablePort menggunakan loop, bukan rekursi
 async function findAvailablePort(startPort) {
     let port = startPort;
     while (true) {
         try {
-            await new Promise((resolve, reject) => {
+            const available = await new Promise((resolve, reject) => {
                 const testServer = http.createServer();
                 testServer.once('error', err => {
                     testServer.close();
-                    if (err.code === 'EADDRINUSE') {
-                        resolve(false);
-                    } else {
-                        reject(err);
-                    }
+                    if (err.code === 'EADDRINUSE') resolve(false);
+                    else reject(err);
                 });
                 testServer.listen(port, () => {
                     testServer.close(() => resolve(true));
                 });
             });
-            return port;
+            if (available) return port;
         } catch (err) {
             throw err;
         }
@@ -50,8 +47,8 @@ async function findAvailablePort(startPort) {
 
 async function startServer() {
     try {
-        // Validate environment variables first
         if (!validateEnv()) {
+            console.error('❌ Environment variables validation failed.');
             process.exit(1);
         }
 
@@ -61,70 +58,65 @@ async function startServer() {
 
         io = new Server(server, {
             cors: {
-                origin: process.env.FRONTEND_URL || "*", // Use env variable
-                methods: ["GET", "POST"],
-                credentials: true
-            }
+                origin: process.env.FRONTEND_URL || '*',
+                methods: ['GET', 'POST'],
+                credentials: true,
+            },
         });
 
         setIO(io);
 
-        // Log port yang akan dicoba
-        console.log(`🔎 Looking for available port starting from ${PORT}...`);
-        // Find available port
-        let availablePort;
-        try {
-            availablePort = await findAvailablePort(PORT);
-        } catch (error) {
-            console.error('❌ Failed to find available port:', error);
-            process.exit(1);
-        }
-
-        server.listen(availablePort, () => {
-            console.log(`🚀 Server running on http://localhost:${availablePort}`);
-            if (availablePort !== PORT) {
-                console.log(`⚠️  Originally tried port ${PORT}, but it was busy. Using port ${availablePort} instead.`);
-            }
-
-            // Initialize cron jobs after server is ready
-            initCronJobs();
-            checkServerTimeZone();
-        });
-
-        // Improved security timeouts
-        server.timeout = 10000; // 10 seconds
-        server.keepAliveTimeout = 5000;
-        server.headersTimeout = 6000;
-        
-        // Limit max connections
-        server.maxConnections = 100;
-        
-        // Enable TCP Keep Alive
-        server.on('connection', socket => {
-            socket.setKeepAlive(true, 60000); // 60 seconds
-        });
-
-        // Socket connection logging
+        // Socket.IO connection handler with join-admin-room
         io.on('connection', (socket) => {
-            console.log('Socket connected:', socket.id);
-            
-            socket.on('disconnect', (reason) => {
-                console.log('Socket disconnected:', socket.id, 'reason:', reason);
-            });
-        });
+    console.log('Socket connected:', socket.id);
 
-        // Tambahkan error handler untuk socket.io
+    // Tambahan: Handler untuk admin join room khusus admin
+    socket.on('join-admin-room', () => {
+        socket.join('admin-room');
+        console.log(`Admin ${socket.id} joined admin-room`);
+        socket.emit('admin-room-joined', {
+            message: 'Berhasil join admin room',
+            socketId: socket.id
+        });
+    });
+
+    socket.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', socket.id, 'reason:', reason);
+    });
+});
+
         io.on('error', (err) => {
             console.error('Socket.IO error:', err);
         });
 
-        // Handle server errors
+        console.log(`🔎 Looking for available port starting from ${PORT}...`);
+        const availablePort = await findAvailablePort(PORT);
+
+        server.listen(availablePort, () => {
+            console.log(`🚀 Server running on http://localhost:${availablePort}`);
+            if (availablePort !== PORT) {
+                console.warn(`⚠️ Originally tried port ${PORT}, but it was busy. Using port ${availablePort} instead.`);
+            }
+            initCronJobs();
+            checkServerTimeZone();
+        });
+
+        // Security and performance timeouts
+        server.timeout = 10000; // 10 sec
+        server.keepAliveTimeout = 5000;
+        server.headersTimeout = 6000;
+        server.maxConnections = 100;
+
+        server.on('connection', (socket) => {
+            socket.setKeepAlive(true, 60000); // keep alive 60 sec
+        });
+
         server.on('error', (error) => {
             if (error.code === 'EADDRINUSE') {
-                console.error(`❌ Port ${error.port} is already in use`);
-                console.log('💡 Try these commands to free up the port:');
+                console.error(`❌ Port ${error.port} is already in use.`);
+                console.log('💡 Commands to free the port:');
                 console.log(`   lsof -ti:${error.port} | xargs kill -9`);
-                console.log(`   Or: pkill -f node`);
+                console.log(`   pkill -f node`);
             } else {
                 console.error('❌ Server error:', error);
             }
@@ -137,20 +129,16 @@ async function startServer() {
     }
 }
 
-// Improved graceful shutdown: tunggu semua koneksi close
 async function gracefulShutdown(signal) {
     console.log(`\n🛑 Received ${signal}, starting graceful shutdown...`);
     if (server) {
         console.log('📡 Closing Socket.IO connections...');
-        if (io) {
-            io.close();
-        }
+        if (io) io.close();
         console.log('🔌 Closing HTTP server...');
         server.close(() => {
             console.log('✅ Server closed successfully');
             process.exit(0);
         });
-        // Cek koneksi aktif, paksa shutdown jika masih ada setelah timeout
         let forced = false;
         setTimeout(() => {
             if (!forced) {
@@ -160,16 +148,14 @@ async function gracefulShutdown(signal) {
             }
         }, 10000);
     } else {
-        console.log('ℹ️  No server instance to close.');
+        console.log('ℹ️ No server instance to close.');
         process.exit(0);
     }
 }
 
-// Handle graceful shutdown signals
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
-// Add process cleanup on exit
 process.on('exit', (code) => {
     console.log(`Process exiting with code: ${code}`);
 });

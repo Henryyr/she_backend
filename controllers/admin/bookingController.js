@@ -1,6 +1,8 @@
 const bookingService = require('../../services/admin/bookingService');
 const dashboardService = require('../../services/admin/dashboardService');
 const userBookingService = require('../../services/user/bookingService');
+const { emitNewBookingToAdmin } = require('../../utils/socketEmitter');
+const { emitBookingStatusUpdatedToAdmin } = require('../../utils/socketEmitter');
 
 const getAllBookings = async (req, res) => {
     try {
@@ -77,6 +79,10 @@ const createOfflineBooking = async (req, res) => {
         };
         // Proses booking menggunakan service user (tanpa email)
         const result = await userBookingService.createBooking(bookingData);
+    emitNewBookingToAdmin({
+        ...result,
+        customer: req.body.customer_name || 'Offline User'
+    });
 
         // Hilangkan promo jika ada
         if (result && result.promo) {
@@ -134,6 +140,7 @@ const deleteBooking = async (req, res) => {
 const confirmBooking = async (req, res) => {
     try {
         const result = await bookingService.updateBookingStatus(req.params.id, 'confirmed');
+        if (result) emitBookingStatusUpdatedToAdmin({ ...result, booking_id: req.params.id });
         if (!result) {
             return res.status(404).json({ message: 'Booking tidak ditemukan' });
         }

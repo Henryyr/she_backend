@@ -1,6 +1,7 @@
 const bookingService = require('../../services/user/bookingService');
 const emailService = require('../../services/user/emailService');
 const { getIO } = require('../../socketInstance');
+const { emitNewBookingToAdmin } = require('../../utils/socketEmitter');
 const dashboardService = require('../../services/admin/dashboardService');
 const { validateBookingTime, validateUserDailyBooking } = require('../../helpers/bookingValidationHelper');
 const { getRandomPromo } = require('../../helpers/promoHelper');
@@ -39,6 +40,10 @@ const createBooking = async (req, res) => {
         try {
             const result = await bookingService.createBooking(bookingData);
             console.log('[BookingController] Booking berhasil', result);
+            emitNewBookingToAdmin({
+        ...result,
+        customer: req.user.fullname || req.user.name || 'User'
+    });
             try {
                 if (req.user.email) {
                     await emailService.sendBookingInformation(req.user.email, result);

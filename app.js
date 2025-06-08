@@ -148,7 +148,7 @@ app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/testimoni', require('./routes/testimoniRoutes'));
 app.use('/api/transaksikategori', require('./routes/transaksikategoriRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
-app.use('/api/email', require('./routes/testRoutes'));
+app.use('/api/test', require('./routes/testRoutes'));
 app.use('/api/vouchers', require('./routes/voucherRoutes'));
 
 // Global error handler
