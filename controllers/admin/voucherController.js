@@ -21,7 +21,7 @@ const createVoucher = async (req, res) => {
   }
 };
 
-const getAllVouchers = async (req, res) => {
+const getAllVouchers = async (res) => {
   try {
     const vouchers = await voucherService.getAllVouchers();
     res.json({ success: true, data: vouchers });
