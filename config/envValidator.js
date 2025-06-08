@@ -5,7 +5,7 @@ const requiredEnvs = {
   DB_PASSWORD: 'string',
   DB_NAME: 'string',
   
-  // Server
+  // nomor
   PORT: 'number',
   NODE_ENV: ['development', 'production', 'test'],
   
