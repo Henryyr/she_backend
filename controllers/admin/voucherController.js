@@ -21,7 +21,7 @@ const createVoucher = async (req, res) => {
   }
 };
 
-const getAllVouchers = async (req, res) => {
+const getAllVouchers = async (res) => {
   try {
     const vouchers = await voucherService.getAllVouchers();
     res.json({ success: true, data: vouchers });
@@ -36,7 +36,35 @@ const getAllVouchers = async (req, res) => {
   }
 };
 
+const deleteVoucher = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deleted = await voucherService.deleteVoucherByVoucherId(id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: "Voucher tidak ditemukan",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Voucher berhasil dihapus",
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Gagal menghapus voucher",
+      error: err.message,
+    });
+  }
+};
+
+
 module.exports = {
   createVoucher,
   getAllVouchers,
+  deleteVoucher
 };
