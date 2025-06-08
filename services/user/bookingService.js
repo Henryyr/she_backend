@@ -200,24 +200,46 @@ const createBooking = async (data) => {
       }
     });
 
-    // Apply voucher discount
+    // Apply voucher discount - UPDATED LOGIC
     let discount = 0;
     let final_price = total_harga;
     let voucher_id = null;
 
     if (voucher_code) {
       try {
+        // NOTE: tambahkan user_id sebagai parameter
         const voucherResult = await voucherService.validateVoucher(
           voucher_code,
-          total_harga
+          user_id,
+          total_harga // Pass total_harga for minimum purchase validation
         );
-        voucher_id = voucherResult.voucherId;
-        discount = voucherResult.discount;
-        final_price = voucherResult.finalPrice;
+        
+        // PASTIKAN voucherId BUKAN undefined/NaN
+        voucher_id = voucherResult.voucherId && !isNaN(voucherResult.voucherId) 
+          ? parseInt(voucherResult.voucherId) 
+          : null;
+        
+        if (!voucher_id) {
+          throw new Error("Invalid voucher ID returned");
+        }
+
+        // Hitung diskon sesuai tipe voucher
+        if (voucherResult.discount_type === 'percentage') {
+          discount = Math.min(
+            (total_harga * voucherResult.discount_value) / 100,
+            voucherResult.max_discount || total_harga
+          );
+        } else if (voucherResult.discount_type === 'fixed') {
+          discount = Math.min(voucherResult.discount_value, total_harga);
+        }
+        
+        // Hitung harga akhir
+        final_price = Math.max(0, total_harga - discount);
+        
         voucher = {
           id: voucher_id,
-          discount,
-          message: `Voucher "${voucher_code}" berhasil diterapkan dengan diskon sebesar ${discount}.`,
+          discount: Math.round(discount),
+          message: `Voucher "${voucher_code}" berhasil diterapkan dengan diskon sebesar Rp ${Math.round(discount).toLocaleString('id-ID')}.`,
         };
       } catch (voucherError) {
         voucher = {
@@ -225,6 +247,8 @@ const createBooking = async (data) => {
           discount: 0,
           message: `Voucher "${voucher_code}" tidak valid: ${voucherError.message}.`,
         };
+        // Reset final_price if voucher fails
+        final_price = total_harga;
       }
     }
 
@@ -333,6 +357,17 @@ const createBooking = async (data) => {
         1,
         connection
       );
+    }
+
+    // Record voucher usage AFTER booking is successfully created
+    if (voucher_id) {
+      try {
+        await voucherService.recordVoucherUsage(user_id, voucher_id, connection);
+      } catch (voucherUsageError) {
+        console.error('Failed to record voucher usage:', voucherUsageError);
+        // Don't throw error here as booking is already created
+        // But log it for monitoring
+      }
     }
 
     await connection.commit();
