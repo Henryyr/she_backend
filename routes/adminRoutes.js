@@ -51,5 +51,6 @@ router.put('/testimonis/:id/status', adminController.updateStatus);
 // Vouchers Admin
 router.get('/vouchers', adminController.getAllVouchers);
 router.post('/vouchers', adminController.createVoucher);
-router.delete("/vouchers/:id", adminController.deleteVoucher);
+router.delete('/vouchers/:id', adminController.deleteVoucher);
+
 module.exports = router;
