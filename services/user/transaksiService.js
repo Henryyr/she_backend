@@ -201,15 +201,16 @@ async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
 
        // Check booking status
        const [bookingResult] = await conn.query(
-           `SELECT id, total_harga, status, promo_discount_percent, promo_discount_amount FROM booking WHERE id = ?`, 
-           [booking_id]
-       );
+    `SELECT id, total_harga, final_price, status, promo_discount_percent, promo_discount_amount FROM booking WHERE id = ?`, 
+    [booking_id]
+);
 
-       if (bookingResult.length === 0) {
-           throw { status: 404, message: "Booking tidak ditemukan" };
-       }
+if (bookingResult.length === 0) {
+    throw { status: 404, message: "Booking tidak ditemukan" };
+}
 
-       const { total_harga, status: bookingStatus, promo_discount_percent, promo_discount_amount } = bookingResult[0];
+const { final_price, status: bookingStatus, promo_discount_percent, promo_discount_amount } = bookingResult[0];
+const total_harga = final_price;
 
        if (bookingStatus === 'completed') {
            throw { status: 400, message: "Booking sudah dibayar" };
@@ -398,11 +399,24 @@ async handleWebhook(webhookData) {
            );
 
            if (paymentStatus === 'paid') {
-               await conn.query(
-                   `UPDATE booking SET status = 'confirmed' WHERE id = ?`,
-                   [transaksi.booking_id]
-               );
-           }
+    await conn.query(
+        `UPDATE booking SET status = 'confirmed' WHERE id = ?`,
+        [transaksi.booking_id]
+    );
+
+    // PATCH: Tandai voucher_used hanya setelah booking lunas
+    const [bookingRows] = await conn.query(
+        `SELECT voucher_id FROM booking WHERE id = ?`,
+        [transaksi.booking_id]
+    );
+    const voucher_id = bookingRows.length > 0 ? bookingRows[0].voucher_id : null;
+    if (voucher_id) {
+        await conn.query(
+            `INSERT IGNORE INTO voucher_usages (user_id, voucher_id) VALUES (?, ?)`,
+            [transaksi.user_id, voucher_id]
+        );
+    }
+}
 
            // Send email receipt
            const emailSubject = paymentStatus === 'paid' ? 
