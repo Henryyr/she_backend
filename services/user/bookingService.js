@@ -434,27 +434,25 @@ const getAllBookings = async (page = 1, limit = 10, user_id) => {
   const connection = await pool.getConnection();
   try {
     const offset = (page - 1) * limit;
-    const [bookings] = await connection.query(
+const [bookings] = await connection.query(
   `
-  SELECT 
-      b.*,
-      l.layanan_names,
-      l.layanan_ids
-  FROM booking b
-  LEFT JOIN (
-      SELECT 
-          bl.booking_id,
-          GROUP_CONCAT(l.nama ORDER BY l.id) AS layanan_names,
-          GROUP_CONCAT(l.id) AS layanan_ids
-      FROM booking_layanan bl
-      JOIN layanan l ON bl.layanan_id = l.id
-      GROUP BY bl.booking_id
-  ) l ON b.id = l.booking_id
-  WHERE b.user_id = ?
-  ORDER BY b.created_at DESC
-  LIMIT ? OFFSET ?
+    SELECT
+      b.id, b.customer, b.date, b.start_time, b.end_time,
+      b.status, b.total_harga, b.dp_amount, b.paid_amount,
+      b.sisa_bayar, b.payment_status, b.created_at,
+      GROUP_CONCAT(l.nama ORDER BY l.id) AS layanan_names,
+      GROUP_CONCAT(l.id) AS layanan_ids
+    FROM booking b
+    LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
+    LEFT JOIN layanan l ON bl.layanan_id = l.id
+    GROUP BY
+      b.id, b.customer, b.date, b.start_time, b.end_time,
+      b.status, b.total_harga, b.dp_amount, b.paid_amount,
+      b.sisa_bayar, b.payment_status, b.created_at
+    ORDER BY b.created_at DESC
+    LIMIT ? OFFSET ?
   `,
-  [user_id, limit, offset]
+  [limit, offset]
 );
 
     const [totalCount] = await connection.query(
