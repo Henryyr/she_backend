@@ -5,17 +5,17 @@ const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) 
     let sql = `
         SELECT 
             b.id,
-            u.fullname as customer,
-            DATE_FORMAT(b.tanggal, '%d %b %Y') as date,
-            TIME_FORMAT(b.jam_mulai, '%H:%i') as start_time,
-            TIME_FORMAT(b.jam_selesai, '%H:%i') as end_time,
-            GROUP_CONCAT(l.nama SEPARATOR ', ') as services,
+            u.fullname AS customer,
+            DATE_FORMAT(b.tanggal, '%d %b %Y') AS date,
+            TIME_FORMAT(b.jam_mulai, '%H:%i') AS start_time,
+            TIME_FORMAT(b.jam_selesai, '%H:%i') AS end_time,
+            GROUP_CONCAT(l.nama SEPARATOR ', ') AS services,
             b.status,
-            t.total_harga,
-            t.dp_amount,
-            t.paid_amount,
-            (t.total_harga - IFNULL(t.paid_amount, 0)) AS sisa_bayar,
-            t.payment_status
+            MAX(t.total_harga) AS total_harga,
+            MAX(t.dp_amount) AS dp_amount,
+            MAX(t.paid_amount) AS paid_amount,
+            (MAX(t.total_harga) - IFNULL(MAX(t.paid_amount), 0)) AS sisa_bayar,
+            MAX(t.payment_status) AS payment_status
         FROM booking b
         JOIN users u ON b.user_id = u.id
         JOIN booking_layanan bl ON b.id = bl.booking_id
@@ -42,7 +42,13 @@ const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) 
     }
 
     sql += `
-        GROUP BY b.id
+        GROUP BY 
+            b.id, 
+            u.fullname, 
+            b.tanggal, 
+            b.jam_mulai, 
+            b.jam_selesai, 
+            b.status
         ORDER BY b.created_at DESC
     `;
 
