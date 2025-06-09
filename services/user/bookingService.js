@@ -435,20 +435,27 @@ const getAllBookings = async (page = 1, limit = 10, user_id) => {
   try {
     const offset = (page - 1) * limit;
     const [bookings] = await connection.query(
-      `
-            SELECT /*+ INDEX(b idx_booking_created) */ b.*,
-                GROUP_CONCAT(l.nama ORDER BY l.id) as layanan_names,
-                GROUP_CONCAT(l.id) as layanan_ids
-            FROM booking b
-            LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
-            LEFT JOIN layanan l ON bl.layanan_id = l.id
-            WHERE b.user_id = ?
-            GROUP BY b.id
-            ORDER BY b.created_at DESC
-            LIMIT ? OFFSET ?
-        `,
-      [user_id, limit, offset]
-    );
+  `
+  SELECT 
+      b.*,
+      l.layanan_names,
+      l.layanan_ids
+  FROM booking b
+  LEFT JOIN (
+      SELECT 
+          bl.booking_id,
+          GROUP_CONCAT(l.nama ORDER BY l.id) AS layanan_names,
+          GROUP_CONCAT(l.id) AS layanan_ids
+      FROM booking_layanan bl
+      JOIN layanan l ON bl.layanan_id = l.id
+      GROUP BY bl.booking_id
+  ) l ON b.id = l.booking_id
+  WHERE b.user_id = ?
+  ORDER BY b.created_at DESC
+  LIMIT ? OFFSET ?
+  `,
+  [user_id, limit, offset]
+);
 
     const [totalCount] = await connection.query(
       "SELECT COUNT(*) as total FROM booking WHERE user_id = ?",
