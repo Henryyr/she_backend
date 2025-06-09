@@ -294,24 +294,24 @@ const createBooking = async (data) => {
     const jam_selesai_string = jam_selesai.toTimeString().split(" ")[0];
 
     const [insertResult] = await connection.query(
-      `INSERT INTO booking /*+ BATCH_INSERT */ 
-            (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, promo_discount_percent, promo_discount_amount, voucher_id, discount, final_price)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        user_id,
-        tanggal,
-        jam_mulai,
-        jam_selesai_string,
-        bookingNumber,
-        total_harga,
-        data.special_request || null,
-        discount_percent || 0,
-        discount_amount || 0,
-        voucher_id,
-        discount,
-        final_price,
-      ]
-    );
+  `INSERT INTO booking /*+ BATCH_INSERT */ 
+        (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, promo_discount_percent, promo_discount_amount, voucher_id, discount, final_price)
+        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
+  [
+    user_id,
+    tanggal,
+    jam_mulai,
+    jam_selesai_string,
+    bookingNumber,
+    total_harga,
+    data.special_request || null,
+    discount_percent || 0,
+    discount_amount || 0,
+    voucher_id,
+    discount,
+    final_price,
+  ]
+);
 
     const booking_id = insertResult.insertId;
 
@@ -360,15 +360,15 @@ const createBooking = async (data) => {
     }
 
     // Record voucher usage AFTER booking is successfully created
-    if (voucher_id) {
-      try {
-        await voucherService.recordVoucherUsage(user_id, voucher_id, connection);
-      } catch (voucherUsageError) {
-        console.error('Failed to record voucher usage:', voucherUsageError);
-        // Don't throw error here as booking is already created
-        // But log it for monitoring
-      }
-    }
+    // if (voucher_id) {
+    //   try {
+    //     await voucherService.recordVoucherUsage(user_id, voucher_id, connection);
+    //   } catch (voucherUsageError) {
+    //     console.error('Failed to record voucher usage:', voucherUsageError);
+    //     // Don't throw error here as booking is already created
+    //     // But log it for monitoring
+    //   }
+    // }
 
     await connection.commit();
 
