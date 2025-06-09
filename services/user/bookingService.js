@@ -437,20 +437,22 @@ const getAllBookings = async (page = 1, limit = 10, user_id) => {
 const [bookings] = await connection.query(
   `
     SELECT
-      b.id, b.customer, b.date, b.start_time, b.end_time,
-      b.status, b.total_harga, b.dp_amount, b.paid_amount,
-      b.sisa_bayar, b.payment_status, b.created_at,
-      GROUP_CONCAT(l.nama ORDER BY l.id) AS layanan_names,
-      GROUP_CONCAT(l.id) AS layanan_ids
-    FROM booking b
-    LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
-    LEFT JOIN layanan l ON bl.layanan_id = l.id
-    GROUP BY
-      b.id, b.customer, b.date, b.start_time, b.end_time,
-      b.status, b.total_harga, b.dp_amount, b.paid_amount,
-      b.sisa_bayar, b.payment_status, b.created_at
-    ORDER BY b.created_at DESC
-    LIMIT ? OFFSET ?
+  b.id,
+  b.customer,
+  ANY_VALUE(b.total_harga) AS total_harga,
+  ANY_VALUE(b.dp_amount) AS dp_amount,
+  ANY_VALUE(b.paid_amount) AS paid_amount,
+  ANY_VALUE(b.sisa_bayar) AS sisa_bayar,
+  ANY_VALUE(b.payment_status) AS payment_status,
+  GROUP_CONCAT(l.nama ORDER BY l.id) as layanan_names,
+  GROUP_CONCAT(l.id) as layanan_ids
+FROM booking b
+LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
+LEFT JOIN layanan l ON bl.layanan_id = l.id
+WHERE b.user_id = ?
+GROUP BY b.id
+ORDER BY b.created_at DESC
+LIMIT ? OFFSET ?
   `,
   [limit, offset]
 );
