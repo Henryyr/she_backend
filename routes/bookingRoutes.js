@@ -17,7 +17,6 @@ router.use(requestLogger);
 router.post('/', authenticate, bookingLimiter, bookingController.createBooking);
 router.get('/', authenticate, bookingController.getAllBookings);
 router.post('/available-slots', authenticate, bookingController.postAvailableSlots);
-router.get('/new-user-promo', authenticate, bookingController.checkNewUserPromoEligibility);
 router.get('/:id', authenticate, bookingController.getBookingById);
 router.put('/:id/cancel', authenticate, bookingController.cancelBooking);
 

@@ -194,149 +194,152 @@ async getLocalTransactionData(order_id, user_id = null) {
   }
 
 async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
-   console.log('[TransaksiService] createTransaction started', { booking_id, kategori_transaksi_id, is_dp, user_id });
-   const conn = await pool.getConnection();
-   try {
-       await conn.beginTransaction();
+    console.log('[TransaksiService] createTransaction started', { booking_id, kategori_transaksi_id, is_dp, user_id });
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
 
-       // Check booking status
-       const [bookingResult] = await conn.query(
-    `SELECT id, total_harga, final_price, status, promo_discount_percent, promo_discount_amount FROM booking WHERE id = ?`, 
-    [booking_id]
-);
+      // Ambil data booking beserta info voucher (LEFT JOIN voucher)
+      const [bookingResult] = await conn.query(
+        `SELECT b.id, b.total_harga, b.final_price, b.status, b.voucher_id, b.discount,
+          v.code as voucher_code, v.description as voucher_name
+   FROM booking b
+   LEFT JOIN vouchers v ON b.voucher_id = v.id
+   WHERE b.id = ?`,
+  [booking_id]
+      );
 
-if (bookingResult.length === 0) {
-    throw { status: 404, message: "Booking tidak ditemukan" };
-}
+      if (bookingResult.length === 0) {
+        throw { status: 404, message: "Booking tidak ditemukan" };
+      }
 
-const { final_price, status: bookingStatus, promo_discount_percent, promo_discount_amount } = bookingResult[0];
-const total_harga = final_price;
+      const { final_price, status: bookingStatus, voucher_id, discount, voucher_code, voucher_name } = bookingResult[0];
+      const total_harga = final_price;
 
-       if (bookingStatus === 'completed') {
-           throw { status: 400, message: "Booking sudah dibayar" };
-       }
+      if (bookingStatus === 'completed') {
+        throw { status: 400, message: "Booking sudah dibayar" };
+      }
 
-       // Check existing transaction with more specific conditions
-       const [existingTransaction] = await conn.query(
-           `SELECT id, payment_status, status, dp_amount 
-            FROM transaksi 
-            WHERE booking_id = ? 
-            AND status NOT IN ('failed', 'expired', 'cancelled')`,
-           [booking_id]
-       );
+      // Check existing transaction with more specific conditions
+      const [existingTransaction] = await conn.query(
+        `SELECT id, payment_status, status, dp_amount 
+          FROM transaksi 
+          WHERE booking_id = ? 
+          AND status NOT IN ('failed', 'expired', 'cancelled')`,
+        [booking_id]
+      );
 
-       // Validate transaction state
-       if (existingTransaction.length > 0) {
-           const existing = existingTransaction[0];
-           
-           if (existing.payment_status === 'paid') {
-               throw { status: 400, message: "Booking ini sudah dibayar penuh" };
-           }
-           
-           if (existing.dp_amount > 0) {
-               throw { status: 400, message: "DP untuk booking ini sudah dibuat" };
-           }
-       }
+      if (existingTransaction.length > 0) {
+        const existing = existingTransaction[0];
+        if (existing.payment_status === 'paid') {
+          throw { status: 400, message: "Booking ini sudah dibayar penuh" };
+        }
+        if (existing.dp_amount > 0) {
+          throw { status: 400, message: "DP untuk booking ini sudah dibuat" };
+        }
+      }
 
-       const order_id = `BKG-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(booking_id).padStart(3, '0')}-${Math.random().toString(36).substr(2, 5)}`;
-       const booking_number = order_id;
-       
-       let paid_amount = 0;
-       let transactionStatus = 'pending';
-       let payment_status = 'unpaid';
-       let snapResponse = null;
-       let amountToPay = total_harga;
-       let dp_amount = 0;
+      const order_id = `BKG-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(booking_id).padStart(3, '0')}-${Math.random().toString(36).substr(2, 5)}`;
+      const booking_number = order_id;
 
-       // Handle cash vs non-cash differently
-       if (kategori_transaksi_id === 1) { 
-           // Cash payment - no DP, no online payment
-           paid_amount = 0; 
-           transactionStatus = 'pending'; 
-           payment_status = 'unpaid';
-           dp_amount = 0;
-           amountToPay = total_harga;
-       } else { 
-           // Online payment - always DP (30%)
-           dp_amount = Math.round(total_harga * 0.3);
-           amountToPay = dp_amount; // Always pay DP amount for online payments
+      let paid_amount = 0;
+      let transactionStatus = 'pending';
+      let payment_status = 'unpaid';
+      let snapResponse = null;
+      let amountToPay = total_harga;
+      let dp_amount = 0;
 
-           const parameter = {
-               transaction_details: { order_id, gross_amount: amountToPay },
-               item_details: [{
-                   id: booking_id,
-                   price: amountToPay,
-                   quantity: 1,
-                   name: 'Booking Salon (DP 30%)',
-                   brand: "Salon",
-                   category: "Perawatan"
-               }],
-               customer_details: { user_id }
-           };
+      // Handle cash vs non-cash differently
+      if (kategori_transaksi_id === 1) { 
+        // Cash payment - no DP, no online payment
+        paid_amount = 0; 
+        transactionStatus = 'pending'; 
+        payment_status = 'unpaid';
+        dp_amount = 0;
+        amountToPay = total_harga;
+      } else { 
+        // Online payment - always DP (30%)
+        dp_amount = Math.round(total_harga * 0.3);
+        amountToPay = dp_amount; // Always pay DP amount for online payments
 
-           snapResponse = await snap.createTransaction(parameter);
-       }
+        const parameter = {
+          transaction_details: { order_id, gross_amount: amountToPay },
+          item_details: [{
+            id: booking_id,
+            price: amountToPay,
+            quantity: 1,
+            name: 'Booking Salon (DP 30%)',
+            brand: "Salon",
+            category: "Perawatan"
+          }],
+          customer_details: { user_id }
+        };
 
-       // Insert transaksi
-       const [result] = await conn.query(
-           `INSERT INTO transaksi (
-               user_id, booking_id, total_harga, paid_amount, dp_amount, 
-               kategori_transaksi_id, status, midtrans_order_id, payment_status, booking_number
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-           [user_id, booking_id, total_harga, paid_amount, dp_amount, 
-            kategori_transaksi_id, transactionStatus, order_id, payment_status, booking_number]
-       );
+        snapResponse = await snap.createTransaction(parameter);
+      }
 
-       await conn.commit();
-       
-       console.log('[TransaksiService] createTransaction success', { transaksi_id: result.insertId });
-       return {
-           message: "Transaksi dibuat",
-           transaksi_id: result.insertId,
-           order_id: order_id,
-           midtrans_order_id: order_id,
-           status: transactionStatus,
-           snap_url: snapResponse ? snapResponse.redirect_url : null,
-           dp_amount,
-           remaining_amount: total_harga - dp_amount,
-           payment_status,
-           total_harga,
-           amount_to_pay: amountToPay,
-           payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment (DP)',
-           promo: promo_discount_percent > 0 ? {
-               discount_percent: promo_discount_percent,
-               discount_amount: promo_discount_amount,
-               message: `Promo aktif: diskon ${promo_discount_percent}% untuk pelanggan aktif!`
-           } : undefined
-       };
-   } catch (err) {
-       console.error('[TransaksiService] createTransaction error:', err);
-       await conn.rollback();
-       
-       // Format Midtrans specific errors
-       if (err.ApiResponse && err.ApiResponse.error_messages) {
-           throw {
-               status: 400,
-               message: "Gagal membuat transaksi",
-               details: err.ApiResponse.error_messages
-           };
-       }
-       
-       // Re-throw known errors
-       if (err.status) {
-           throw err;
-       }
+      // Insert transaksi
+      const [result] = await conn.query(
+        `INSERT INTO transaksi (
+            user_id, booking_id, total_harga, paid_amount, dp_amount, 
+            kategori_transaksi_id, status, midtrans_order_id, payment_status, booking_number
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [user_id, booking_id, total_harga, paid_amount, dp_amount, 
+          kategori_transaksi_id, transactionStatus, order_id, payment_status, booking_number]
+      );
 
-       // Handle unexpected errors
-       throw {
-           status: 500,
-           message: "Terjadi kesalahan saat membuat transaksi",
-           details: process.env.NODE_ENV === 'development' ? err.message : undefined
-       };
-   } finally {
-       conn.release();
-   }
-}
+      await conn.commit();
+
+      // Hanya tampilkan info voucher jika ada
+      let voucher = null;
+      if (voucher_id && discount > 0) {
+        voucher = {
+          id: voucher_id,
+          code: voucher_code,
+          name: voucher_name,
+          discount: Math.round(discount),
+          message: `Voucher berhasil diterapkan dengan diskon sebesar Rp ${Math.round(discount).toLocaleString('id-ID')}.`
+        };
+      }
+
+      return {
+        message: "Transaksi dibuat",
+        transaksi_id: result.insertId,
+        order_id: order_id,
+        midtrans_order_id: order_id,
+        status: transactionStatus,
+        snap_url: snapResponse ? snapResponse.redirect_url : null,
+        dp_amount,
+        remaining_amount: total_harga - dp_amount,
+        payment_status,
+        total_harga,
+        amount_to_pay: amountToPay,
+        payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment (DP)',
+        voucher // hanya ini, tidak ada objek promo lagi
+      };
+    } catch (err) {
+      console.error('[TransaksiService] createTransaction error:', err);
+      await conn.rollback();
+
+      if (err.ApiResponse && err.ApiResponse.error_messages) {
+        throw {
+          status: 400,
+          message: "Gagal membuat transaksi",
+          details: err.ApiResponse.error_messages
+        };
+      }
+      if (err.status) {
+        throw err;
+      }
+      throw {
+        status: 500,
+        message: "Terjadi kesalahan saat membuat transaksi",
+        details: process.env.NODE_ENV === 'development' ? err.message : undefined
+      };
+    } finally {
+      conn.release();
+    }
+  }
 
 async handleWebhook(webhookData) {
    console.log('[TransaksiService] handleWebhook started', webhookData);

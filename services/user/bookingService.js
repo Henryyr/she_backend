@@ -3,7 +3,6 @@ const bookingValidationHelper = require("../../helpers/bookingValidationHelper")
 const stockService = require("./stockService");
 const { RATE_LIMIT } = require("../../config/rateLimit");
 const bookingHelper = require("../../helpers/bookingHelper");
-const { getRandomPromo } = require("../../helpers/promoHelper");
 const voucherService = require("../../services/user/voucherService"); // Add voucherService
 
 const createBooking = async (data) => {
@@ -18,11 +17,6 @@ const createBooking = async (data) => {
     id: null,
     discount: 0,
     message: "Tidak ada voucher yang diterapkan.",
-  };
-  let promo = {
-    discount_percent: 0,
-    discount_amount: 0,
-    message: "Tidak ada promo yang diterapkan.",
   };
 
   try {
@@ -98,27 +92,6 @@ const createBooking = async (data) => {
       smoothing_product,
       keratin_product
     );
-
-    // Cek jumlah booking user (hanya status aktif)
-    const [bookingCountRows] = await connection.query(
-      `SELECT COUNT(*) as count FROM booking WHERE user_id = ? AND status NOT IN ('cancelled', 'expired', 'failed')`,
-      [user_id]
-    );
-    const bookingCount = bookingCountRows[0]?.count || 0;
-
-    // Ambil booking terakhir user (cek promo terakhir, hanya status aktif)
-    const [lastBookingRows] = await connection.query(
-      `SELECT id, tanggal, promo_discount_percent 
-             FROM booking 
-             WHERE user_id = ? AND status NOT IN ('cancelled', 'expired') 
-             ORDER BY created_at DESC LIMIT 1`,
-      [user_id]
-    );
-    let lastBookingHadPromo = false;
-    if (lastBookingRows.length > 0) {
-      const lastBooking = lastBookingRows[0];
-      lastBookingHadPromo = lastBooking.promo_discount_percent > 0;
-    }
 
     // Hitung total harga semua layanan
     let total_harga = layananWithCategory.reduce(
@@ -255,35 +228,7 @@ const createBooking = async (data) => {
     // Bulatkan final_price hanya di sini, sebelum digunakan untuk insert dan response
     final_price = Math.round(final_price);
 
-    // Apply promo discount
-    const {
-      discount_percent,
-      discount_amount,
-      is_new_user,
-      promo_target_layanan_id,
-      promo_target_layanan_harga,
-    } = getRandomPromo(
-      bookingCount,
-      lastBookingHadPromo,
-      final_price,
-      layanan_ids,
-      layananWithCategory
-    );
-
-    if (discount_percent > 0) {
-      promo = {
-        discount_percent,
-        discount_amount,
-        is_new_user,
-        promo_target_layanan_id,
-        promo_target_layanan_harga,
-        message: is_new_user
-          ? `Promo user baru: diskon ${discount_percent}% untuk layanan tertentu.`
-          : `Promo aktif: diskon ${discount_percent}% untuk pelanggan aktif.`,
-      };
-      final_price = Math.round(final_price - discount_amount);
-    }
-
+    // Generate booking number
     const bookingNumber = await bookingHelper.generateBookingNumber();
     const total_estimasi = layananWithCategory.reduce(
       (sum, l) => sum + l.estimasi_waktu,
@@ -293,25 +238,24 @@ const createBooking = async (data) => {
     jam_selesai.setMinutes(jam_selesai.getMinutes() + total_estimasi);
     const jam_selesai_string = jam_selesai.toTimeString().split(" ")[0];
 
+    // INSERT booking ke database (TANPA FIELD PROMO)
     const [insertResult] = await connection.query(
-  `INSERT INTO booking /*+ BATCH_INSERT */ 
-        (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, promo_discount_percent, promo_discount_amount, voucher_id, discount, final_price)
-        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
-  [
-    user_id,
-    tanggal,
-    jam_mulai,
-    jam_selesai_string,
-    bookingNumber,
-    total_harga,
-    data.special_request || null,
-    discount_percent || 0,
-    discount_amount || 0,
-    voucher_id,
-    discount,
-    final_price,
-  ]
-);
+      `INSERT INTO booking /*+ BATCH_INSERT */ 
+        (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, voucher_id, discount, final_price)
+        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+      [
+        user_id,
+        tanggal,
+        jam_mulai,
+        jam_selesai_string,
+        bookingNumber,
+        total_harga,
+        data.special_request || null,
+        voucher_id,
+        discount,
+        final_price,
+      ]
+    );
 
     const booking_id = insertResult.insertId;
 
@@ -358,17 +302,6 @@ const createBooking = async (data) => {
         connection
       );
     }
-
-    // Record voucher usage AFTER booking is successfully created
-    // if (voucher_id) {
-    //   try {
-    //     await voucherService.recordVoucherUsage(user_id, voucher_id, connection);
-    //   } catch (voucherUsageError) {
-    //     console.error('Failed to record voucher usage:', voucherUsageError);
-    //     // Don't throw error here as booking is already created
-    //     // But log it for monitoring
-    //   }
-    // }
 
     await connection.commit();
 
@@ -419,7 +352,6 @@ const createBooking = async (data) => {
       product_detail,
       special_request: data.special_request || null,
       voucher,
-      promo,
       cancel_timer,
     };
   } catch (err) {
@@ -564,7 +496,6 @@ const cancelBooking = async (id) => {
 };
 
 const postAvailableSlots = async (tanggal, estimasi_waktu = 60) => {
-  const db = require("../../db");
   const operatingHours = [
     "09:00",
     "10:00",
@@ -579,7 +510,7 @@ const postAvailableSlots = async (tanggal, estimasi_waktu = 60) => {
     "19:00",
   ];
 
-  const [bookings] = await db.pool.query(
+  const [bookings] = await pool.query(
     `SELECT jam_mulai, jam_selesai FROM booking 
          WHERE tanggal = ? AND status NOT IN ('canceled', 'completed')`,
     [tanggal]

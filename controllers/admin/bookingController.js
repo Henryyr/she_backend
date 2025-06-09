@@ -78,10 +78,7 @@ const createOfflineBooking = async (req, res) => {
         // Proses booking menggunakan service user (tanpa email)
         const result = await userBookingService.createBooking(bookingData);
 
-        // Hilangkan promo jika ada
-        if (result && result.promo) {
-            delete result.promo;
-        }
+        // Tidak ada lagi response promo yang perlu dihapus
 
         // Emit dashboard update jika ada socket
         const io = require('../../socketInstance').getIO();
