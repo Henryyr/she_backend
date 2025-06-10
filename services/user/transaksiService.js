@@ -252,40 +252,39 @@ async createTransaction(booking_id, kategori_transaksi_id, is_dp, user_id) {
       const booking_number = order_id;
 
       let paid_amount = 0;
-      let transactionStatus = 'pending';
-      let payment_status = 'unpaid';
-      let snapResponse = null;
-      let amountToPay = total_harga;
-      let dp_amount = 0;
+let transactionStatus = 'pending';
+let payment_status = 'unpaid';
+let snapResponse = null;
+let amountToPay = total_harga;
+let dp_amount = 0;
 
-      // Handle cash vs non-cash differently
-      if (kategori_transaksi_id === 1) { 
-        // Cash payment - no DP, no online payment
-        paid_amount = 0; 
-        transactionStatus = 'pending'; 
-        payment_status = 'unpaid';
-        dp_amount = 0;
-        amountToPay = total_harga;
-      } else { 
-        // Online payment - always DP (30%)
-        dp_amount = Math.round(total_harga * 0.3);
-        amountToPay = dp_amount;
+// Handle cash vs non-cash differently
+if (kategori_transaksi_id === 1) { 
+    paid_amount = 0; 
+    transactionStatus = 'pending'; 
+    payment_status = 'unpaid';
+    dp_amount = 0;
+    amountToPay = total_harga;
+} else { 
+    dp_amount = Math.round(total_harga * 0.3);
+    amountToPay = dp_amount;
+    payment_status = 'dp'; // <--- PATCH DI SINI
 
-        const parameter = {
-          transaction_details: { order_id, gross_amount: amountToPay },
-          item_details: [{
-            id: booking_id,
-            price: amountToPay,
-            quantity: 1,
-            name: 'Booking Salon (DP 30%)',
-            brand: "Salon",
-            category: "Perawatan"
-          }],
-          customer_details: { user_id }
-        };
+    const parameter = {
+      transaction_details: { order_id, gross_amount: amountToPay },
+      item_details: [{
+        id: booking_id,
+        price: amountToPay,
+        quantity: 1,
+        name: 'Booking Salon (DP 30%)',
+        brand: "Salon",
+        category: "Perawatan"
+      }],
+      customer_details: { user_id }
+    };
 
-        snapResponse = await snap.createTransaction(parameter);
-      }
+    snapResponse = await snap.createTransaction(parameter);
+}
 
       // Insert transaksi
       const [result] = await conn.query(
