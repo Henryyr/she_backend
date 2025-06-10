@@ -479,17 +479,37 @@ const getBookingById = async (id) => {
   }
 };
 
-const cancelBooking = async (id) => {
+const cancelBooking = async (id, user_id) => {
   const connection = await pool.getConnection();
   try {
+    await connection.beginTransaction();
+
+    // Update status booking
     const [result] = await connection.query(
-      "UPDATE booking SET status = ? WHERE id = ?",
-      ["cancelled", id]
+      "UPDATE booking SET status = ? WHERE id = ? AND user_id = ?",
+      ["cancelled", id, user_id]
     );
     if (result.affectedRows === 0) {
       throw new Error("Booking tidak ditemukan");
     }
+
+    // PATCH: Hapus voucher_usage jika ada
+    const [booking] = await connection.query(
+      `SELECT voucher_id FROM booking WHERE id = ?`,
+      [id]
+    );
+    if (booking.length > 0 && booking[0].voucher_id) {
+      await pool.query(
+        `DELETE FROM voucher_usages WHERE user_id = ? AND voucher_id = ?`,
+        [user_id, booking[0].voucher_id]
+      );
+    }
+
+    await connection.commit();
     return { message: "Booking berhasil dibatalkan", booking_id: id };
+  } catch (err) {
+    await connection.rollback();
+    throw err;
   } finally {
     connection.release();
   }
