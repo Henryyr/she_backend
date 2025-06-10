@@ -1,6 +1,7 @@
 const bookingService = require('../../services/admin/bookingService');
 const dashboardService = require('../../services/admin/dashboardService');
 const userBookingService = require('../../services/user/bookingService');
+const { getIO } = require('../../socketInstance');
 
 const getAllBookings = async (req, res) => {
     try {
@@ -60,11 +61,10 @@ const getBookingById = async (req, res) => {
 
 const createOfflineBooking = async (req, res) => {
     try {
-        // Pastikan user_id ada
         if (!req.body.user_id) {
             return res.status(400).json({ message: 'User ID diperlukan untuk booking offline' });
         }
-        // Ambil data booking dari body
+
         const bookingData = {
             user_id: req.body.user_id,
             layanan_id: req.body.layanan_id,
@@ -75,15 +75,39 @@ const createOfflineBooking = async (req, res) => {
             keratin_product: req.body.keratin_product,
             special_request: req.body.special_request || null
         };
-        // Proses booking menggunakan service user (tanpa email)
+
         const result = await userBookingService.createBooking(bookingData);
 
-        // Tidak ada lagi response promo yang perlu dihapus
-
-        // Emit dashboard update jika ada socket
-        const io = require('../../socketInstance').getIO();
+        // Emit Socket.IO event for offline booking
+        const io = getIO();
         if (io) {
-            await emitDashboardUpdate(io);
+            try {
+                const bookingNotification = {
+                    id: result.booking_number || result.id,
+                    customer: result.user?.fullname || result.user?.nama || 'Offline Customer',
+                    date: result.tanggal,
+                    start_time: result.jam_mulai,
+                    end_time: result.jam_selesai,
+                    services: result.layanan_names || result.layanan?.map(l => l.nama).join(', ') || 'N/A',
+                    status: result.status || 'confirmed',
+                    booking_number: result.booking_number
+                };
+
+                // Emit to admin room
+                io.to('admin-room').emit('new-booking', {
+                    booking: bookingNotification,
+                    message: `New offline booking created for ${bookingNotification.customer}`,
+                    timestamp: new Date().toISOString(),
+                    isOfflineBooking: true
+                });
+
+                console.log('✅ New offline booking event emitted to admin room');
+
+                // Update dashboard stats
+                await dashboardService.updateDashboardStats(io);
+            } catch (emitErr) {
+                console.error('Socket emit error:', emitErr);
+            }
         }
 
         res.status(201).json({
@@ -97,6 +121,7 @@ const createOfflineBooking = async (req, res) => {
         });
     }
 };
+
 
 const updateBooking = async (req, res) => {
     try {
@@ -134,6 +159,27 @@ const confirmBooking = async (req, res) => {
         if (!result) {
             return res.status(404).json({ message: 'Booking tidak ditemukan' });
         }
+
+        // Emit Socket.IO event for booking confirmation
+        const io = getIO();
+        if (io) {
+            try {
+                io.to('admin-room').emit('booking-status-updated', {
+                    booking_id: parseInt(req.params.id),
+                    status: 'confirmed',
+                    message: `Booking #${req.params.id} has been confirmed`,
+                    timestamp: new Date().toISOString()
+                });
+
+                console.log(`✅ Booking confirmation event emitted: ${req.params.id} -> confirmed`);
+
+                // Update dashboard stats
+                await dashboardService.updateDashboardStats(io);
+            } catch (emitErr) {
+                console.error('Socket emit error:', emitErr);
+            }
+        }
+
         res.json({ message: 'Booking berhasil dikonfirmasi' });
     } catch (error) {
         res.status(500).json({ message: 'Error confirming booking', error: error.message });
@@ -146,6 +192,27 @@ const completeBooking = async (req, res) => {
         if (!result) {
             return res.status(404).json({ message: 'Booking tidak ditemukan' });
         }
+
+        // Emit Socket.IO event for booking completion
+        const io = getIO();
+        if (io) {
+            try {
+                io.to('admin-room').emit('booking-status-updated', {
+                    booking_id: parseInt(req.params.id),
+                    status: 'completed',
+                    message: `Booking #${req.params.id} has been completed`,
+                    timestamp: new Date().toISOString()
+                });
+
+                console.log(`✅ Booking completion event emitted: ${req.params.id} -> completed`);
+
+                // Update dashboard stats
+                await dashboardService.updateDashboardStats(io);
+            } catch (emitErr) {
+                console.error('Socket emit error:', emitErr);
+            }
+        }
+
         res.json({ message: 'Booking berhasil diselesaikan' });
     } catch (error) {
         res.status(500).json({ message: 'Error completing booking', error: error.message });
@@ -158,6 +225,27 @@ const cancelBooking = async (req, res) => {
         if (!result) {
             return res.status(404).json({ message: 'Booking tidak ditemukan' });
         }
+
+        // Emit Socket.IO event for booking cancellation by admin
+        const io = getIO();
+        if (io) {
+            try {
+                io.to('admin-room').emit('booking-status-updated', {
+                    booking_id: parseInt(req.params.id),
+                    status: 'cancelled',
+                    message: `Booking #${req.params.id} has been cancelled by admin`,
+                    timestamp: new Date().toISOString()
+                });
+
+                console.log(`✅ Booking cancellation event emitted: ${req.params.id} -> cancelled`);
+
+                // Update dashboard stats
+                await dashboardService.updateDashboardStats(io);
+            } catch (emitErr) {
+                console.error('Socket emit error:', emitErr);
+            }
+        }
+
         res.json({ message: 'Booking berhasil dibatalkan' });
     } catch (error) {
         res.status(500).json({ message: 'Error cancelling booking', error: error.message });

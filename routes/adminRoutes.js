@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticate, isAdmin } = require('../middleware/auth');
 const adminController = require('../controllers/admin/adminController');
-
+const { getIO } = require('../socketInstance');
 const router = express.Router();
 
 // Middleware autentikasi & admin check untuk semua route admin
@@ -52,5 +52,23 @@ router.put('/testimonis/:id/status', adminController.updateStatus);
 router.get('/vouchers', adminController.getAllVouchers);
 router.post('/vouchers', adminController.createVoucher);
 router.delete('/vouchers/:id', adminController.deleteVoucher);
-
+// test Socket
+router.post('/test/socket', (req, res) => {
+    try {
+        const io = getIO();
+        
+        // Test emit ke admin room
+        io.to('admin-room').emit('test-event', {
+            message: 'Test Socket.IO connection from server',
+            timestamp: new Date().toISOString(),
+            data: req.body
+        });
+        
+        console.log('✅ Test event emitted to admin-room');
+        res.json({ success: true, message: 'Test event sent to admin room' });
+    } catch (error) {
+        console.error('Test socket error:', error);
+        res.status(500).json({ error: 'Failed to send test event' });
+    }
+});
 module.exports = router;
