@@ -365,17 +365,13 @@ if (kategori_transaksi_id === 1) {
 
       const { order_id, transaction_status, gross_amount } = webhookData;
 
-      // Get transaction with user email and booking details
+      // Ambil transaksi yang relevan
       const [transaksiResult] = await conn.query(
-        `SELECT t.*, u.email, b.tanggal, b.jam_mulai, b.jam_selesai, b.voucher_id, b.user_id as booking_user_id,
-          GROUP_CONCAT(l.nama SEPARATOR ', ') as layanan_nama
-          FROM transaksi t
-          JOIN users u ON t.user_id = u.id
-          JOIN booking b ON t.booking_id = b.id
-          JOIN booking_layanan bl ON b.id = bl.booking_id
-          JOIN layanan l ON bl.layanan_id = l.id
-          WHERE t.midtrans_order_id = ? OR t.pelunasan_order_id = ?
-          GROUP BY t.id`,
+        `SELECT t.*, b.id as booking_id
+         FROM transaksi t
+         JOIN booking b ON t.booking_id = b.id
+         WHERE t.midtrans_order_id = ? OR t.pelunasan_order_id = ?
+         GROUP BY t.id`,
         [order_id, order_id]
       );
 
@@ -386,21 +382,18 @@ if (kategori_transaksi_id === 1) {
       const transaksi = transaksiResult[0];
 
       if (transaction_status === "settlement" || transaction_status === "capture") {
-    const newPaidAmount = parseFloat(gross_amount);
+        // Isi paid_amount dengan nominal DP yang dibayar (gross_amount)
+        const newPaidAmount = parseFloat(gross_amount);
 
-    // Hanya ada dua status pembayaran di sistem kamu: DP atau unpaid
-    let paymentStatus = 'DP'; // Tidak pernah 'paid'
-    let newStatus = 'pending'; // Atau 'confirmed' jika ingin otomatis terkonfirmasi setelah DP
-
-    await conn.query(
-      `UPDATE transaksi 
-          SET paid_amount = ?, 
-              status = ?, 
-              payment_status = ?, 
-              updated_at = CURRENT_TIMESTAMP 
-          WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
-      [newPaidAmount, newStatus, paymentStatus, order_id, order_id]
-    );
+        await conn.query(
+          `UPDATE transaksi 
+              SET paid_amount = ?, 
+                  payment_status = 'DP', 
+                  status = 'pending',
+                  updated_at = CURRENT_TIMESTAMP 
+           WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
+          [newPaidAmount, order_id, order_id]
+        );
 
         if (paymentStatus === 'paid') {
           await conn.query(
