@@ -7,8 +7,7 @@ const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) 
             b.id,
             u.fullname AS customer,
             DATE_FORMAT(b.tanggal, '%d %b %Y') AS date,
-            TIME_FORMAT(b.jam_mulai, '%H:%i') AS start_time,
-            TIME_FORMAT(b.jam_selesai, '%H:%i') AS end_time,
+            CONCAT(TIME_FORMAT(b.jam_mulai, '%H:%i'), ' - ', TIME_FORMAT(b.jam_selesai, '%H:%i')) AS time,
             GROUP_CONCAT(l.nama SEPARATOR ', ') AS services,
             b.status,
             MAX(t.total_harga) AS total_harga,
@@ -74,7 +73,22 @@ const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) 
 
     const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
 
-    return { bookings: data, pagination };
+    // Format output agar Paid bisa langsung dipakai di frontend
+    const bookings = data.map(row => ({
+        id: row.id,
+        customer: row.customer,
+        date: row.date,
+        time: row.time,
+        services: row.services,
+        status: row.status,
+        total: row.total_harga,
+        dp: row.dp_amount,
+        paid: row.paid_amount,        // <- ini tampilkan di frontend
+        sisa: row.sisa_bayar,
+        payment_status: row.payment_status
+    }));
+
+    return { bookings, pagination };
 };
 
 const getBookingsByUserId = async (userId, page = 1, limit = 10, status, startDate, endDate) => {
