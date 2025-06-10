@@ -386,23 +386,21 @@ if (kategori_transaksi_id === 1) {
       const transaksi = transaksiResult[0];
 
       if (transaction_status === "settlement" || transaction_status === "capture") {
-        const newPaidAmount = parseFloat(transaksi.paid_amount) + parseFloat(gross_amount);
-        let paymentStatus = 'DP';
-        if (newPaidAmount >= transaksi.total_harga) {
-          paymentStatus = 'paid';
-        }
+    const newPaidAmount = parseFloat(gross_amount);
 
-        const newStatus = paymentStatus === 'paid' ? 'completed' : 'pending';
+    // Hanya ada dua status pembayaran di sistem kamu: DP atau unpaid
+    let paymentStatus = 'DP'; // Tidak pernah 'paid'
+    let newStatus = 'pending'; // Atau 'confirmed' jika ingin otomatis terkonfirmasi setelah DP
 
-        await conn.query(
-          `UPDATE transaksi 
-              SET paid_amount = ?, 
-                  status = ?, 
-                  payment_status = ?, 
-                  updated_at = CURRENT_TIMESTAMP 
-              WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
-          [newPaidAmount, newStatus, paymentStatus, order_id, order_id]
-        );
+    await conn.query(
+      `UPDATE transaksi 
+          SET paid_amount = ?, 
+              status = ?, 
+              payment_status = ?, 
+              updated_at = CURRENT_TIMESTAMP 
+          WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
+      [newPaidAmount, newStatus, paymentStatus, order_id, order_id]
+    );
 
         if (paymentStatus === 'paid') {
           await conn.query(
