@@ -69,6 +69,41 @@ async function startServer() {
 
         setIO(io);
 
+        io.on('connection', (socket) => {
+    console.log('Socket connected:', socket.id);
+
+    // Handle admin joining room
+    socket.on('join-admin-room', () => {
+        socket.join('admin-room');
+        console.log(`Admin ${socket.id} joined admin-room`);
+        
+        // Send confirmation
+        socket.emit('admin-room-joined', {
+            message: 'Successfully joined admin room',
+            socketId: socket.id
+        });
+    });
+
+    // Handle user joining room (optional)
+    socket.on('join-user-room', (userId) => {
+        socket.join(`user-${userId}`);
+        console.log(`User ${userId} (${socket.id}) joined user room`);
+    });
+
+    // Test event untuk debugging
+    socket.on('test-admin-notification', () => {
+        io.to('admin-room').emit('test-event', {
+            message: 'Test notification from admin',
+            timestamp: new Date().toISOString()
+        });
+        console.log('Test event sent to admin room');
+    });
+
+    socket.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', socket.id, 'reason:', reason);
+    });
+});
+
         // Log port yang akan dicoba
         console.log(`🔎 Looking for available port starting from ${PORT}...`);
         // Find available port

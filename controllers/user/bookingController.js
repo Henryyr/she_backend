@@ -3,7 +3,6 @@ const emailService = require('../../services/user/emailService');
 const { getIO } = require('../../socketInstance');
 const dashboardService = require('../../services/admin/dashboardService');
 const { validateBookingTime, validateUserDailyBooking } = require('../../helpers/bookingValidationHelper');
-// const { getRandomPromo } = require('../../helpers/promoHelper'); // DIHAPUS
 
 const createBooking = async (req, res) => {
     console.log('[BookingController] Masuk createBooking', { body: req.body, user: req.user });
@@ -15,6 +14,7 @@ const createBooking = async (req, res) => {
                 timestamp: new Date().toISOString()
             });
         }
+
         const bookingData = {
             user_id: req.user.id,
             layanan_id: cleanBody.layanan_id,
@@ -26,6 +26,7 @@ const createBooking = async (req, res) => {
             special_request: cleanBody.special_request || null,
             voucher_code: cleanBody.voucher_code || null
         };
+
         try {
             await validateBookingTime(bookingData.tanggal, bookingData.jam_mulai, req.user.id);
             await validateUserDailyBooking(bookingData.tanggal, req.user.id);
@@ -36,24 +37,55 @@ const createBooking = async (req, res) => {
                 timestamp: new Date().toISOString()
             });
         }
+
         try {
             const result = await bookingService.createBooking(bookingData);
             console.log('[BookingController] Booking berhasil', result);
+
+            // Send email notification
             try {
                 if (req.user.email) {
                     await emailService.sendBookingInformation(req.user.email, result);
                 }
-            } catch (emailErr) {}
+            } catch (emailErr) {
+                console.error('Email send error:', emailErr);
+            }
+
+            // Emit Socket.IO event for new booking
             const io = getIO();
             if (io) {
                 try {
+                    // Format booking data for admin notification
+                    const bookingNotification = {
+                        id: result.booking_number || result.id,
+                        customer: req.user.fullname || req.user.nama || 'Unknown Customer',
+                        date: result.tanggal,
+                        start_time: result.jam_mulai,
+                        end_time: result.jam_selesai,
+                        services: result.layanan_names || result.layanan?.map(l => l.nama).join(', ') || 'N/A',
+                        status: result.status || 'pending',
+                        booking_number: result.booking_number
+                    };
+
+                    // Emit to admin room
+                    io.to('admin-room').emit('new-booking', {
+                        booking: bookingNotification,
+                        message: `New booking from ${bookingNotification.customer}`,
+                        timestamp: new Date().toISOString()
+                    });
+
+                    console.log('✅ New booking event emitted to admin room');
+
+                    // Update dashboard stats
                     await dashboardService.updateDashboardStats(io);
-                } catch (emitErr) {}
+                } catch (emitErr) {
+                    console.error('Socket emit error:', emitErr);
+                }
             }
+
             res.json(result);
         } catch (error) {
             console.error('[BookingController] Booking gagal:', error);
-            // Tangkap error validasi produk dan error lain dari service
             return res.status(400).json({
                 error: 'Booking gagal',
                 details: error.message || error.toString(),
@@ -62,7 +94,6 @@ const createBooking = async (req, res) => {
         }
     } catch (error) {
         console.error('[BookingController] Error luar:', error);
-        // Tangkap error parsing JSON atau error lain di luar blok try di atas
         return res.status(400).json({
             error: 'Invalid request body',
             details: error.message || error.toString(),
@@ -122,43 +153,62 @@ const cancelBooking = async (req, res) => {
                 message: 'Data booking tidak ditemukan. Silakan cek kembali atau hubungi admin.'
             });
         }
+
         if (booking.user_id !== user.id) {
             return res.status(403).json({
                 error: 'Akses ditolak',
                 message: 'Anda tidak memiliki izin untuk membatalkan booking ini.'
             });
         }
+
         if (booking.status === 'canceled') {
             return res.status(400).json({
                 error: 'Booking sudah dibatalkan',
                 message: 'Booking ini sudah dibatalkan sebelumnya.'
             });
         }
+
         if (booking.status === 'completed') {
             return res.status(400).json({
                 error: 'Booking sudah selesai',
                 message: 'Booking yang sudah selesai tidak dapat dibatalkan.'
             });
         }
+
         const tanggalStr = typeof booking.tanggal === 'string' ? booking.tanggal.split('T')[0] : booking.tanggal;
         const jamStr = booking.jam_mulai.length === 5 ? booking.jam_mulai : booking.jam_mulai.slice(0, 5);
         const startDateTime = new Date(`${tanggalStr}T${jamStr}:00+08:00`);
         const now = new Date();
         const batasCancel = new Date(startDateTime.getTime() + 30 * 60000);
+
         if (now > batasCancel) {
             return res.status(400).json({
                 error: 'Batas pembatalan telah lewat',
                 message: 'Pembatalan hanya dapat dilakukan maksimal 30 menit setelah jam mulai booking.'
             });
         }
+
         const result = await bookingService.cancelBooking(id);
 
-        // Update dashboard stats (ganti emitDashboardUpdate)
+        // Emit Socket.IO event for booking cancellation
         const io = getIO();
         if (io) {
             try {
+                // Emit booking cancellation to admin room
+                io.to('admin-room').emit('booking-cancelled', {
+                    booking_id: id,
+                    customer: user.fullname || user.nama || 'Unknown Customer',
+                    message: `Booking #${booking.booking_number || id} has been cancelled by customer`,
+                    timestamp: new Date().toISOString()
+                });
+
+                console.log('✅ Booking cancellation event emitted to admin room');
+
+                // Update dashboard stats
                 await dashboardService.updateDashboardStats(io);
-            } catch (emitErr) {}
+            } catch (emitErr) {
+                console.error('Socket emit error:', emitErr);
+            }
         }
 
         res.json({
