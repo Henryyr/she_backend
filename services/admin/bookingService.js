@@ -3,24 +3,24 @@ const paginateQuery = require('../../helpers/paginateQuery');
 
 const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) => {
     let sql = `
-        SELECT 
-            b.id,
-            u.fullname AS customer,
-            DATE_FORMAT(b.tanggal, '%d %b %Y') AS date,
-            CONCAT(TIME_FORMAT(b.jam_mulai, '%H:%i'), ' - ', TIME_FORMAT(b.jam_selesai, '%H:%i')) AS time,
-            GROUP_CONCAT(l.nama SEPARATOR ', ') AS services,
-            b.status,
-            MAX(t.total_harga) AS total_harga,
-            MAX(t.dp_amount) AS dp_amount,
-            MAX(t.paid_amount) AS paid_amount,
-            (MAX(t.total_harga) - IFNULL(MAX(t.paid_amount), 0)) AS sisa_bayar,
-            MAX(t.payment_status) AS payment_status
-        FROM booking b
-        JOIN users u ON b.user_id = u.id
-        JOIN booking_layanan bl ON b.id = bl.booking_id
-        JOIN layanan l ON bl.layanan_id = l.id
-        LEFT JOIN transaksi t ON t.booking_id = b.id
-    `;
+    SELECT 
+        b.id,
+        u.fullname AS customer,
+        DATE_FORMAT(b.tanggal, '%d %b %Y') AS date,
+        CONCAT(TIME_FORMAT(b.jam_mulai, '%H:%i'), ' - ', TIME_FORMAT(b.jam_selesai, '%H:%i')) AS time,
+        GROUP_CONCAT(l.nama SEPARATOR ', ') AS services,
+        b.status,
+        COALESCE(MAX(t.total_harga), b.total_harga) AS total_harga,
+        COALESCE(MAX(t.dp_amount), 0) AS dp_amount,
+        COALESCE(MAX(t.paid_amount), 0) AS paid_amount,
+        (COALESCE(MAX(t.total_harga), b.total_harga) - IFNULL(MAX(t.paid_amount), 0)) AS sisa_bayar,
+        MAX(t.payment_status) AS payment_status
+    FROM booking b
+    JOIN users u ON b.user_id = u.id
+    JOIN booking_layanan bl ON b.id = bl.booking_id
+    JOIN layanan l ON bl.layanan_id = l.id
+    LEFT JOIN transaksi t ON t.booking_id = b.id
+`;
     let whereClauses = [];
     let params = [];
 
