@@ -361,16 +361,17 @@ async handleWebhook(webhookData) {
   console.log('[TransaksiService] handleWebhook started', webhookData);
   const conn = await pool.getConnection();
   try {
-    validateMidtransNotification(webhookData); // Validasi signature, timestamp, dsb.
+    // Validasi format notifikasi Midtrans (pastikan valid sesuai kebutuhan)
+    validateMidtransNotification(webhookData);
 
     const { order_id, transaction_status, gross_amount } = webhookData;
 
-    // Mulai transaksi SQL (biar bisa rollback kalau error)
+    // Mulai transaksi database
     await conn.beginTransaction();
 
-    // Cari transaksi berdasar midtrans_order_id atau pelunasan_order_id
+    // Cari transaksi berdasarkan midtrans_order_id atau pelunasan_order_id
     const [transaksiResult] = await conn.query(
-      `SELECT t.*, b.id AS booking_id 
+      `SELECT t.*, b.id AS booking_id
        FROM transaksi t
        JOIN booking b ON t.booking_id = b.id
        WHERE t.midtrans_order_id = ? OR t.pelunasan_order_id = ?`,
@@ -385,20 +386,20 @@ async handleWebhook(webhookData) {
 
     if (transaction_status === "settlement" || transaction_status === "capture") {
       const amountPaid = parseFloat(gross_amount);
+      // Tentukan apakah ini pelunasan (jika order_id sama dengan pelunasan_order_id)
       const isPelunasan = transaksi.pelunasan_order_id === order_id;
-
       let updatedPaidAmount = 0;
+
       if (isPelunasan) {
-        // Tambah pelunasan ke paid_amount lama
-        updatedPaidAmount = parseFloat(transaksi.paid_amount || 0) + amountPaid;
+        updatedPaidAmount = (parseFloat(transaksi.paid_amount) || 0) + amountPaid;
       } else {
-        // Pembayaran DP, overwrite paid_amount
         updatedPaidAmount = amountPaid;
       }
 
+      // Tentukan payment status berdasarkan jumlah yang sudah dibayar
       let newPaymentStatus = 'unpaid';
-      const total = parseFloat(transaksi.total_harga || 0);
-      const dp = parseFloat(transaksi.dp_amount || 0);
+      const total = parseFloat(transaksi.total_harga) || 0;
+      const dp = parseFloat(transaksi.dp_amount) || 0;
 
       if (updatedPaidAmount >= total) {
         newPaymentStatus = 'paid';
@@ -406,7 +407,8 @@ async handleWebhook(webhookData) {
         newPaymentStatus = 'DP';
       }
 
-      await conn.query(
+      // Update transaksi menggunakan primary key (transaksi.id)
+      const updateResult = await conn.query(
         `UPDATE transaksi 
          SET paid_amount = ?, 
              payment_status = ?, 
@@ -415,9 +417,13 @@ async handleWebhook(webhookData) {
          WHERE id = ?`,
         [updatedPaidAmount, newPaymentStatus, transaksi.id]
       );
+      console.log('[TransaksiService] Update result:', updateResult);
 
-      // Kirim email invoice (optional)
-      const emailSubject = isPelunasan ? 'Pelunasan Berhasil - Booking Salon' : 'Pembayaran DP Berhasil - Booking Salon';
+      // Kirim email konfirmasi pembayaran
+      const emailSubject = isPelunasan
+        ? 'Pelunasan Berhasil - Booking Salon'
+        : 'Pembayaran DP Berhasil - Booking Salon';
+
       const emailHtml = await transactionReceiptTemplate({
         booking_number: transaksi.booking_number,
         paymentStatus: newPaymentStatus,
@@ -433,11 +439,11 @@ async handleWebhook(webhookData) {
       await sendEmail(
         transaksi.email,
         emailSubject,
-        'Pembayaran anda telah berhasil',
+        'Pembayaran Anda telah berhasil',
         emailHtml
       );
-
-    } else if (["expired", "cancel", "deny"].includes(transaction_status)) {
+    } else if (["expired", "cancel", "deny", "cancelled"].includes(transaction_status)) {
+      // Tentukan status sesuai notifikasi
       let softDeleteStatus = {
         expired: 'expired',
         cancel: 'cancelled',
@@ -452,7 +458,7 @@ async handleWebhook(webhookData) {
         [softDeleteStatus, transaksi.id]
       );
 
-      // Jika ada voucher, hapus pemakaiannya
+      // Hapus voucher usage jika ada
       if (transaksi.voucher_id) {
         await conn.query(
           `DELETE FROM voucher_usages 
@@ -469,18 +475,12 @@ async handleWebhook(webhookData) {
   } catch (err) {
     console.error('[TransaksiService] handleWebhook error:', err);
     await conn.rollback();
-    if (err.message?.includes("Midtrans")) {
-      throw {
-        status: 400,
-        message: "Invalid Midtrans notification",
-        details: err.message
-      };
-    }
     throw err;
   } finally {
     conn.release();
   }
 }
+
 
 async payRemaining(transaksi_id, user_id) {
    console.log('[TransaksiService] payRemaining started', { transaksi_id, user_id });
