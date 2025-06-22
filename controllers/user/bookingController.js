@@ -188,7 +188,8 @@ const cancelBooking = async (req, res) => {
             });
         }
 
-        const result = await bookingService.cancelBooking(id);
+        // FIX: Pass user.id as second parameter
+        const result = await bookingService.cancelBooking(id, user.id);
 
         // Emit Socket.IO event for booking cancellation
         const io = getIO();
@@ -216,6 +217,7 @@ const cancelBooking = async (req, res) => {
             data: result
         });
     } catch (error) {
+        console.error('Cancel booking error:', error); // Add detailed logging
         res.status(500).json({
             error: 'Gagal membatalkan booking',
             message: error.message
