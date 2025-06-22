@@ -361,17 +361,19 @@ async handleWebhook(webhookData) {
   console.log('[TransaksiService] handleWebhook started', webhookData);
   const conn = await pool.getConnection();
   try {
-    validateMidtransNotification(webhookData);
+    validateMidtransNotification(webhookData); // Validasi signature, timestamp, dsb.
 
     const { order_id, transaction_status, gross_amount } = webhookData;
 
-    // Ambil transaksi yang relevan
+    // Mulai transaksi SQL (biar bisa rollback kalau error)
+    await conn.beginTransaction();
+
+    // Cari transaksi berdasar midtrans_order_id atau pelunasan_order_id
     const [transaksiResult] = await conn.query(
-      `SELECT t.*, b.id as booking_id
+      `SELECT t.*, b.id AS booking_id 
        FROM transaksi t
        JOIN booking b ON t.booking_id = b.id
-       WHERE t.midtrans_order_id = ? OR t.pelunasan_order_id = ?
-       GROUP BY t.id`,
+       WHERE t.midtrans_order_id = ? OR t.pelunasan_order_id = ?`,
       [order_id, order_id]
     );
 
@@ -382,88 +384,94 @@ async handleWebhook(webhookData) {
     const transaksi = transaksiResult[0];
 
     if (transaction_status === "settlement" || transaction_status === "capture") {
-  const amountPaid = parseFloat(gross_amount);
+      const amountPaid = parseFloat(gross_amount);
+      const isPelunasan = transaksi.pelunasan_order_id === order_id;
 
-  // Periksa apakah ini pembayaran DP atau pelunasan
-  const isPelunasan = transaksi.pelunasan_order_id === order_id;
-  let updatedPaidAmount;
+      let updatedPaidAmount = 0;
+      if (isPelunasan) {
+        // Tambah pelunasan ke paid_amount lama
+        updatedPaidAmount = parseFloat(transaksi.paid_amount || 0) + amountPaid;
+      } else {
+        // Pembayaran DP, overwrite paid_amount
+        updatedPaidAmount = amountPaid;
+      }
 
-  if (isPelunasan) {
-    // Pelunasan: tambahkan ke paid_amount
-    updatedPaidAmount = parseFloat(transaksi.paid_amount) + amountPaid;
-  } else {
-    // Pembayaran awal (DP): paid_amount di-set
-    updatedPaidAmount = amountPaid;
-  }
+      let newPaymentStatus = 'unpaid';
+      const total = parseFloat(transaksi.total_harga || 0);
+      const dp = parseFloat(transaksi.dp_amount || 0);
 
-  // Hitung payment_status baru
-  let newPaymentStatus = 'unpaid';
-  if (updatedPaidAmount >= parseFloat(transaksi.total_harga)) {
-    newPaymentStatus = 'paid';
-  } else if (updatedPaidAmount >= parseFloat(transaksi.dp_amount)) {
-    newPaymentStatus = 'DP';
-  }
+      if (updatedPaidAmount >= total) {
+        newPaymentStatus = 'paid';
+      } else if (updatedPaidAmount >= dp) {
+        newPaymentStatus = 'DP';
+      }
 
-  await conn.query(
-    `UPDATE transaksi 
-        SET paid_amount = ?, 
-            payment_status = ?, 
-            status = 'pending',
-            updated_at = CURRENT_TIMESTAMP 
-     WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
-    [updatedPaidAmount, newPaymentStatus, order_id, order_id]
-  );
-
-  // Email (optional)
-  const emailSubject = isPelunasan ? 'Pelunasan Berhasil - Booking Salon' : 'Pembayaran DP Berhasil - Booking Salon';
-
-  const emailHtml = await transactionReceiptTemplate({
-    booking_number: transaksi.booking_number,
-    paymentStatus: newPaymentStatus,
-    layanan_nama: transaksi.layanan_nama,
-    tanggal: transaksi.tanggal,
-    jam_mulai: transaksi.jam_mulai,
-    jam_selesai: transaksi.jam_selesai,
-    gross_amount,
-    total_harga: transaksi.total_harga,
-    newPaidAmount: updatedPaidAmount
-  });
-
-  await sendEmail(
-    transaksi.email,
-    emailSubject,
-    'Pembayaran anda telah berhasil',
-    emailHtml
-  );
-
-
-    } else if (transaction_status === "expired" || transaction_status === "cancelled" || transaction_status === "deny") {
-      let softDeleteStatus = 'cancelled';
-      if (transaction_status === "expired") softDeleteStatus = 'expired';
-      if (transaction_status === "deny") softDeleteStatus = 'failed';
       await conn.query(
-        `UPDATE transaksi SET status = ? WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`, 
-        [softDeleteStatus, order_id, order_id]
+        `UPDATE transaksi 
+         SET paid_amount = ?, 
+             payment_status = ?, 
+             status = 'pending',
+             updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [updatedPaidAmount, newPaymentStatus, transaksi.id]
       );
 
-      // PATCH: Hapus voucher_usage jika transaksi dibatalkan/expired/deny
+      // Kirim email invoice (optional)
+      const emailSubject = isPelunasan ? 'Pelunasan Berhasil - Booking Salon' : 'Pembayaran DP Berhasil - Booking Salon';
+      const emailHtml = await transactionReceiptTemplate({
+        booking_number: transaksi.booking_number,
+        paymentStatus: newPaymentStatus,
+        layanan_nama: transaksi.layanan_nama,
+        tanggal: transaksi.tanggal,
+        jam_mulai: transaksi.jam_mulai,
+        jam_selesai: transaksi.jam_selesai,
+        gross_amount,
+        total_harga: transaksi.total_harga,
+        newPaidAmount: updatedPaidAmount
+      });
+
+      await sendEmail(
+        transaksi.email,
+        emailSubject,
+        'Pembayaran anda telah berhasil',
+        emailHtml
+      );
+
+    } else if (["expired", "cancel", "deny"].includes(transaction_status)) {
+      let softDeleteStatus = {
+        expired: 'expired',
+        cancel: 'cancelled',
+        cancelled: 'cancelled',
+        deny: 'failed'
+      }[transaction_status] || 'failed';
+
+      await conn.query(
+        `UPDATE transaksi 
+         SET status = ? 
+         WHERE id = ?`,
+        [softDeleteStatus, transaksi.id]
+      );
+
+      // Jika ada voucher, hapus pemakaiannya
       if (transaksi.voucher_id) {
-        await pool.query(
-          `DELETE FROM voucher_usages WHERE user_id = ? AND voucher_id = ?`,
+        await conn.query(
+          `DELETE FROM voucher_usages 
+           WHERE user_id = ? AND voucher_id = ?`,
           [transaksi.booking_user_id, transaksi.voucher_id]
         );
       }
     }
 
     await conn.commit();
-    console.log('[TransaksiService] handleWebhook success', { order_id: webhookData.order_id });
+    console.log('[TransaksiService] handleWebhook success', { order_id });
     return { message: "Webhook processed successfully" };
+
   } catch (err) {
     console.error('[TransaksiService] handleWebhook error:', err);
     await conn.rollback();
-    if (err.message && err.message.includes('Midtrans')) {
-      throw { 
-        status: 400, 
+    if (err.message?.includes("Midtrans")) {
+      throw {
+        status: 400,
         message: "Invalid Midtrans notification",
         details: err.message
       };
