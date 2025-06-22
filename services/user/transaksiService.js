@@ -382,69 +382,60 @@ async handleWebhook(webhookData) {
     const transaksi = transaksiResult[0];
 
     if (transaction_status === "settlement" || transaction_status === "capture") {
-      console.log('DEBUG - gross_amount dari Midtrans:', gross_amount);
-      console.log('DEBUG - order_id:', order_id);
-      console.log('DEBUG - transaction_status:', transaction_status);
-      
-      // Ambil nominal yang benar-benar dibayar user dari gross_amount
-      const amountPaid = parseFloat(gross_amount);
-      console.log('DEBUG - amountPaid (yang benar-benar dibayar user):', amountPaid);
+  const amountPaid = parseFloat(gross_amount);
 
-      // Update paid_amount dengan nominal yang benar-benar sudah dibayar
-      await conn.query(
-        `UPDATE transaksi 
-            SET paid_amount = ?, 
-                payment_status = 'DP', 
-                status = 'pending',
-                updated_at = CURRENT_TIMESTAMP 
-         WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
-        [amountPaid, order_id, order_id]
-      );
+  // Periksa apakah ini pembayaran DP atau pelunasan
+  const isPelunasan = transaksi.pelunasan_order_id === order_id;
+  let updatedPaidAmount;
 
-      console.log('DEBUG - Query UPDATE executed - paid_amount diisi dengan:', amountPaid);
+  if (isPelunasan) {
+    // Pelunasan: tambahkan ke paid_amount
+    updatedPaidAmount = parseFloat(transaksi.paid_amount) + amountPaid;
+  } else {
+    // Pembayaran awal (DP): paid_amount di-set
+    updatedPaidAmount = amountPaid;
+  }
 
-      // Verifikasi update berhasil
-      const [verifyResult] = await conn.query(
-        `SELECT id, paid_amount, payment_status, total_harga FROM transaksi 
-         WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
-        [order_id, order_id]
-      );
-      
-      if (verifyResult.length > 0) {
-        console.log('DEBUG - Data di database setelah update:');
-        console.log('- ID Transaksi:', verifyResult[0].id);
-        console.log('- paid_amount:', verifyResult[0].paid_amount);
-        console.log('- payment_status:', verifyResult[0].payment_status);
-        console.log('- total_harga:', verifyResult[0].total_harga);
-      }
+  // Hitung payment_status baru
+  let newPaymentStatus = 'unpaid';
+  if (updatedPaidAmount >= parseFloat(transaksi.total_harga)) {
+    newPaymentStatus = 'paid';
+  } else if (updatedPaidAmount >= parseFloat(transaksi.dp_amount)) {
+    newPaymentStatus = 'DP';
+  }
 
-      // Tentukan payment status - untuk DP selalu 'DP'
-      const paymentStatus = 'DP';
+  await conn.query(
+    `UPDATE transaksi 
+        SET paid_amount = ?, 
+            payment_status = ?, 
+            status = 'pending',
+            updated_at = CURRENT_TIMESTAMP 
+     WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
+    [updatedPaidAmount, newPaymentStatus, order_id, order_id]
+  );
 
-      // Voucher usage sudah dimasukkan di createTransaction (DP/Cash).
-      // Tidak perlu repeat insert di sini.
+  // Email (optional)
+  const emailSubject = isPelunasan ? 'Pelunasan Berhasil - Booking Salon' : 'Pembayaran DP Berhasil - Booking Salon';
 
-      // Send email receipt
-      const emailSubject = 'Pembayaran DP Berhasil - Booking Salon';
+  const emailHtml = await transactionReceiptTemplate({
+    booking_number: transaksi.booking_number,
+    paymentStatus: newPaymentStatus,
+    layanan_nama: transaksi.layanan_nama,
+    tanggal: transaksi.tanggal,
+    jam_mulai: transaksi.jam_mulai,
+    jam_selesai: transaksi.jam_selesai,
+    gross_amount,
+    total_harga: transaksi.total_harga,
+    newPaidAmount: updatedPaidAmount
+  });
 
-      const emailHtml = await transactionReceiptTemplate({
-        booking_number: transaksi.booking_number,
-        paymentStatus,
-        layanan_nama: transaksi.layanan_nama,
-        tanggal: transaksi.tanggal,
-        jam_mulai: transaksi.jam_mulai,
-        jam_selesai: transaksi.jam_selesai,
-        gross_amount,
-        total_harga: transaksi.total_harga,
-        newPaidAmount: amountPaid
-      });
+  await sendEmail(
+    transaksi.email,
+    emailSubject,
+    'Pembayaran anda telah berhasil',
+    emailHtml
+  );
 
-      await sendEmail(
-        transaksi.email,
-        emailSubject,
-        'Pembayaran anda telah berhasil',
-        emailHtml
-      );
 
     } else if (transaction_status === "expired" || transaction_status === "cancelled" || transaction_status === "deny") {
       let softDeleteStatus = 'cancelled';
