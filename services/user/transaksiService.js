@@ -372,11 +372,13 @@ async handleWebhook(webhookData) {
     // Cari transaksi berdasarkan midtrans_order_id atau pelunasan_order_id
     const [transaksiResult] = await conn.query(
   `SELECT t.*, 
-          b.id AS booking_id, 
-          b.email AS email
-   FROM transaksi t
-   JOIN booking b ON t.booking_id = b.id
-   WHERE t.midtrans_order_id = ? OR t.pelunasan_order_id = ?`,
+       b.id AS booking_id, 
+       u.email AS email
+FROM transaksi t
+JOIN booking b ON t.booking_id = b.id
+JOIN users u ON b.user_id = u.id
+WHERE t.midtrans_order_id = ? OR t.pelunasan_order_id = ?
+`,
   [order_id, order_id]
 );
 
