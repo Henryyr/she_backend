@@ -382,18 +382,31 @@ if (kategori_transaksi_id === 1) {
       const transaksi = transaksiResult[0];
 
       if (transaction_status === "settlement" || transaction_status === "capture") {
-        // Isi paid_amount dengan nominal DP yang dibayar (gross_amount)
-        const newPaidAmount = parseFloat(gross_amount);
+        console.log('DEBUG - gross_amount dari Midtrans:', gross_amount);
+  console.log('DEBUG - order_id:', order_id);
+  
+  // Isi paid_amount dengan nominal DP yang dibayar (gross_amount)
+  const newPaidAmount = parseFloat(gross_amount);
+  console.log('DEBUG - newPaidAmount setelah parseFloat:', newPaidAmount);
 
-        await conn.query(
-          `UPDATE transaksi 
-              SET paid_amount = ?, 
-                  payment_status = 'DP', 
-                  status = 'pending',
-                  updated_at = CURRENT_TIMESTAMP 
-           WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
-          [newPaidAmount, order_id, order_id]
-        );
+  await conn.query(
+    `UPDATE transaksi 
+        SET paid_amount = ?, 
+            payment_status = 'DP', 
+            status = 'pending',
+            updated_at = CURRENT_TIMESTAMP 
+     WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
+    [newPaidAmount, order_id, order_id]
+  );
+
+  console.log('DEBUG - Query UPDATE transaksi executed dengan paid_amount:', newPaidAmount);
+
+  // Cek apakah update berhasil
+  const [checkResult] = await conn.query(
+    `SELECT paid_amount, payment_status FROM transaksi WHERE midtrans_order_id = ? OR pelunasan_order_id = ?`,
+    [order_id, order_id]
+  );
+  console.log('DEBUG - Data setelah update:', checkResult[0]);
 
         if (paymentStatus === 'paid') {
           await conn.query(
