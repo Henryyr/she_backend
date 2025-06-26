@@ -10,7 +10,7 @@ DETAIL BOOKING ANDA:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📅 Tanggal: ${bookingData.tanggal}
 ⏰ Jam: ${bookingData.jam_mulai}
-💄 Layanan: ${bookingData.nama_layanan || `ID: ${bookingData.layanan_id}`}
+💄 Layanan: ${bookingData.layanan_nama}
 💰 Estimasi Biaya: ${bookingData.harga || 'Akan dikonfirmasi'}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -88,7 +88,7 @@ const html = (bookingData) => `
                             <strong style="color: #2c3e50;">💄 Layanan:</strong>
                         </div>
                         <div style="display: table-cell; padding: 12px 0; border-bottom: 1px solid #e8e8e8; color: #34495e;">
-                            ${bookingData.nama_layanan || `ID: ${bookingData.layanan_id}`}
+                            ${bookingData.layanan}
                         </div>
                     </div>
                     ${bookingData.harga ? `
