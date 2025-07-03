@@ -5,6 +5,7 @@ const dashboardService = require('./dashboardService');
 const productService = require('./productService'); 
 const testimoniService = require('./testimoniService');
 const voucherService = require('./voucherService');
+const layananService = require('./layananService');
 
 module.exports = {
     ...userService,
@@ -13,5 +14,6 @@ module.exports = {
     ...dashboardService,
     ...productService,
     ...testimoniService,
-    ...voucherService
+    ...voucherService,
+    ...layananService,
 }
