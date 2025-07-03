@@ -1,4 +1,4 @@
-
+// html/transactionReceipt.js
 
 const transactionReceiptTemplate = async (data) => {
   const {
@@ -11,22 +11,34 @@ const transactionReceiptTemplate = async (data) => {
     gross_amount,
     total_harga,
     newPaidAmount,
+    payment_time, // Terima properti baru
   } = data
 
-  const date = new Date(tanggal).toLocaleDateString("id-ID", {
+  // Opsi format yang konsisten untuk tanggal dan waktu
+  const dateTimeFormatOptions = {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
-  })
-
-  const currentDateTime = new Date().toLocaleString("id-ID", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  })
+    timeZone: "Asia/Makassar", // Pastikan zona waktu konsisten (WITA)
+  };
+
+  // Format Tanggal Layanan (hanya tanggal)
+  const serviceDate = new Date(tanggal);
+  const formattedServiceDate = serviceDate.toLocaleDateString("id-ID", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "Asia/Makassar",
+  });
+  
+  // Format Waktu Pembayaran (tanggal dan waktu)
+  const paymentDateTime = new Date(payment_time);
+  const formattedPaymentDateTime = paymentDateTime.toLocaleString("id-ID", dateTimeFormatOptions);
+
 
   return `
 <!DOCTYPE html>
@@ -39,7 +51,6 @@ const transactionReceiptTemplate = async (data) => {
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; line-height: 1.6;">
     <div style="max-width: 600px; margin: 20px auto; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-radius: 15px; overflow: hidden;">
         
-        <!-- Header -->
         <div style="background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%); padding: 30px 20px; text-align: center; color: white;">
             <h1 style="margin: 0; font-size: 28px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
                 ✨ She Salon ✨
@@ -53,22 +64,18 @@ const transactionReceiptTemplate = async (data) => {
             </div>
         </div>
         
-        <!-- Receipt Number -->
         <div style="background-color: #2c3e50; color: white; padding: 15px 20px; text-align: center; font-size: 16px; font-weight: bold;">
             Receipt #${booking_number}
         </div>
 
-        <!-- Main Content -->
         <div style="padding: 30px 25px;">
             
-            <!-- Status -->
             <div style="text-align: center; margin-bottom: 25px;">
                 <div style="display: inline-block; padding: 10px 25px; border-radius: 25px; font-weight: bold; font-size: 16px; text-transform: uppercase; ${paymentStatus === "paid" ? "background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);" : "background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);"} color: white;">
                     ${paymentStatus === "paid" ? "✅ LUNAS" : "💰 DP (Down Payment)"}
                 </div>
             </div>
             
-            <!-- Booking Details -->
             <div style="background: linear-gradient(135deg, #ffeef8 0%, #f8e8ff 100%); border-radius: 15px; padding: 25px; margin: 20px 0; border-left: 5px solid #ff6b9d;">
                 <h3 style="color: #c44569; margin: 0 0 20px 0; font-size: 18px; text-align: center;">
                     📋 Detail Booking
@@ -80,7 +87,7 @@ const transactionReceiptTemplate = async (data) => {
                             <strong style="color: #2c3e50;">📅 Tanggal Layanan:</strong>
                         </div>
                         <div style="display: table-cell; padding: 12px 0; border-bottom: 1px solid #e8e8e8; color: #34495e;">
-                            ${date}
+                            ${formattedServiceDate}
                         </div>
                     </div>
                     <div style="display: table-row;">
@@ -104,13 +111,12 @@ const transactionReceiptTemplate = async (data) => {
                             <strong style="color: #2c3e50;">🕐 Waktu Pembayaran:</strong>
                         </div>
                         <div style="display: table-cell; padding: 12px 0; color: #34495e;">
-                            ${currentDateTime}
+                            ${formattedPaymentDateTime}
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- Payment Information -->
             <div style="background-color: #e8f5e8; border-radius: 15px; padding: 25px; margin: 20px 0; border-left: 5px solid #27ae60;">
                 <h3 style="color: #27ae60; margin: 0 0 20px 0; font-size: 18px; text-align: center;">
                     💳 Rincian Pembayaran
@@ -169,7 +175,6 @@ const transactionReceiptTemplate = async (data) => {
             </div>            
         </div>
         
-        <!-- Footer -->
         <div style="background-color: #2c3e50; color: white; padding: 25px; text-align: center;">
             <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: bold;">
                 Terima kasih atas kepercayaan Anda! 💕

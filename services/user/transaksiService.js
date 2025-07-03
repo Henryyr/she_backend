@@ -364,8 +364,7 @@ async handleWebhook(webhookData) {
     // Validasi format notifikasi Midtrans (pastikan valid sesuai kebutuhan)
     validateMidtransNotification(webhookData);
 
-    const { order_id, transaction_status, gross_amount } = webhookData;
-
+const { order_id, transaction_status, gross_amount, settlement_time, transaction_time } = webhookData;
     // Mulai transaksi database
     await conn.beginTransaction();
 
@@ -435,16 +434,17 @@ GROUP BY t.id
         : 'Pembayaran DP Berhasil - Booking Salon';
 
       const emailHtml = await transactionReceiptTemplate({
-        booking_number: transaksi.booking_number,
-        paymentStatus: newPaymentStatus,
-        layanan_nama: transaksi.layanan_nama,
-        tanggal: transaksi.tanggal,
-        jam_mulai: transaksi.jam_mulai,
-        jam_selesai: transaksi.jam_selesai,
-        gross_amount,
-        total_harga: transaksi.total_harga,
-        newPaidAmount: updatedPaidAmount
-      });
+  booking_number: transaksi.booking_number,
+  paymentStatus: newPaymentStatus,
+  layanan_nama: transaksi.layanan_nama,
+  tanggal: transaksi.tanggal,
+  jam_mulai: transaksi.jam_mulai,
+  jam_selesai: transaksi.jam_selesai,
+  gross_amount,
+  total_harga: transaksi.total_harga,
+  newPaidAmount: updatedPaidAmount,
+  payment_time: settlement_time || transaction_time || new Date() // Tambahkan baris ini
+});
 
       await sendEmail(
         transaksi.email,
