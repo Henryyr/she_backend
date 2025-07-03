@@ -1,7 +1,15 @@
+// html/booking-information.js
+
 // Template email booking information
 const subject = '✨ She Salon - Siap Memanjakan Anda!';
 
-const text = (bookingData) => `
+const text = (bookingData) => {
+    // Gabungkan dengan " + " untuk versi teks biasa agar mudah dibaca.
+    const layananText = Array.isArray(bookingData.layanan)
+        ? bookingData.layanan.join(' + ')
+        : bookingData.layanan;
+
+    return `
 Halo ${bookingData.nama_customer || 'Pelanggan Tersayang'},
 
 Terima kasih telah mempercayai She Salon untuk merawat kecantikan Anda! ✨
@@ -10,7 +18,7 @@ DETAIL BOOKING ANDA:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📅 Tanggal: ${bookingData.tanggal}
 ⏰ Jam: ${bookingData.jam_mulai}
-💄 Layanan: ${bookingData.layanan_nama}
+💄 Layanan: ${layananText}
 💰 Estimasi Biaya: ${bookingData.harga || 'Akan dikonfirmasi'}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -25,8 +33,15 @@ Sampai jumpa di She Salon!
 Salam hangat,
 Tim She Salon 💕
 `;
+};
 
-const html = (bookingData) => `
+const html = (bookingData) => {
+    // Gabungkan layanan dengan tag <br> agar setiap layanan berada di baris baru.
+    const layananHtml = Array.isArray(bookingData.layanan)
+        ? bookingData.layanan.join('<br>')
+        : bookingData.layanan;
+
+    return `
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -37,7 +52,6 @@ const html = (bookingData) => `
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; line-height: 1.6;">
     <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
         
-        <!-- Header -->
         <div style="background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%); padding: 30px 20px; text-align: center; color: white;">
             <h1 style="margin: 0; font-size: 28px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
                 ✨ She Salon ✨
@@ -47,10 +61,8 @@ const html = (bookingData) => `
             </p>
         </div>
 
-        <!-- Main Content -->
         <div style="padding: 40px 30px;">
             
-            <!-- Greeting -->
             <div style="text-align: center; margin-bottom: 30px;">
                 <h2 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 24px;">
                     Halo, ${bookingData.nama_customer || 'Pelanggan Tersayang'}! 👋
@@ -60,7 +72,6 @@ const html = (bookingData) => `
                 </p>
             </div>
 
-            <!-- Booking Details Card -->
             <div style="background: linear-gradient(135deg, #ffeef8 0%, #f8e8ff 100%); border-radius: 15px; padding: 25px; margin: 25px 0; border-left: 5px solid #ff6b9d;">
                 <h3 style="color: #c44569; margin: 0 0 20px 0; font-size: 20px; text-align: center;">
                     📋 Detail Booking Anda
@@ -88,7 +99,7 @@ const html = (bookingData) => `
                             <strong style="color: #2c3e50;">💄 Layanan:</strong>
                         </div>
                         <div style="display: table-cell; padding: 12px 0; border-bottom: 1px solid #e8e8e8; color: #34495e;">
-                            ${bookingData.layanan}
+                            ${layananHtml}
                         </div>
                     </div>
                     ${bookingData.harga ? `
@@ -104,7 +115,6 @@ const html = (bookingData) => `
                 </div>
             </div>
 
-            <!-- Important Information -->
             <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 10px; padding: 20px; margin: 25px 0;">
                 <h3 style="color: #856404; margin: 0 0 15px 0; font-size: 18px;">
                     ⚠️ Informasi Penting
@@ -114,7 +124,6 @@ const html = (bookingData) => `
                 </ul>
             </div>
 
-            <!-- Contact Information -->
             <div style="background-color: #e8f5e8; border-radius: 10px; padding: 20px; margin: 25px 0; text-align: center;">
                 <h3 style="color: #27ae60; margin: 0 0 15px 0; font-size: 18px;">
                     📍 Informasi Kontak
@@ -127,7 +136,6 @@ const html = (bookingData) => `
                 </p>
             </div>
 
-            <!-- CTA Button -->
             <div style="text-align: center; margin: 30px 0;">
                 <a href="https://wa.me/6281338563414" style="display: inline-block; background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 25px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(255, 107, 157, 0.3); transition: all 0.3s ease;">
                     💬 Hubungi Kami di WhatsApp
@@ -136,7 +144,6 @@ const html = (bookingData) => `
 
         </div>
 
-        <!-- Footer -->
         <div style="background-color: #2c3e50; color: white; padding: 25px 30px; text-align: center;">
             <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: bold;">
                 Sampai jumpa di She Salon! 💕
@@ -155,6 +162,7 @@ const html = (bookingData) => `
 </body>
 </html>
 `;
+};
 
 module.exports = {
   subject,
