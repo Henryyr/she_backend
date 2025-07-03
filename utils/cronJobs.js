@@ -1,102 +1,58 @@
 const cron = require('node-cron');
 const { pool } = require('../db');
-const TransaksiService = require('../services/user/transaksiService');
 const emailService = require('../services/user/emailService');
-const authService = require('../services/user/authService');
-
-const cleanupOldData = () => {
-    cron.schedule('0 0 * * *', async () => {
-        console.log('[CRON] CleanupOldData running at', new Date().toISOString());
-        try {
-            const today = new Date().toISOString().split('T')[0];
-            const [result] = await db.query(`DELETE FROM booking WHERE tanggal < ?`, [today]); // ✅ FIXED
-            console.log(`[CRON] Deleted ${result.affectedRows} expired bookings.`);
-        } catch (err) {
-            console.error("[CRON] Cleanup error:", err.message);
-        }
-    }, {
-        timezone: "Asia/Jakarta"
-    });
-};
-
-const handleExpiredTransactionsJob = () => {
-    cron.schedule('0 */1 * * *', async () => {
-        console.log('[CRON] handleExpiredTransactionsJob running at', new Date().toISOString());
-        try {
-            // FIX: Use TransaksiService directly (it's a singleton, not a class)
-            await TransaksiService.handleExpiredTransactions();
-            console.log('[CRON] handleExpiredTransactionsJob completed successfully.');
-        } catch (err) {
-            console.error("[CRON] Expired transactions error:", err.message);
-        }
-    }, {
-        timezone: "Asia/Jakarta"
-    });
-};
 
 const sendBookingReminderEmails = () => {
-    cron.schedule('*/5 * * * *', async () => {
-        console.log('[CRON] sendBookingReminderEmails running at', new Date().toISOString());
+    // Jadwal berjalan setiap menit
+    cron.schedule('* * * * *', async () => {
         try {
-            const now = new Date();
-            const reminderTime = new Date(now.getTime() + 20 * 60000);
-            const dateString = reminderTime.toISOString().split('T')[0];
-            const timeString = reminderTime.toTimeString().slice(0,5);
+            // Logika baru yang lebih andal: mencari booking dalam rentang 19-20 menit dari sekarang
+            const query = `
+                SELECT b.id, b.tanggal, b.jam_mulai, u.fullname as nama_customer, u.email,
+                       GROUP_CONCAT(l.nama SEPARATOR ', ') as layanan
+                FROM booking b
+                JOIN users u ON b.user_id = u.id
+                JOIN booking_layanan bl ON b.id = bl.booking_id
+                JOIN layanan l ON bl.layanan_id = l.id
+                WHERE
+                    b.status = 'confirmed' AND
+                    b.reminder_sent = 0 AND
+                    CONCAT(b.tanggal, ' ', b.jam_mulai) BETWEEN
+                        NOW() + INTERVAL 19 MINUTE AND
+                        NOW() + INTERVAL 20 MINUTE
+                GROUP BY b.id;
+            `;
 
-            const [bookings] = await pool.query(
-                `SELECT b.*, u.email, u.username, u.fullname FROM booking b
-                 JOIN users u ON b.user_id = u.id
-                 WHERE b.tanggal = ? AND b.jam_mulai = ?`,
-                [dateString, timeString]
-            );
+            const [bookings] = await pool.query(query);
 
-            if (!bookings || bookings.length === 0) {
-                console.log('[CRON] No bookings found for reminders.');
+            if (bookings.length === 0) {
+                // Ini kondisi normal, tidak perlu log
                 return;
             }
 
-            let sentCount = 0;
+            // Log baru yang lebih jelas
+            const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' });
+            console.log(`[${timestamp}] [CRON] Ditemukan ${bookings.length} booking untuk dikirim pengingat.`);
+
             for (const booking of bookings) {
-                if (!booking.email) continue;
-                try {
-                    await emailService.sendBookingInformation(booking.email, booking);
-                    sentCount++;
-                    console.log(`[CRON] Reminder email sent to ${booking.email} for booking at ${booking.tanggal} ${booking.jam_mulai}`);
-                } catch (err) {
-                    console.error(`[CRON] Failed to send reminder to ${booking.email}:`, err.message);
+                if (booking.email) {
+                    await emailService.sendBookingReminder(booking.email, booking);
+                    // Tandai bahwa email sudah terkirim
+                    await pool.query('UPDATE booking SET reminder_sent = 1 WHERE id = ?', [booking.id]);
                 }
             }
-            console.log(`[CRON] Processed ${sentCount} booking reminders`);
-        } catch (err) {
-            console.error('[CRON] Error sending booking reminder emails:', err.message);
-        }
-    }, {
-        timezone: "Asia/Jakarta"
-    });
-};
 
-const cleanupExpiredTokensJob = () => {
-    cron.schedule('0 2 * * *', async () => {
-        // Setiap hari jam 02:00 WIB
-        console.log('[CRON] cleanupExpiredTokensJob running at', new Date().toISOString());
-        try {
-            await authService.cleanupExpiredTokens();
-            console.log('[CRON] cleanupExpiredTokensJob completed successfully.');
-        } catch (err) {
-            console.error("[CRON] cleanupExpiredTokensJob error:", err.message);
+        } catch (error) {
+            console.error('[CRON] Gagal saat proses pengingat booking:', error.message);
         }
     }, {
-        timezone: "Asia/Jakarta"
+        timezone: "Asia/Makassar"
     });
 };
 
 const initCronJobs = () => {
-    console.log('[CRON] Initializing cron jobs...');
-    cleanupOldData();
-    handleExpiredTransactionsJob();
     sendBookingReminderEmails();
-    cleanupExpiredTokensJob(); // panggil di sini
-    console.log('[CRON] All cron jobs scheduled.');
+    console.log('✅ Cron job pengingat booking (versi robust) telah diinisialisasi.');
 };
 
 module.exports = { initCronJobs };

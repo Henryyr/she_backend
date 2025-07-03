@@ -1,5 +1,3 @@
-// html/transactionReceipt.js
-
 const transactionReceiptTemplate = async (data) => {
   const {
     booking_number,
