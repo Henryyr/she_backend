@@ -1,4 +1,4 @@
-const bcrypt = require('bcryptjs');
+// const bcrypt = require('bcryptjs'); // Hapus atau komentari baris ini
 const jwt = require('jsonwebtoken');
 const { pool } = require('../../db');
 const { validatePassword } = require('../../utils/validation');
@@ -114,7 +114,10 @@ const registerUser = async (userData) => {
         throw { status: 400, message: "Email atau username sudah digunakan" };
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await Bun.password.hash(password, {
+        algorithm: "bcrypt",
+        cost: 10,
+    });
     const role = 'pelanggan';
 
     const [result] = await pool.query(
@@ -147,7 +150,7 @@ const loginUser = async ({ username, password }, req = {}) => {
     }
 
     const user = users[0];
-    const isValid = await bcrypt.compare(password, user.password);
+    const isValid = await Bun.password.verify(password, user.password);
 
     if (!isValid) {
         recordLoginAttempt(username, ip, false);
@@ -273,7 +276,10 @@ const resetPassword = async (token, newPassword, confirmationPassword) => {
     }
     const user_id = rows[0].user_id;
     // Update password user
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await Bun.password.hash(newPassword, {
+        algorithm: "bcrypt",
+        cost: 10,
+    });
     await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user_id]);
     // Hapus token
     await pool.query('DELETE FROM password_resets WHERE user_id = ?', [user_id]);
@@ -300,7 +306,10 @@ const changePassword = async (userId, currentPassword, newPassword, confirmation
         throw { status: 401, message: "Password saat ini salah" };
     }
     // Update password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await Bun.password.hash(newPassword, {
+        algorithm: "bcrypt",
+        cost: 10,
+    });
     await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId]);
     return true;
 };
