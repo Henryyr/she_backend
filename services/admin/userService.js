@@ -23,10 +23,37 @@ const getUserById = async (id) => {
 };
 
 const updateUser = async (id, data) => {
-    const { fullname, email, phone_number, username, address, role } = data;
-    const sql = "UPDATE users SET fullname = ?, email = ?, phone_number = ?, username = ?, address = ?, role = ? WHERE id = ?";
-    const [result] = await pool.query(sql, [fullname, email, phone_number, username, address, role, id]);
-    return result.affectedRows > 0;
+    const fields = [];
+    const values = [];
+
+    // Daftar field yang diizinkan untuk diubah
+    const allowedFields = ['fullname', 'email', 'phone_number', 'username', 'address', 'role'];
+
+    // Loop melalui data yang dikirim dan buat query secara dinamis
+    for (const [key, value] of Object.entries(data)) {
+        if (value !== undefined && allowedFields.includes(key)) {
+            fields.push(`${key} = ?`);
+            values.push(value);
+        }
+    }
+
+    // Jika tidak ada field valid yang dikirim, tidak ada yang perlu diupdate
+    if (fields.length === 0) {
+        return true; 
+    }
+    
+    // Tambahkan ID ke akhir array values untuk klausa WHERE
+    values.push(id);
+
+    const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
+    
+    try {
+        const [result] = await pool.query(sql, values);
+        return result.affectedRows > 0;
+    } catch (error) {
+        console.error("SQL Error in updateUser:", error);
+        throw error;
+    }
 };
 
 const deleteUser = async (id) => {
