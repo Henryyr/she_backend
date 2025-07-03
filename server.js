@@ -1,7 +1,5 @@
-// server.js
 const app = require('./app');
 const { connect } = require('./db');
-const validateEnv = require('./config/envValidator');
 const { Server } = require('socket.io');
 const { setIO } = require('./socketInstance');
 const { initCronJobs } = require('./utils/cronJobs');
@@ -23,11 +21,7 @@ let io;
 
 async function startServer() {
     try {
-        // Validate environment variables first
-        if (!validateEnv()) {
-            process.exit(1);
-        }
-
+        // envValidator sudah tidak diperlukan, Bun menanganinya secara otomatis.
         await connect();
 
         // Jalankan Express langsung
