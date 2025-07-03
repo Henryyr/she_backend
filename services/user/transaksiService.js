@@ -369,19 +369,24 @@ async handleWebhook(webhookData) {
     // Mulai transaksi database
     await conn.beginTransaction();
 
-    // Cari transaksi berdasarkan midtrans_order_id atau pelunasan_order_id
     const [transaksiResult] = await conn.query(
-  `SELECT t.*, 
-       b.id AS booking_id, 
-       u.email AS email
+  `SELECT t.*,
+       b.id AS booking_id,
+       b.tanggal,
+       b.jam_mulai,
+       b.jam_selesai,
+       u.email AS email,
+       GROUP_CONCAT(l.nama ORDER BY l.nama SEPARATOR ', ') AS layanan_nama
 FROM transaksi t
 JOIN booking b ON t.booking_id = b.id
 JOIN users u ON b.user_id = u.id
-WHERE t.midtrans_order_id = ? OR t.pelunasan_order_id = ?
+LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
+LEFT JOIN layanan l ON bl.layanan_id = l.id
+WHERE (t.midtrans_order_id = ? OR t.pelunasan_order_id = ?)
+GROUP BY t.id
 `,
   [order_id, order_id]
 );
-
 
     if (transaksiResult.length === 0) {
       throw { status: 404, message: "Transaksi tidak ditemukan" };
