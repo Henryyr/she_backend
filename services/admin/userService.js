@@ -23,9 +23,25 @@ const getUserById = async (id) => {
 };
 
 const updateUser = async (id, data) => {
-    const { fullname, email, phone_number, username, address, role } = data;
-    const sql = "UPDATE users SET fullname = ?, email = ?, phone_number = ?, username = ?, address = ?, role = ? WHERE id = ?";
-    const [result] = await pool.query(sql, [fullname, email, phone_number, username, address, role, id]);
+    const fields = [];
+    const values = [];
+
+    // Loop melalui data yang dikirim dan buat query secara dinamis
+    for (const [key, value] of Object.entries(data)) {
+        if (value !== undefined && ['fullname', 'email', 'phone_number', 'username', 'address', 'role'].includes(key)) {
+            fields.push(`${key} = ?`);
+            values.push(value);
+        }
+    }
+
+    if (fields.length === 0) {
+        return true; 
+    }
+    
+    values.push(id);
+
+    const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
+    const [result] = await pool.query(sql, values);
     return result.affectedRows > 0;
 };
 
