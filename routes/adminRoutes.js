@@ -26,6 +26,7 @@ router.get('/bookings/:id', adminController.getBookingById);
 router.post('/bookings/offline', adminController.createOfflineBooking);
 router.put('/bookings/:id', adminController.updateBooking);
 router.delete('/bookings/:id', adminController.deleteBooking);
+
 // Booking status actions
 router.post('/bookings/:id/confirm', adminController.confirmBooking);
 router.post('/bookings/:id/complete', adminController.completeBooking);
@@ -36,22 +37,34 @@ router.get('/products', adminController.getAdminAllProducts);
 router.post('/products', adminController.createProduct);
 router.put('/products/:id', adminController.updateProduct);
 router.delete('/products/:id', adminController.deleteProduct);
+
 // Stock update (admin only)
 router.post('/products/hair', adminController.updateHairColorStock);
 router.post('/products/smoothing', adminController.updateSmoothingStock);
 router.post('/products/keratin', adminController.updateKeratinStock);
+
 // Produk berdasarkan kategori (admin only)
 router.get('/products/hair', adminController.getAdminHairProducts);
 router.get('/products/smoothing', adminController.getAdminSmoothingProducts);
 router.get('/products/keratin', adminController.getAdminKeratinProducts);
+
 // Testimoni Admin
 router.get('/testimonis', adminController.getAllTestimoni);
 router.delete('/testimonis/:id', adminController.deleteTestimoni);
 router.put('/testimonis/:id/status', adminController.updateStatus);
+
 // Vouchers Admin
 router.get('/vouchers', adminController.getAllVouchers);
 router.post('/vouchers', adminController.createVoucher);
 router.delete('/vouchers/:id', adminController.deleteVoucher);
+
+// Layanan Admin
+router.post('/layanan', adminController.createLayanan);
+router.get('/layanan', adminController.getAllLayanan);
+router.get('/layanan/:id', adminController.getLayananById);
+router.put('/layanan/:id', adminController.updateLayanan);
+router.delete('/layanan/:id', adminController.deleteLayanan);
+
 // test Socket
 router.post('/test/socket', (req, res) => {
     try {
@@ -71,4 +84,8 @@ router.post('/test/socket', (req, res) => {
         res.status(500).json({ error: 'Failed to send test event' });
     }
 });
+
+
+
+
 module.exports = router;

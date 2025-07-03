@@ -5,6 +5,7 @@ const transactionController = require('./transactionController');
 const productController = require('./productController');
 const testimoniController = require('./testimoniController');
 const voucherController = require('./voucherController')
+const layananController = require('./layananController');
 
 module.exports = {
     ...dashboardController,
@@ -13,5 +14,6 @@ module.exports = {
     ...transactionController,
     ...productController,
     ...testimoniController,
-    ...voucherController
+    ...voucherController,
+    ...layananController
 };
