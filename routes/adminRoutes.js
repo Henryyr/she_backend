@@ -65,6 +65,9 @@ router.get('/layanan/:id', adminController.getLayananById);
 router.put('/layanan/:id', adminController.updateLayanan);
 router.delete('/layanan/:id', adminController.deleteLayanan);
 
+// Kategori Layanan Admin
+router.get('/kategori-layanan', adminController.getAllKategoriLayanan);
+
 // test Socket
 router.post('/test/socket', (req, res) => {
     try {
