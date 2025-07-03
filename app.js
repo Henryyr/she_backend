@@ -1,28 +1,17 @@
 // app.js
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const bodyParser = require('body-parser');
-const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
-const compression = require('compression');
+const rateLimit = require('express-rate-limit');
 const xss = require('xss');
-const responseTime = require('response-time'); // Tambahkan ini
+const responseTime = require('response-time');
 require('./config/cloudinary');
 
 const app = express();
 
 // Middlewares
 app.set('trust proxy', 1);
-app.use(compression({
-  level: 6,
-  threshold: 0,
-  filter: (req, res) => {
-    if (req.headers['x-no-compression']) return false;
-    return compression.filter(req, res);
-  }
-}));
 
 // Cache control middleware
 app.use((req, res, next) => {
@@ -90,7 +79,7 @@ app.use(express.json({
     }
   }
 }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // Logging
 app.use(morgan('dev'));

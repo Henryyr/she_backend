@@ -15,7 +15,6 @@
     "@types/compression": "^1.7.5",
     "axios": "^1.9.0",
     "bcrypt": "^5.1.1",
-    "bcryptjs": "^3.0.2",
     "body-parser": "^1.20.3",
     "chart.js": "^4.4.8",
     "cloudinary": "^2.6.0",
@@ -45,8 +44,5 @@
     "socket.io": "^4.8.1",
     "twilio": "^5.4.5",
     "xss": "^1.0.15"
-  },
-  "overrides": {
-    "axios": "^1.6.0"
   }
 }

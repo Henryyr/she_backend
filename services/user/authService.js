@@ -1,4 +1,3 @@
-// const bcrypt = require('bcryptjs'); // Hapus atau komentari baris ini
 const jwt = require('jsonwebtoken');
 const { pool } = require('../../db');
 const { validatePassword } = require('../../utils/validation');

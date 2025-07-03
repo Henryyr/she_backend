@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
-require('dotenv').config();
 
 const bookingEmailTemplate = require('../../html/booking-information');
+const bookingReminderTemplate = require('../../html/booking-reminder');
 const invoiceEmailTemplate = require('../../html/transactionReceipt');
 const resetPasswordTemplate = require('../../html/reset-password');
 
@@ -122,10 +122,29 @@ const sendPasswordResetEmail = async (toEmail, fullname, resetToken) => {
   }
 };
 
+// Fungsi khusus kirim pengingat booking
+const sendBookingReminder = async (toEmail, bookingData) => {
+  try {
+    await sendEmail(
+      toEmail,
+      bookingReminderTemplate.subject,
+      bookingReminderTemplate.text(bookingData),
+      bookingReminderTemplate.html(bookingData)
+    );
+    // Log baru yang lebih jelas
+    const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' });
+    console.log(`[${timestamp}] [EmailService] Pengingat booking untuk jadwal jam ${bookingData.jam_mulai} berhasil dikirim ke: ${toEmail}`);
+  } catch (error) {
+    console.error('[EmailService] Gagal mengirim pengingat booking:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   sendEmail,
   sendTestEmailToUser,
   sendBookingInformation,
+  sendBookingReminder,
   sendInvoice,
   sendPasswordResetEmail
 };
