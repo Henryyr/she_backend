@@ -280,6 +280,31 @@ const resetPassword = async (token, newPassword, confirmationPassword) => {
     return true;
 };
 
+const changePassword = async (userId, currentPassword, newPassword, confirmationPassword) => {
+    if (!currentPassword || !newPassword || !confirmationPassword) {
+        throw { status: 400, message: "Data tidak lengkap" };
+    }
+    if (newPassword !== confirmationPassword) {
+        throw { status: 400, message: "Konfirmasi password tidak cocok" };
+    }
+    if (!validatePassword(newPassword)) {
+        throw { status: 400, message: "Password harus minimal 8 karakter, mengandung huruf dan angka" };
+    }
+    // Get user
+    const [users] = await pool.query('SELECT password FROM users WHERE id = ?', [userId]);
+    if (users.length === 0) {
+        throw { status: 404, message: "User tidak ditemukan" };
+    }
+    const isValid = await bcrypt.compare(currentPassword, users[0].password);
+    if (!isValid) {
+        throw { status: 401, message: "Password saat ini salah" };
+    }
+    // Update password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId]);
+    return true;
+};
+
 module.exports = {
     registerUser,
     loginUser,
@@ -289,4 +314,5 @@ module.exports = {
     cleanupExpiredTokens,
     requestPasswordReset,
     resetPassword,
+    changePassword
 };
