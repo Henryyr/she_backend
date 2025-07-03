@@ -76,11 +76,26 @@ const resetPassword = async (req, res) => {
     }
 };
 
+const changePassword = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { current_password, new_password, confirmation_password } = req.body;
+        if (current_password === new_password) {
+            return res.status(400).json({ error: "Password baru tidak boleh sama dengan password lama" });
+        }
+        await authService.changePassword(userId, current_password, new_password, confirmation_password);
+        res.json({ message: "Password berhasil diubah" });
+    } catch (error) {
+        res.status(error.status || 500).json({ error: error.message });
+    }
+};
+
 module.exports = {
     register,
     login,
     logout,
     getProfile,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    changePassword
 };

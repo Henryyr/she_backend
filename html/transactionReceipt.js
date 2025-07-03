@@ -1,20 +1,4 @@
-const QRCode = require("qrcode")
 
-const generateQR = async (text) => {
-  try {
-    console.log("=================== QR CODE DEBUG ===================")
-    console.log("Input text:", text)
-    const qrData = await QRCode.toDataURL(text)
-    console.log("QR Data length:", qrData.length)
-    console.log("QR Data starts with:", qrData.substring(0, 100))
-    console.log("QR Data is valid base64:", qrData.startsWith("data:image/png;base64,"))
-    console.log("=================================================")
-    return qrData
-  } catch (err) {
-    console.error("QR Code Generation Error:", err)
-    return ""
-  }
-}
 
 const transactionReceiptTemplate = async (data) => {
   const {
@@ -29,15 +13,6 @@ const transactionReceiptTemplate = async (data) => {
     newPaidAmount,
   } = data
 
-  // Generate QR code content with more information
-  const qrContent = JSON.stringify({
-    booking: booking_number,
-    amount: gross_amount,
-    status: paymentStatus,
-    date: tanggal,
-  })
-
-  const qrCode = await generateQR(qrContent)
   const date = new Date(tanggal).toLocaleDateString("id-ID", {
     weekday: "long",
     year: "numeric",
@@ -191,20 +166,7 @@ const transactionReceiptTemplate = async (data) => {
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <!-- QR Code -->
-            <div style="background-color: #f8f9fa; border-radius: 15px; padding: 25px; text-align: center; margin: 20px 0; border: 2px dashed #c44569;">
-                <h3 style="color: #c44569; margin: 0 0 15px 0; font-size: 16px; font-weight: bold;">
-                    🔍 QR Code Verifikasi
-                </h3>
-                <img src="${qrCode}" style="width: 150px; height: 150px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="QR Code Booking"/>
-                <p style="color: #7f8c8d; font-size: 12px; margin: 10px 0 0 0;">
-                    Scan QR code untuk verifikasi booking<br>
-                    <strong>${booking_number}</strong>
-                </p>
-            </div>
-            
+            </div>            
         </div>
         
         <!-- Footer -->
