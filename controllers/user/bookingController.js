@@ -62,7 +62,7 @@ const createBooking = async (req, res) => {
                         date: result.tanggal,
                         start_time: result.jam_mulai,
                         end_time: result.jam_selesai,
-                        services: result.layanan_names || result.layanan?.map(l => l.nama).join(', ') || 'N/A',
+                        services: result.layanan_names || result.layanan || 'N/A', // Gunakan langsung string yang sudah diformat
                         status: result.status || 'pending',
                         booking_number: result.booking_number
                     };

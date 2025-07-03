@@ -7,7 +7,6 @@ const bodyParser = require('body-parser');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const compression = require('compression');
-const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss');
 const responseTime = require('response-time'); // Tambahkan ini
 require('./config/cloudinary');
@@ -95,9 +94,6 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10kb' }));
 
 // Logging
 app.use(morgan('dev'));
-
-// Security middleware
-app.use(mongoSanitize());
 
 // XSS protection
 app.use((req, res, next) => {
