@@ -1,5 +1,5 @@
 const { pool } = require('../../db');
-const transactionService = require('./transactionService');
+const { getRecentTransactions } = require('./transactionService');
 
 const getDashboardStats = async () => {
     try {
@@ -91,7 +91,7 @@ const getDashboardStats = async () => {
                     period: "this month"
                 }
             },
-            recentTransactions: await transactionService.getRecentTransactions(4)
+            recentTransactions: await getRecentTransactions(4)
         };
     } catch (err) {
         console.error('[DashboardService] getDashboardStats error:', err);
