@@ -313,7 +313,12 @@ const updateBookingStatus = async (id, status) => {
     // Jika status completed, update juga status transaksi terkait
     if (status === 'completed') {
         await pool.query(
-            "UPDATE transaksi SET status = 'completed' WHERE booking_id = ?",
+            `UPDATE transaksi 
+             SET 
+                status = 'completed', 
+                payment_status = 'paid',
+                paid_amount = total_harga 
+             WHERE booking_id = ?`,
             [id]
         );
     }

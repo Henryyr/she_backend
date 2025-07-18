@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const xss = require('xss');
 const responseTime = require('response-time');
+const errorHandler = require('./middleware/errorHandler');
 require('./config/cloudinary');
 
 const app = express();
@@ -68,16 +69,7 @@ app.use(helmet({
 
 // Validasi dan parsing JSON
 app.use(express.json({ 
-  limit: '10kb',
-  verify: (req, res, buf) => {
-    try {
-      JSON.parse(buf);
-    } catch(e) {
-      const err = new Error('Invalid JSON');
-      err.status = 400;
-      throw err; // Biarkan error handler yang tangani
-    }
-  }
+  limit: '10kb'
 }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
@@ -137,26 +129,6 @@ app.use('/api/email', require('./routes/testRoutes'));
 app.use('/api/vouchers', require('./routes/voucherRoutes'));
 
 // Global error handler
-app.use((err, _req, res, _next) => {
-  const status = err.status || 500;
-  const message = process.env.NODE_ENV === 'production' ? 
-    'Internal server error' : err.message;
-
-  if (process.env.NODE_ENV === 'production') {
-    res.removeHeader('X-Powered-By');
-    res.removeHeader('Server');
-  }
-
-  if (res.headersSent) {
-    // Jika headers sudah dikirim, log error saja
-    console.error('Unhandled error after headers sent:', err);
-    return;
-  }
-
-  res.status(status).json({ 
-    error: message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
-});
+app.use(errorHandler);
 
 module.exports = app;
