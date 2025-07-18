@@ -327,14 +327,10 @@ class TransaksiService {
                 }
             }
             
-                await conn.commit();
-                console.log(`[Webhook] Data pembayaran untuk order ${order_id} berhasil disimpan.`);
-
-    // 2. Jalankan pengiriman email setelahnya (bisa tanpa 'await' jika ingin berjalan di background)
-                prosesTugasSetelahPembayaran(transaksi, webhookData);
-
-                return { message: "Webhook berhasil diproses" };
-
+            await conn.commit();
+            console.log('[TransaksiService] handleWebhook success (non-settlement)', { order_id });
+            return { message: "Webhook processed successfully" };
+            
         } catch (err) {
             console.error('[TransaksiService] handleWebhook error:', err);
             await conn.rollback();

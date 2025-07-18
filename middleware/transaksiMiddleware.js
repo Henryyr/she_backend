@@ -1,7 +1,7 @@
 const { isDevelopment } = require('../config/midtrans');
 
 const validateCreateTransaction = (req, res, next) => {
-    const { booking_id, kategori_transaksi_id } = req.body;
+    const { booking_id, kategori_transaksi_id, is_dp } = req.body;
 
     if (isDevelopment || req.headers['x-test-mode'] === 'true') {
         return next();
