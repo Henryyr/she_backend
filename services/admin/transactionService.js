@@ -1,7 +1,7 @@
 const { pool } = require('../../db');
-const { sendEmail, sendInvoice } = require('./emailService');
+const { sendEmail, sendInvoice } = require('../../services/user/emailService');
 const transactionReceiptTemplate = require('../../html/transactionReceipt');
-const { snap, MIDTRANS_STATUS, validateMidtransNotification } = require('../../config/midtrans');
+const { snap, validateMidtransNotification } = require('../../config/midtrans');
 
 class TransaksiService {
 async getTransactionStatus(order_id, user_id = null) {
@@ -479,15 +479,30 @@ GROUP BY t.id
     }
 
     await conn.commit();
-    console.log('[TransaksiService] handleWebhook success', { order_id });
-    return { message: "Webhook processed successfully" };
-
-  } catch (err) {
-    console.error('[TransaksiService] handleWebhook error:', err);
+    console.log('[TransaksiService] Webhook berhasil, data tersimpan di DB', { order_id });
+    if (transaksi.status === 'paid') {
+      try {
+        await sendInvoice(transaksi.email, transaksi.customerName, {
+          // data transaksi
+          booking_number: transaksi.booking_number,
+          paymentStatus: transaksi.paymentStatus,
+          layanan_nama: transaksi.layanan_nama,
+          tanggal: transaksi.tanggal,
+          jam_mulai: transaksi.jam_mulai,
+          jam_selesai: transaksi.jam_selesai,
+          gross_amount: transaksi.gross_amount,
+          total_harga: transaksi.total_harga,
+          newPaidAmount: transaksi.newPaidAmount,
+          payment_time: transaksi.payment_time,
+        });
+      } catch (error) {
+        console.error('[TransaksiService] Gagal mengirim transaction receipt:', error);
+      }
+    }
+  } catch (error) {
     await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
+    console.error('[TransaksiService] Gagal memperbarui status transaksi:', error);
+    throw error;
   }
 }
 
