@@ -14,22 +14,20 @@ const validateCreateTransaction = (req, res, next) => {
         });
     }
 
-    if (req.body.kategori_transaksi_id === 1 && req.body.is_dp !== undefined) {
+    // Pembayaran cash (ID 1) tidak boleh menggunakan DP
+    if (kategori_transaksi_id === 1 && typeof is_dp !== 'undefined') {
         return res.status(400).json({
             error: "Format tidak valid",
-            details: "Pembayaran cash tidak menggunakan sistem DP"
+            details: "Pembayaran tunai tidak mendukung sistem DP."
         });
     }
 
-    if (req.body.kategori_transaksi_id === 2 && req.body.is_dp === false) {
-        return res.status(400).json({
+    // Pembayaran non-tunai (ID 2) harus DP (untuk saat ini)
+    if (kategori_transaksi_id === 2 && is_dp === false) {
+         return res.status(400).json({
             error: "Format tidak valid",
-            details: "Pembayaran non-cash hanya tersedia dengan sistem DP"
+            details: "Saat ini pembayaran online hanya tersedia dengan metode DP."
         });
-    }
-
-    if (req.body.kategori_transaksi_id === 2) {
-        req.body.is_dp = true;
     }
 
     next();
