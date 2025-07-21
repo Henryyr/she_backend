@@ -7,7 +7,7 @@ const resetPasswordTemplate = require('../../html/reset-password');
 
 // Email transporter setup (Namecheap SMTP)
 const transporter = nodemailer.createTransport({
-  host: 'mail.privateemail.com',
+  host: 'smtp.gmail.com',
   port: 465, // gunakan 465 untuk SSL, 587 untuk TLS
   secure: true, // true untuk port 465, false untuk 587
   auth: {
