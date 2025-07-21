@@ -8,10 +8,8 @@ const NodeCache = require('node-cache');
 // stdTTL: 3600 detik = 1 jam
 const transactionCache = new NodeCache({ stdTTL: 3600 });
 
-/**
- * Fungsi ini berjalan di latar belakang untuk mengirim email dan melakukan tugas lain
- * setelah pembayaran berhasil tanpa menghalangi respons ke webhook.
- */
+const userCache = new NodeCache({ stdTTL: 60 });
+
 const prosesTugasSetelahPembayaran = async (transaksi, webhookData) => {
     try {
         const { order_id, gross_amount, settlement_time, transaction_time } = webhookData;
@@ -21,7 +19,6 @@ const prosesTugasSetelahPembayaran = async (transaksi, webhookData) => {
             ? 'Pelunasan Berhasil - Booking Salon'
             : 'Pembayaran DP Berhasil - Booking Salon';
 
-        // Hitung ulang status pembayaran untuk data email yang akurat
         const updatedPaidAmount = (parseFloat(transaksi.paid_amount) || 0) + parseFloat(gross_amount);
         let newPaymentStatus = 'unpaid';
         if (updatedPaidAmount >= parseFloat(transaksi.total_harga)) {
@@ -57,7 +54,6 @@ const prosesTugasSetelahPembayaran = async (transaksi, webhookData) => {
     }
 };
 
-
 class TransaksiService {
     async getTransactionStatus(order_id, user_id = null) {
         const cacheKey = `status_${order_id}`;
@@ -71,8 +67,12 @@ class TransaksiService {
         console.log('[TransaksiService] getTransactionStatus started', { order_id, user_id });
         
         try {
-            const midtransResponse = await this.fetchMidtransStatus(order_id);
-            const localTransaction = await this.getLocalTransactionData(order_id, user_id);
+            // [OPTIMASI] Menjalankan pemanggilan I/O (API & DB) secara paralel.
+            // Ini akan lebih cepat daripada menjalankannya satu per satu (sekuensial).
+            const [midtransResponse, localTransaction] = await Promise.all([
+                this.fetchMidtransStatus(order_id),
+                this.getLocalTransactionData(order_id, user_id)
+            ]);
 
             const safeMidtransData = {
                 status_code: midtransResponse.status_code,
@@ -105,7 +105,6 @@ class TransaksiService {
                 }
             };
 
-            // Simpan ke cache jika statusnya final
             const finalStatuses = ['settlement', 'capture', 'expire', 'cancel', 'deny', 'failed'];
             if (finalStatuses.includes(midtransResponse.transaction_status)) {
                 transactionCache.set(cacheKey, combinedData);
@@ -187,8 +186,7 @@ class TransaksiService {
         console.log('[TransaksiService] createTransaction started', { booking_id, kategori_transaksi_id, is_dp, user_id });
         const conn = await pool.getConnection();
         try {
-            await conn.beginTransaction();
-
+            // [OPTIMASI] Pindahkan validasi dan persiapan data di luar transaksi DB
             const [bookingResult] = await conn.query(
                 `SELECT b.id, b.total_harga, b.final_price, b.status, b.voucher_id, b.discount,
                 v.code as voucher_code, v.description as voucher_name, b.user_id
@@ -204,55 +202,59 @@ class TransaksiService {
             const total_harga = final_price;
             
             if (bookingStatus === 'completed') throw { status: 400, message: "Booking sudah dibayar" };
-            
+
             const [existingTransaction] = await conn.query(
                 `SELECT id, payment_status, status, dp_amount FROM transaksi WHERE booking_id = ? AND status NOT IN ('failed', 'expired', 'cancelled')`,
                 [booking_id]
             );
 
             if (existingTransaction.length > 0) {
-                const existing = existingTransaction[0];
+                 const existing = existingTransaction[0];
                 if (existing.payment_status === 'paid') throw { status: 400, message: "Booking ini sudah dibayar penuh" };
                 if (existing.dp_amount > 0) throw { status: 400, message: "DP untuk booking ini sudah dibuat" };
             }
-            
+
             const order_id = `BKG-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(booking_id).padStart(3, '0')}-${Math.random().toString(36).substr(2, 5)}`;
             const booking_number = order_id;
             
-            let paid_amount = 0, transactionStatus = 'pending', payment_status = 'unpaid', snapResponse = null, amountToPay = total_harga, dp_amount = 0;
-            
-            if (kategori_transaksi_id === 1) { // Cash
-                amountToPay = total_harga;
-            } else { // Non-cash
+            let amountToPay = total_harga, dp_amount = 0, snapResponse = null;
+            let payment_status = kategori_transaksi_id === 1 ? 'unpaid' : 'dp';
+
+            // [OPTIMASI] Buat transaksi Midtrans SEBELUM memulai transaksi DB
+            // Ini mencegah koneksi DB menunggu proses network yang bisa lambat.
+            if (kategori_transaksi_id !== 1) { // Non-cash
                 dp_amount = Math.round(total_harga * 0.3);
                 amountToPay = dp_amount;
-                payment_status = 'dp';
+                
                 snapResponse = await snap.createTransaction({
                     transaction_details: { order_id, gross_amount: amountToPay },
                     item_details: [{ id: booking_id, price: amountToPay, quantity: 1, name: 'Booking Salon (DP 30%)', brand: "Salon", category: "Perawatan" }],
                     customer_details: { user_id }
                 });
             }
-            
+
+            // Transaksi DB sekarang hanya untuk menulis, jadi lebih cepat.
+            await conn.beginTransaction();
+
             const [result] = await conn.query(
                 `INSERT INTO transaksi (user_id, booking_id, total_harga, paid_amount, dp_amount, kategori_transaksi_id, status, midtrans_order_id, payment_status, booking_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [user_id, booking_id, total_harga, paid_amount, dp_amount, kategori_transaksi_id, transactionStatus, order_id, payment_status, booking_number]
+                [user_id, booking_id, total_harga, 0, dp_amount, kategori_transaksi_id, 'pending', order_id, payment_status, booking_number]
             );
             
-            await conn.commit();
-            
             if (voucher_id) {
-                await pool.query(`INSERT IGNORE INTO voucher_usages (user_id, voucher_id) VALUES (?, ?)`, [booking_user_id, voucher_id]);
+                await conn.query(`INSERT IGNORE INTO voucher_usages (user_id, voucher_id) VALUES (?, ?)`, [booking_user_id, voucher_id]);
             }
+            
+            await conn.commit();
             
             let voucher = null;
             if (voucher_id && discount > 0) {
                 voucher = { id: voucher_id, code: voucher_code, name: voucher_name, discount: Math.round(discount), message: `Voucher berhasil diterapkan dengan diskon sebesar Rp ${Math.round(discount).toLocaleString('id-ID')}.` };
             }
-            
+
             return {
                 message: "Transaksi dibuat", transaksi_id: result.insertId, order_id, midtrans_order_id: order_id,
-                status: transactionStatus, snap_url: snapResponse ? snapResponse.redirect_url : null,
+                status: 'pending', snap_url: snapResponse ? snapResponse.redirect_url : null,
                 dp_amount, remaining_amount: total_harga - dp_amount, payment_status,
                 total_harga, amount_to_pay: amountToPay,
                 payment_method: kategori_transaksi_id === 1 ? 'Cash' : 'Online Payment (DP)', voucher
@@ -260,7 +262,7 @@ class TransaksiService {
             
         } catch (err) {
             console.error('[TransaksiService] createTransaction error:', err);
-            await conn.rollback();
+            await conn.rollback(); // Rollback tetap penting jika ada error di dalam blok try-catch
             if (err.ApiResponse && err.ApiResponse.error_messages) throw { status: 400, message: "Gagal membuat transaksi", details: err.ApiResponse.error_messages };
             if (err.status) throw err;
             throw { status: 500, message: "Terjadi kesalahan saat membuat transaksi", details: process.env.NODE_ENV === 'development' ? err.message : undefined };
@@ -342,6 +344,8 @@ class TransaksiService {
 
     async payRemaining(transaksi_id, user_id) {
         console.log('[TransaksiService] payRemaining started', { transaksi_id, user_id });
+        // [OPTIMASI] Tidak perlu full DB transaction (BEGIN/COMMIT) untuk satu query UPDATE.
+        // Tapi kita tetap butuh koneksi untuk membaca dan menulis.
         const conn = await pool.getConnection();
         try {
             const [transaksiResult] = await conn.query(
@@ -361,13 +365,15 @@ class TransaksiService {
             if (sisaPembayaran <= 0) throw { status: 400, message: "Transaksi sudah lunas" };
             
             const pelunasanOrderId = `${transaksi.midtrans_order_id}-PELUNASAN`;
-            
+
+            // [OPTIMASI] Buat transaksi Midtrans SEBELUM update DB.
             const snapResponse = await snap.createTransaction({
                 transaction_details: { order_id: pelunasanOrderId, gross_amount: sisaPembayaran },
                 item_details: [{ id: transaksi.booking_id, price: sisaPembayaran, quantity: 1, name: "Pelunasan Sisa Pembayaran", brand: "Salon", category: "Perawatan" }],
                 customer_details: { user_id }
             });
 
+            // Setelah snap berhasil, baru update DB.
             await conn.query(`UPDATE transaksi SET pelunasan_order_id = ? WHERE id = ?`, [pelunasanOrderId, transaksi_id]);
             
             console.log('[TransaksiService] payRemaining success', { transaksi_id, pelunasan_order_id: pelunasanOrderId });
@@ -375,7 +381,7 @@ class TransaksiService {
             
         } catch (err) {
             console.error('[TransaksiService] payRemaining error:', err);
-            await conn.rollback();
+            // Tidak perlu rollback karena tidak ada transaction block, tapi error handling tetap penting.
             throw err;
         } finally {
             conn.release();
@@ -383,6 +389,14 @@ class TransaksiService {
     }
 
     async getUserTransactions(user_id) {
+        const cacheKey = `user_transactions_${user_id}`;
+        const cachedData = userCache.get(cacheKey);
+
+        if (cachedData) {
+            console.log(`[TransaksiService] Mengembalikan daftar transaksi dari cache untuk user ${user_id}`);
+            return cachedData;
+        }
+
         try {
             const [results] = await pool.query(`
                 SELECT 
@@ -404,12 +418,17 @@ class TransaksiService {
                 ORDER BY CASE t.status WHEN 'pending' THEN 1 WHEN 'processing' THEN 2 WHEN 'completed' THEN 3 ELSE 4 END, b.tanggal DESC, t.created_at DESC
             `, [user_id]);
             
-            return results.map(row => {
+            const sanitizedResults = results.map(row => {
                 const safeRow = { ...row };
                 if ('va_numbers' in safeRow) safeRow.va_numbers = '[MASKED]';
                 if ('payment_amounts' in safeRow) safeRow.payment_amounts = '[MASKED]';
                 return safeRow;
             });
+            
+            // Dan baris ini juga akan berfungsi
+            userCache.set(cacheKey, sanitizedResults);
+            
+            return sanitizedResults;
             
         } catch (err) {
             throw { status: 500, message: "Gagal mengambil data transaksi", details: err.message };

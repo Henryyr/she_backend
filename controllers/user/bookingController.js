@@ -38,67 +38,60 @@ const createBooking = async (req, res) => {
             });
         }
 
-        try {
             const result = await bookingService.createBooking(bookingData);
             console.log('[BookingController] Booking berhasil', result);
 
+            res.json(result);
+
             // Send email notification
             try {
-                if (req.user.email) {
-                    await emailService.sendBookingInformation(req.user.email, result);
-                }
+            if (req.user.email) {
+                await emailService.sendBookingInformation(req.user.email, result);
+                console.log(`[Latar Belakang] Email untuk booking #${result.booking_number} terkirim.`);
+            }
             } catch (emailErr) {
-                console.error('Email send error:', emailErr);
+            console.error('[Latar Belakang] Gagal mengirim email:', emailErr);
             }
-
-            // Emit Socket.IO event for new booking
             const io = getIO();
-            if (io) {
-                try {
-                    // Format booking data for admin notification
-                    const bookingNotification = {
-                        id: result.booking_number || result.id,
-                        customer: req.user.fullname || req.user.nama || 'Unknown Customer',
-                        date: result.tanggal,
-                        start_time: result.jam_mulai,
-                        end_time: result.jam_selesai,
-                        services: result.layanan_names || result.layanan || 'N/A', // Gunakan langsung string yang sudah diformat
-                        status: result.status || 'pending',
-                        booking_number: result.booking_number
-                    };
+        if (io) {
+            try {
+                const bookingNotification = {
+                    id: result.booking_number || result.id,
+                    customer: req.user.fullname || 'Unknown Customer',
+                    date: result.tanggal,
+                    start_time: result.jam_mulai,
+                    services: result.layanan_names || 'N/A',
+                    status: result.status || 'pending',
+                    booking_number: result.booking_number
+                };
 
-                    // Emit to admin room
-                    io.to('admin-room').emit('new-booking', {
-                        booking: bookingNotification,
-                        message: `New booking from ${bookingNotification.customer}`,
-                        timestamp: new Date().toISOString()
-                    });
+                io.to('admin-room').emit('new-booking', {
+                    booking: bookingNotification,
+                    message: `New booking from ${bookingNotification.customer}`,
+                    timestamp: new Date().toISOString()
+                });
+                console.log('[Latar Belakang] Event new-booking terkirim ke admin-room.');
+                
+                // Update dashboard stats di latar belakang
+                await dashboardService.updateDashboardStats(io);
+                console.log('[Latar Belakang] Statistik dashboard diperbarui.');
 
-                    console.log('✅ New booking event emitted to admin room');
-
-                    // Update dashboard stats
-                    await dashboardService.updateDashboardStats(io);
-                } catch (emitErr) {
-                    console.error('Socket emit error:', emitErr);
-                }
+            } catch (backgroundErr) {
+                console.error('[Latar Belakang] Gagal menjalankan tugas socket/dashboard:', backgroundErr);
             }
+        }
 
-            res.json(result);
-        } catch (error) {
-            console.error('[BookingController] Booking gagal:', error);
+    } catch (error) {
+        // Tangani error utama dari validasi atau pembuatan booking
+        console.error('[BookingController] Booking gagal:', error);
+        // Pastikan tidak mengirim respons lagi jika sudah terkirim
+        if (!res.headersSent) {
             return res.status(400).json({
                 error: 'Booking gagal',
                 details: error.message || error.toString(),
                 timestamp: new Date().toISOString()
             });
         }
-    } catch (error) {
-        console.error('[BookingController] Error luar:', error);
-        return res.status(400).json({
-            error: 'Invalid request body',
-            details: error.message || error.toString(),
-            timestamp: new Date().toISOString()
-        });
     }
 };
 
