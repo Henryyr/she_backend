@@ -5,362 +5,196 @@ const { RATE_LIMIT } = require("../../config/rateLimit");
 const bookingHelper = require("../../helpers/bookingHelper");
 const voucherService = require("../../services/user/voucherService"); // Add voucherService
 
+
+const getProductDetails = (connection, { hair_color, smoothing_product, keratin_product }) => {
+    const queries = [];
+
+    if (hair_color) {
+        queries.push(
+            connection.query(
+                `SELECT 'hair_color' as type, hc.*, hp.harga_dasar, pb.nama as brand_nama FROM hair_colors hc JOIN hair_products hp ON hc.product_id = hp.id JOIN product_brands pb ON hp.brand_id = pb.id WHERE hc.id = ?`,
+                [hair_color.color_id]
+            )
+        );
+    }
+    if (smoothing_product) {
+        queries.push(
+            connection.query(
+                `SELECT 'smoothing' as type, sp.*, pb.nama as brand_nama FROM smoothing_products sp JOIN product_brands pb ON sp.brand_id = pb.id WHERE sp.id = ?`,
+                [smoothing_product.product_id]
+            )
+        );
+    }
+    if (keratin_product) {
+        queries.push(
+            connection.query(
+                `SELECT 'keratin' as type, kp.*, pb.nama as brand_nama FROM keratin_products kp JOIN product_brands pb ON kp.brand_id = pb.id WHERE kp.id = ?`,
+                [keratin_product.product_id]
+            )
+        );
+    }
+
+    return Promise.all(queries);
+};
+
 const createBooking = async (data) => {
-  const { user_id, layanan_id, tanggal, jam_mulai, hair_color, voucher_code } =
-    data;
-  let { smoothing_product, keratin_product } = data;
+  const { user_id, layanan_id, tanggal, jam_mulai, hair_color, smoothing_product, keratin_product, voucher_code } = data;
   const layanan_ids = Array.isArray(layanan_id) ? layanan_id : [layanan_id];
   const connection = await pool.getConnection();
 
-  let layananWithCategory = [];
-  let voucher = {
-    id: null,
-    discount: 0,
-    message: "Tidak ada voucher yang diterapkan.",
-  };
-
   try {
-    const [requests] = await connection.query(
-      `SELECT /*+ INDEX(booking idx_user_created) */ COUNT(*) as count 
-             FROM booking 
-             WHERE user_id = ? 
-             AND created_at > NOW() - INTERVAL ? MINUTE`,
-      [user_id, process.env.NODE_ENV === "production" ? 60 : 5]
-    );
-
-    if (requests[0].count >= RATE_LIMIT.DATABASE.MAX_REQUESTS) {
-      const timeWindow =
-        process.env.NODE_ENV === "production" ? "jam" : "menit";
-      throw new Error(
-        `Rate limit: Max ${RATE_LIMIT.DATABASE.MAX_REQUESTS} requests per ${timeWindow}. [DEV MODE]`
-      );
-    }
-
-    await connection.beginTransaction();
-
-    // Cek apakah sudah ada booking sebelumnya
-    const [[existingBookings], layananResults] = await Promise.all([
-      connection.query(
-        "SELECT /*+ INDEX(booking idx_user_tanggal) */ id FROM booking WHERE user_id = ? AND tanggal = ? FOR UPDATE",
-        [user_id, tanggal]
-      ),
-      connection.query(
-        `SELECT /*+ INDEX(l idx_layanan_id) */ l.*, lk.nama as kategori_nama 
-                 FROM layanan l 
-                 JOIN kategori_layanan lk ON l.kategori_id = lk.id 
-                 WHERE l.id IN (?)`,
-        [layanan_ids]
-      ),
+    // =================================================================
+    // TAHAP 1: VALIDASI & PENGAMBILAN DATA (SECARA PARALEL)
+    // Semua query SELECT dijalankan di luar transaksi untuk efisiensi
+    // =================================================================
+    const [
+        [rateLimitResult],
+        [existingBookings],
+        [layananWithCategory],
+        productQueryResults,
+        voucherResult // Bisa undefined jika tidak ada voucher_code
+    ] = await Promise.all([
+        connection.query(`SELECT COUNT(*) as count FROM booking WHERE user_id = ? AND created_at > NOW() - INTERVAL ? MINUTE`, [user_id, process.env.NODE_ENV === "production" ? 60 : 5]),
+        connection.query("SELECT id FROM booking WHERE user_id = ? AND tanggal = ? AND status NOT IN ('cancelled', 'completed')", [user_id, tanggal]),
+        connection.query(`SELECT l.*, lk.nama as kategori_nama FROM layanan l JOIN kategori_layanan lk ON l.kategori_id = lk.id WHERE l.id IN (?)`, [layanan_ids]),
+        getProductDetails(connection, { hair_color, smoothing_product, keratin_product }),
+        voucher_code ? voucherService.validateVoucher(voucher_code, user_id, 0) : Promise.resolve(null)
     ]);
-
-    if (existingBookings.length > 0) {
-      throw new Error("Anda sudah memiliki booking pada hari ini");
+    
+    // --- Lakukan semua validasi di sini ---
+    if (rateLimitResult[0].count >= RATE_LIMIT.DATABASE.MAX_REQUESTS) {
+        throw new Error(`Rate limit terlampaui. Silakan coba lagi nanti.`);
     }
-
-    layananWithCategory = layananResults[0];
-
-    if (layananWithCategory.length === 0) {
-      throw new Error("Layanan tidak ditemukan");
+    if (existingBookings.length > 0) {
+        throw new Error("Anda sudah memiliki booking pada hari ini.");
     }
     if (layananWithCategory.length !== layanan_ids.length) {
-      throw new Error("Beberapa layanan tidak valid");
+        throw new Error("Beberapa layanan tidak valid.");
     }
 
     const categories = layananWithCategory.map((l) => l.kategori_nama);
-
-    // Validasi produk hanya jika kategori memang membutuhkan produk
-    if (categories.includes("Cat Rambut")) {
-      if (!hair_color) {
-        throw new Error("Layanan Cat Rambut membutuhkan pemilihan warna");
-      }
+    bookingValidationHelper.isProductUnnecessary(categories, hair_color, smoothing_product, keratin_product);
+    if (bookingValidationHelper.isIncompatibleCombo(categories) || bookingValidationHelper.hasDuplicateCategory(categories)) {
+        throw new Error("Kombinasi layanan atau duplikasi kategori tidak diperbolehkan.");
+    }
+    if (categories.includes("Cat Rambut") && !hair_color) {
+        throw new Error("Layanan Cat Rambut membutuhkan pemilihan warna.");
     }
 
-    if (bookingValidationHelper.isIncompatibleCombo(categories)) {
-      throw new Error("Kombinasi layanan yang dipilih tidak diperbolehkan");
-    }
-
-    if (bookingValidationHelper.hasDuplicateCategory(categories)) {
-      throw new Error(
-        "Tidak bisa booking layanan dari kategori yang sama sekaligus. Silakan booking terpisah."
-      );
-    }
-
-    // Validasi produk hanya jika kategori memang membutuhkan produk
-    bookingValidationHelper.isProductUnnecessary(
-      categories,
-      hair_color,
-      smoothing_product,
-      keratin_product
-    );
-
-    // Hitung total harga semua layanan
-    let total_harga = layananWithCategory.reduce(
-      (sum, l) => sum + parseFloat(l.harga),
-      0
-    );
+    // Olah hasil query produk
+    const productResults = productQueryResults.flat().map(res => res[0]);
+    let total_harga = layananWithCategory.reduce((sum, l) => sum + parseFloat(l.harga), 0);
     let product_detail = {};
-    let productResults = [];
-
-    try {
-      if (hair_color) {
-        const [hairColorResults] = await connection.query(
-          `
-                    SELECT 'hair_color' as type, hc.*, hp.harga_dasar, pb.nama as brand_nama
-                    FROM hair_colors hc
-                    JOIN hair_products hp ON hc.product_id = hp.id
-                    JOIN product_brands pb ON hp.brand_id = pb.id
-                    WHERE hc.id = ? AND hc.product_id = ? AND hp.brand_id = ?
-                `,
-          [hair_color.color_id, hair_color.product_id, hair_color.brand_id]
-        );
-        if (!hairColorResults || hairColorResults.length === 0) {
-          throw new Error("Warna rambut yang dipilih tidak ditemukan");
-        }
-        productResults = [...productResults, ...hairColorResults];
-      }
-
-      if (smoothing_product) {
-        const [smoothingResults] = await connection.query(
-          `
-                    SELECT 'smoothing' as type, sp.*, pb.nama as brand_nama
-                    FROM smoothing_products sp
-                    JOIN product_brands pb ON sp.brand_id = pb.id
-                    WHERE sp.id = ? AND sp.brand_id = ?
-                `,
-          [smoothing_product.product_id, smoothing_product.brand_id]
-        );
-        if (!smoothingResults || smoothingResults.length === 0) {
-          throw new Error("Produk smoothing yang dipilih tidak ditemukan");
-        }
-        productResults = [...productResults, ...smoothingResults];
-      }
-
-      if (keratin_product) {
-        const [keratinResults] = await connection.query(
-          `
-                    SELECT 'keratin' as type, kp.*, pb.nama as brand_nama
-                    FROM keratin_products kp
-                    JOIN product_brands pb ON kp.brand_id = pb.id
-                    WHERE kp.id = ? AND kp.brand_id = ?
-                `,
-          [keratin_product.product_id, keratin_product.brand_id]
-        );
-        if (!keratinResults || keratinResults.length === 0) {
-          throw new Error("Produk keratin yang dipilih tidak ditemukan");
-        }
-        productResults = [...productResults, ...keratinResults];
-      }
-    } catch (err) {
-      await connection.rollback();
-      throw err;
-    }
 
     productResults.forEach((result) => {
-      switch (result.type) {
-        case "hair_color":
-          total_harga +=
-            parseFloat(result.harga_dasar) + parseFloat(result.tambahan_harga);
-          product_detail.hair_color = result;
-          break;
-        case "smoothing":
-          total_harga += parseFloat(result.harga);
-          product_detail.smoothing = result;
-          break;
-        case "keratin":
-          total_harga += parseFloat(result.harga);
-          product_detail.keratin = result;
-          break;
-      }
+        if (!result) throw new Error("Salah satu produk yang dipilih tidak ditemukan.");
+        switch (result.type) {
+            case "hair_color":
+                total_harga += parseFloat(result.harga_dasar) + parseFloat(result.tambahan_harga);
+                product_detail.hair_color = result;
+                break;
+            case "smoothing":
+                total_harga += parseFloat(result.harga);
+                product_detail.smoothing = result;
+                break;
+            case "keratin":
+                total_harga += parseFloat(result.harga);
+                product_detail.keratin = result;
+                break;
+        }
     });
 
-    // Apply voucher discount - UPDATED LOGIC
-    let discount = 0;
+    // Validasi ulang voucher dengan total harga yang benar
     let final_price = total_harga;
+    let discount = 0;
     let voucher_id = null;
-
+    let voucher = { id: null, discount: 0, message: "Tidak ada voucher yang diterapkan." };
     if (voucher_code) {
-      try {
-        // NOTE: tambahkan user_id sebagai parameter
-        const voucherResult = await voucherService.validateVoucher(
-          voucher_code,
-          user_id,
-          total_harga // Pass total_harga for minimum purchase validation
-        );
-        
-        // PASTIKAN voucherId BUKAN undefined/NaN
-        voucher_id = voucherResult.voucherId && !isNaN(voucherResult.voucherId) 
-          ? parseInt(voucherResult.voucherId) 
-          : null;
-        
-        if (!voucher_id) {
-          throw new Error("Invalid voucher ID returned");
+        try {
+            const finalVoucherResult = await voucherService.validateVoucher(voucher_code, user_id, total_harga);
+            voucher_id = finalVoucherResult.voucherId ? parseInt(finalVoucherResult.voucherId) : null;
+            if (!voucher_id) throw new Error("Voucher ID tidak valid.");
+            
+            if (finalVoucherResult.discount_type === 'percentage') {
+                discount = (total_harga * finalVoucherResult.discount_value) / 100;
+            } else {
+                discount = finalVoucherResult.discount_value;
+            }
+            final_price = Math.max(0, total_harga - discount);
+            voucher = { id: voucher_id, discount: Math.round(discount), message: `Voucher "${voucher_code}" berhasil diterapkan.` };
+        } catch (voucherError) {
+            voucher.message = `Voucher "${voucher_code}" tidak valid: ${voucherError.message}.`;
         }
-
-        // Hitung diskon sesuai tipe voucher
-        if (voucherResult.discount_type === 'percentage') {
-          discount = Math.min(
-            (total_harga * voucherResult.discount_value) / 100,
-            voucherResult.max_discount || total_harga
-          );
-        } else if (voucherResult.discount_type === 'fixed') {
-          discount = Math.min(voucherResult.discount_value, total_harga);
-        }
-        
-        // Hitung harga akhir
-        final_price = Math.max(0, total_harga - discount);
-        
-        voucher = {
-          id: voucher_id,
-          discount: Math.round(discount),
-          message: `Voucher "${voucher_code}" berhasil diterapkan dengan diskon sebesar Rp ${Math.round(discount).toLocaleString('id-ID')}.`,
-        };
-      } catch (voucherError) {
-        voucher = {
-          id: null,
-          discount: 0,
-          message: `Voucher "${voucher_code}" tidak valid: ${voucherError.message}.`,
-        };
-        // Reset final_price if voucher fails
-        final_price = total_harga;
-      }
     }
-
-    // Bulatkan final_price hanya di sini, sebelum digunakan untuk insert dan response
     final_price = Math.round(final_price);
 
-    // Generate booking number
-    const bookingNumber = await bookingHelper.generateBookingNumber();
-    const total_estimasi = layananWithCategory.reduce(
-      (sum, l) => sum + l.estimasi_waktu,
-      0
-    );
-    const jam_selesai = new Date(`${tanggal} ${jam_mulai}`);
-    jam_selesai.setMinutes(jam_selesai.getMinutes() + total_estimasi);
-    const jam_selesai_string = jam_selesai.toTimeString().split(" ")[0];
-
-    // INSERT booking ke database (TANPA FIELD PROMO)
-    const [insertResult] = await connection.query(
-      `INSERT INTO booking /*+ BATCH_INSERT */ 
-        (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, voucher_id, discount, final_price)
-        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
-      [
-        user_id,
-        tanggal,
-        jam_mulai,
-        jam_selesai_string,
-        bookingNumber,
-        total_harga,
-        data.special_request || null,
-        voucher_id,
-        discount,
-        final_price,
-      ]
-    );
-
-    const booking_id = insertResult.insertId;
-
-    await connection.query(
-      `INSERT INTO booking_layanan (booking_id, layanan_id) VALUES ?`,
-      [layanan_ids.map((id) => [booking_id, id])]
-    );
-
-    if (hair_color) {
-      await connection.query(
-        `INSERT INTO booking_colors (booking_id, color_id, brand_id, harga_saat_booking)
-                VALUES (?, ?, ?, ?)`,
-        [
-          booking_id,
-          hair_color.color_id,
-          hair_color.brand_id,
-          product_detail.hair_color
-            ? product_detail.hair_color.tambahan_harga
-            : 0,
-        ]
-      );
-    }
-
-    if (hair_color) {
-      await stockService.reduceHairColorStock(
-        hair_color.color_id,
-        1,
-        connection
-      );
-    }
-    if (smoothing_product) {
-      await stockService.reduceSmoothingStock(
-        smoothing_product.product_id,
-        smoothing_product.brand_id,
-        1,
-        connection
-      );
-    }
-    if (keratin_product) {
-      await stockService.reduceKeratinStock(
-        keratin_product.product_id,
-        keratin_product.brand_id,
-        1,
-        connection
-      );
-    }
-
-    await connection.commit();
-
-    let cancel_timer = null;
+    // =================================================================
+    // TAHAP 2: TRANSAKSI DATABASE (HANYA OPERASI TULIS)
+    // Transaksi menjadi lebih singkat dan cepat.
+    // =================================================================
+    await connection.beginTransaction();
     try {
-      const now = new Date();
-      const tanggalStr =
-        typeof tanggal === "string" ? tanggal.split("T")[0] : tanggal;
-      const jamStr = jam_mulai.length === 5 ? jam_mulai : jam_mulai.slice(0, 5);
-      const startDateTime = new Date(`${tanggalStr}T${jamStr}:00+08:00`);
-      const batasCancel = new Date(startDateTime.getTime() + 30 * 60000);
-      cancel_timer = Math.max(
-        0,
-        Math.floor((batasCancel.getTime() - now.getTime()) / 1000)
-      );
-    } catch (e) {
-      cancel_timer = null;
-    }
+        const bookingNumber = await bookingHelper.generateBookingNumber();
+        const total_estimasi = layananWithCategory.reduce((sum, l) => sum + l.estimasi_waktu, 0);
+        const jam_selesai = new Date(`${tanggal} ${jam_mulai}`);
+        jam_selesai.setMinutes(jam_selesai.getMinutes() + total_estimasi);
+        const jam_selesai_string = jam_selesai.toTimeString().split(" ")[0];
 
-    // Hapus stok dari product_detail sebelum return
-    if (
-      product_detail.hair_color &&
-      product_detail.hair_color.stok !== undefined
-    ) {
-      delete product_detail.hair_color.stok;
-    }
-    if (
-      product_detail.smoothing &&
-      product_detail.smoothing.stok !== undefined
-    ) {
-      delete product_detail.smoothing.stok;
-    }
-    if (product_detail.keratin && product_detail.keratin.stok !== undefined) {
-      delete product_detail.keratin.stok;
-    }
+        const [insertResult] = await connection.query(
+            `INSERT INTO booking (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, voucher_id, discount, final_price) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+            [user_id, tanggal, jam_mulai, jam_selesai_string, bookingNumber, total_harga, data.special_request || null, voucher_id, discount, final_price]
+        );
+        const booking_id = insertResult.insertId;
 
-    return {
-      booking_id,
-      booking_number: bookingNumber,
-      layanan_id: layanan_ids,
-      total_harga: final_price,
-      status: "pending",
-    layanan: layananWithCategory.map((l) => l.nama), // Kirim sebagai array      kategori: categories.join(" + "),
-      tanggal,
-      jam_mulai,
-      jam_selesai: jam_selesai_string,
-      product_detail,
-      special_request: data.special_request || null,
-      voucher,
-      cancel_timer,
-    };
+        const bookingLayananValues = layanan_ids.map(id => [booking_id, id]);
+        await connection.query(`INSERT INTO booking_layanan (booking_id, layanan_id) VALUES ?`, [bookingLayananValues]);
+
+        if (hair_color) {
+            await connection.query(`INSERT INTO booking_colors (booking_id, color_id, brand_id, harga_saat_booking) VALUES (?, ?, ?, ?)`, [booking_id, hair_color.color_id, hair_color.brand_id, product_detail.hair_color.tambahan_harga]);
+            await stockService.reduceHairColorStock(hair_color.color_id, 1, connection);
+        }
+        if (smoothing_product) {
+            await stockService.reduceSmoothingStock(smoothing_product.product_id, smoothing_product.brand_id, 1, connection);
+        }
+        if (keratin_product) {
+            await stockService.reduceKeratinStock(keratin_product.product_id, keratin_product.brand_id, 1, connection);
+        }
+
+        await connection.commit();
+
+        // Siapkan data respons
+        const cancel_timer = Math.max(0, Math.floor((new Date(`${tanggal}T${jam_mulai}:00+08:00`).getTime() + 30 * 60000 - Date.now()) / 1000));
+        delete product_detail?.hair_color?.stok;
+        delete product_detail?.smoothing?.stok;
+        delete product_detail?.keratin?.stok;
+        
+        return {
+            booking_id,
+            booking_number: bookingNumber,
+            layanan_id: layanan_ids,
+            total_harga: final_price,
+            status: "pending",
+            layanan: layananWithCategory.map((l) => l.nama),
+            tanggal,
+            jam_mulai,
+            jam_selesai: jam_selesai_string,
+            product_detail,
+            special_request: data.special_request || null,
+            voucher,
+            cancel_timer,
+        };
+
+    } catch (err) {
+        await connection.rollback();
+        throw err; // Lemparkan error agar ditangani di blok catch luar
+    }
   } catch (err) {
-    await connection.rollback();
+    // Tidak perlu rollback di sini karena sudah ditangani di dalam blok try-catch transaksi
     throw err;
   } finally {
     connection.release();
   }
 };
-
 const getAllBookings = async (page = 1, limit = 10, user_id) => {
   const connection = await pool.getConnection();
   try {
