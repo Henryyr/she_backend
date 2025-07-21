@@ -1,6 +1,6 @@
 const { pool } = require('../../db');
 const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 300 }); // 5 minutes cache
+const cache = new NodeCache({ stdTTL: 3600 }); // 1 hour cache
 
 const getAllProducts = async () => {
     const cacheKey = 'all_products';
@@ -170,6 +170,10 @@ const getHairColors = async () => {
 };
 
 const getSmoothingProducts = async () => {
+    const cacheKey = 'smoothing_products_public';
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
     const connection = await pool;
     try {
         const [products] = await connection.query(`
@@ -179,6 +183,7 @@ const getSmoothingProducts = async () => {
             WHERE sp.stok > 0
             ORDER BY pb.nama, sp.nama
         `);
+        cache.set(cacheKey, products); // Simpan ke cache
         return products;
     } catch (err) {
         throw new Error('Gagal mengambil data smoothing: ' + err.message);
@@ -186,6 +191,10 @@ const getSmoothingProducts = async () => {
 };
 
 const getKeratinProducts = async () => {
+    const cacheKey = 'keratin_products_public';
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
     const connection = await pool;
     try {
         const [products] = await connection.query(`
@@ -195,6 +204,7 @@ const getKeratinProducts = async () => {
             WHERE kp.stok > 0
             ORDER BY pb.nama, kp.nama
         `);
+        cache.set(cacheKey, products); // Simpan ke cache
         return products;
     } catch (err) {
         throw new Error('Gagal mengambil data keratin: ' + err.message);
