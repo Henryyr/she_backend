@@ -4,12 +4,12 @@
 const subject = '✨ She Salon - Siap Memanjakan Anda!';
 
 const text = (bookingData) => {
-    // Gabungkan dengan " + " untuk versi teks biasa agar mudah dibaca.
-    const layananText = Array.isArray(bookingData.layanan)
-        ? bookingData.layanan.join(' + ')
-        : bookingData.layanan;
+  // Gabungkan dengan " + " untuk versi teks biasa agar mudah dibaca.
+  const layananText = Array.isArray(bookingData.layanan)
+    ? bookingData.layanan.join(' + ')
+    : bookingData.layanan;
 
-    return `
+  return `
 Halo ${bookingData.nama_customer || 'Pelanggan Tersayang'},
 
 Terima kasih telah mempercayai She Salon untuk merawat kecantikan Anda! ✨
@@ -35,26 +35,25 @@ Tim She Salon 💕
 `;
 };
 
-
 const html = (bookingData) => {
-    // Gabungkan layanan dengan tag <br> agar setiap layanan berada di baris baru.
-    const layananHtml = Array.isArray(bookingData.layanan)
-        ? bookingData.layanan.join('<br>')
-        : bookingData.layanan;
+  // Gabungkan layanan dengan tag <br> agar setiap layanan berada di baris baru.
+  const layananHtml = Array.isArray(bookingData.layanan)
+    ? bookingData.layanan.join('<br>')
+    : bookingData.layanan;
 
-    // Format angka sebagai mata uang Rupiah yang rapi.
-    const formatCurrency = (amount) => {
-        if (amount === null || amount === undefined) return 'N/A';
-        return new Intl.NumberFormat('id-ID', { 
-            style: 'currency', 
-            currency: 'IDR', 
-            minimumFractionDigits: 0 
-        }).format(amount);
-    };
+  // Format angka sebagai mata uang Rupiah yang rapi.
+  const formatCurrency = (amount) => {
+    if (amount === null || amount === undefined) return 'N/A';
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(amount);
+  };
 
-    const totalHargaFormatted = formatCurrency(bookingData.total_harga);
+  const totalHargaFormatted = formatCurrency(bookingData.total_harga);
 
-    return `
+  return `
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -143,5 +142,5 @@ const html = (bookingData) => {
 module.exports = {
   subject,
   text,
-  html,
+  html
 };

@@ -50,15 +50,15 @@ app.use(cors(corsOptions));
 
 // Helmet
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
-    },
+      defaultSrc: ['\'self\''],
+      scriptSrc: ['\'self\'', '\'unsafe-inline\''],
+      styleSrc: ['\'self\'', '\'unsafe-inline\''],
+      imgSrc: ['\'self\'', 'data:', 'https:'],
+      connectSrc: ['\'self\'']
+    }
   },
   hsts: {
     maxAge: 31536000,
@@ -68,7 +68,7 @@ app.use(helmet({
 }));
 
 // Validasi dan parsing JSON
-app.use(express.json({ 
+app.use(express.json({
   limit: '10kb'
 }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
@@ -79,7 +79,7 @@ app.use(morgan('dev'));
 // XSS protection
 app.use((req, res, next) => {
   if (req.body) {
-    for (let key in req.body) {
+    for (const key in req.body) {
       if (typeof req.body[key] === 'string') {
         req.body[key] = xss(req.body[key]);
       }

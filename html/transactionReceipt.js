@@ -9,34 +9,33 @@ const transactionReceiptTemplate = async (data) => {
     gross_amount,
     total_harga,
     newPaidAmount,
-    payment_time, // Terima properti baru
-  } = data
+    payment_time // Terima properti baru
+  } = data;
 
   // Opsi format yang konsisten untuk tanggal dan waktu
   const dateTimeFormatOptions = {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Makassar", // Pastikan zona waktu konsisten (WITA)
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Makassar' // Pastikan zona waktu konsisten (WITA)
   };
 
   // Format Tanggal Layanan (hanya tanggal)
   const serviceDate = new Date(tanggal);
-  const formattedServiceDate = serviceDate.toLocaleDateString("id-ID", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "Asia/Makassar",
+  const formattedServiceDate = serviceDate.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'Asia/Makassar'
   });
-  
+
   // Format Waktu Pembayaran (tanggal dan waktu)
   const paymentDateTime = new Date(payment_time);
-  const formattedPaymentDateTime = paymentDateTime.toLocaleString("id-ID", dateTimeFormatOptions);
-
+  const formattedPaymentDateTime = paymentDateTime.toLocaleString('id-ID', dateTimeFormatOptions);
 
   return `
 <!DOCTYPE html>
@@ -69,8 +68,8 @@ const transactionReceiptTemplate = async (data) => {
         <div style="padding: 30px 25px;">
             
             <div style="text-align: center; margin-bottom: 25px;">
-                <div style="display: inline-block; padding: 10px 25px; border-radius: 25px; font-weight: bold; font-size: 16px; text-transform: uppercase; ${paymentStatus === "paid" ? "background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);" : "background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);"} color: white;">
-                    ${paymentStatus === "paid" ? "✅ LUNAS" : "💰 DP (Down Payment)"}
+                <div style="display: inline-block; padding: 10px 25px; border-radius: 25px; font-weight: bold; font-size: 16px; text-transform: uppercase; ${paymentStatus === 'paid' ? 'background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);' : 'background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);'} color: white;">
+                    ${paymentStatus === 'paid' ? '✅ LUNAS' : '💰 DP (Down Payment)'}
                 </div>
             </div>
             
@@ -122,14 +121,14 @@ const transactionReceiptTemplate = async (data) => {
                 
                 <div style="display: table; width: 100%; border-collapse: collapse;">
                     ${
-                      paymentStatus === "DP"
+                      paymentStatus === 'DP'
                         ? `
                     <div style="display: table-row;">
                         <div style="display: table-cell; padding: 8px 0; border-bottom: 1px solid #d5e8d5; color: #2c3e50;">
                             Total Harga Layanan:
                         </div>
                         <div style="display: table-cell; padding: 8px 0; border-bottom: 1px solid #d5e8d5; color: #27ae60; font-weight: bold; text-align: right;">
-                            Rp ${total_harga.toLocaleString("id-ID")}
+                            Rp ${total_harga.toLocaleString('id-ID')}
                         </div>
                     </div>
                     <div style="display: table-row;">
@@ -137,7 +136,7 @@ const transactionReceiptTemplate = async (data) => {
                             DP yang Dibayar:
                         </div>
                         <div style="display: table-cell; padding: 8px 0; border-bottom: 1px solid #d5e8d5; color: #27ae60; font-weight: bold; text-align: right;">
-                            Rp ${gross_amount.toLocaleString("id-ID")}
+                            Rp ${gross_amount.toLocaleString('id-ID')}
                         </div>
                     </div>
                     <div style="display: table-row;">
@@ -145,7 +144,7 @@ const transactionReceiptTemplate = async (data) => {
                             Sisa Pembayaran:
                         </div>
                         <div style="display: table-cell; padding: 8px 0; border-bottom: 2px solid #27ae60; color: #e74c3c; font-weight: bold; text-align: right;">
-                            Rp ${(total_harga - newPaidAmount).toLocaleString("id-ID")}
+                            Rp ${(total_harga - newPaidAmount).toLocaleString('id-ID')}
                         </div>
                     </div>
                     `
@@ -155,7 +154,7 @@ const transactionReceiptTemplate = async (data) => {
                             Total Pembayaran:
                         </div>
                         <div style="display: table-cell; padding: 8px 0; border-bottom: 2px solid #27ae60; color: #27ae60; font-weight: bold; text-align: right;">
-                            Rp ${gross_amount.toLocaleString("id-ID")}
+                            Rp ${gross_amount.toLocaleString('id-ID')}
                         </div>
                     </div>
                     `
@@ -166,7 +165,7 @@ const transactionReceiptTemplate = async (data) => {
                             💰 TOTAL DIBAYAR:
                         </div>
                         <div style="display: table-cell; padding: 15px 0 0 0; color: #27ae60; font-weight: bold; font-size: 18px; text-align: right;">
-                            Rp ${gross_amount.toLocaleString("id-ID")}
+                            Rp ${gross_amount.toLocaleString('id-ID')}
                         </div>
                     </div>
                 </div>
@@ -189,7 +188,7 @@ const transactionReceiptTemplate = async (data) => {
     </div>
 </body>
 </html>
-`
-}
+`;
+};
 
-module.exports = transactionReceiptTemplate
+module.exports = transactionReceiptTemplate;

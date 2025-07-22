@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
   secure: true, // true untuk port 465, false untuk 587
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    pass: process.env.EMAIL_PASS
   },
   logger: false,
   debug: false
@@ -29,7 +29,7 @@ transporter.verify((error) => {
 // Fungsi umum kirim email
 const sendEmail = async (_to, _subject, _text, _html) => {
   try {
-    if (!_to) throw new Error("Email tujuan kosong!");
+    if (!_to) throw new Error('Email tujuan kosong!');
 
     const mailOptions = {
       from: `"She Salon" <${process.env.EMAIL_USER}>`,
@@ -39,15 +39,15 @@ const sendEmail = async (_to, _subject, _text, _html) => {
       html: _html,
       headers: {
         'X-Priority': '3',
-        'X-Mailer': 'NodeMailer',
+        'X-Mailer': 'NodeMailer'
       }
     };
 
     await transporter.sendMail(mailOptions);
-    console.log("✅ Email berhasil dikirim ke:", _to);
+    console.log('✅ Email berhasil dikirim ke:', _to);
     return true;
   } catch (error) {
-    console.error("❌ Gagal mengirim email:", error);
+    console.error('❌ Gagal mengirim email:', error);
     throw error;
   }
 };
