@@ -48,13 +48,13 @@ Buat file `.env` di root directory dan isi dengan konfigurasi berikut:
 DB_HOST=localhost
 DB_USER=root
 DB_PORT=3307
-DB_PASSWORD=henry123
+DB_PASSWORD=your_very_own_db_password
 DB_NAME=she_app
 
 # 🌐 Server Configuration
 PORT=3000
 NODE_ENV=development
-JWT_SECRET=rahasia_salon
+JWT_SECRET=your_very_own_jwt_token
 ALLOWED_ORIGINS=http://localhost:3000
 
 # 📸 Cloudinary Configuration
