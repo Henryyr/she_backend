@@ -8,6 +8,7 @@ const xss = require('xss');
 const responseTime = require('response-time');
 const errorHandler = require('./middleware/errorHandler');
 require('./config/cloudinary');
+const packageJson = require('./package.json'); // Impor package.json
 
 const app = express();
 
@@ -113,6 +114,17 @@ app.use((req, res, next) => {
     }
   });
   next();
+});
+
+app.get('/', (req, res) => {
+  res.status(200).json({
+    api_name: packageJson.name,
+    version: packageJson.version,
+    description: 'Welcome to the She Salon API. Please refer to the documentation for available endpoints.',
+    documentation_url: 'https://github.com/Henryyr/she_backend',
+    status: 'ok',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Routes
