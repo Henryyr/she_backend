@@ -1,660 +1,160 @@
-# Web Salon System API Documentation
+# 💅 She Salon Backend
 
-## Table of Contents
-1. [Authentication](#1-authentication)
-2. [User Management](#2-user-management)
-3. [Admin Dashboard](#3-admin-dashboard)
-4. [Services Management](#4-services-management)
-5. [Booking System](#5-booking-system)
-6. [Transaction Management](#6-transaction-management)
-7. [Testimonials](#7-testimonials)
+Backend API untuk aplikasi manajemen salon kecantikan dengan fitur booking, pembayaran, dan manajemen layanan.
 
----
+## 📋 Daftar Isi
 
-## 1. Authentication
+- [Prasyarat](#prasyarat)
+- [Cara Instalasi](#cara-instalasi)
+- [Konfigurasi Environment](#konfigurasi-environment)
+- [Menjalankan Aplikasi](#menjalankan-aplikasi)
+- [Struktur Database](#struktur-database)
+- [Teknologi yang Digunakan](#teknologi-yang-digunakan)
 
-### Register User
-**Endpoint:**
-```
-POST /api/auth/register
-```
-**Description:** Register a new user in the system.
+## 🛠️ Prasyarat
 
-**Request Body:**
-```json
-{
-  "fullname": "John Doe",
-  "email": "johndoe@example.com",
-  "phone_number": "081234567890", // Optional
-  "username": "johndoe",
-  "password": "password123",
-  "confirmation_password": "password123",
-  "address": "Jl. Mawar No. 10", // Optional
-  "role": "pelanggan" // Optional, default: "pelanggan"
-}
-```
-**Response (201 Created):**
-```json
-{
-  "message": "User berhasil didaftarkan",
-  "id": 1
-}
+Pastikan sistem Anda telah memiliki:
+
+| Software | Versi | Link Download |
+|----------|-------|---------------|
+| **Bun** | Latest | [bun.sh](https://bun.sh) |
+| **MySQL** | 8.0+ | [mysql.com](https://dev.mysql.com/downloads/) |
+| **Docker** | Latest | [docker.com](https://www.docker.com/get-started) |
+| **Docker Compose** | Latest | Included with Docker Desktop |
+
+## 🚀 Cara Instalasi
+
+### 1. Clone Repository
+
+```bash
+git clone <URL_REPOSITORI_ANDA>
+cd she_backend
 ```
 
-### Login
-**Endpoint:**
-```
-POST /api/auth/login
-```
-**Description:** Authenticate user to get JWT token.
+### 2. Install Dependencies
 
-**Request Body:**
-```json
-{
-  "username": "johndoe",
-  "password": "password123"
-}
-```
-**Response (200 OK):**
-```json
-{
-  "message": "Login berhasil",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI..."
-}
+```bash
+bun install
 ```
 
-### Logout
-**Endpoint:**
-```
-POST /api/auth/logout
-```
-**Description:** Logout only removes token on client side.
+## ⚙️ Konfigurasi Environment
 
-**Response (200 OK):**
-```json
-{
-  "message": "Logout berhasil, silakan hapus token di client"
-}
-```
+### 1. Buat File Environment
 
-### Get User Profile
-**Endpoint:**
-```
-GET /api/auth/profile
-```
-**Description:** Get current logged-in user profile.
+Buat file `.env` di root directory dan isi dengan konfigurasi berikut:
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+```env
+# 🗄️ Database Configuration
+DB_HOST=localhost
+DB_USER=root
+DB_PORT=3307
+DB_PASSWORD=henry123
+DB_NAME=she_app
 
-**Response (200 OK):**
-```json
-{
-  "message": "Profil user",
-  "user": {
-    "id": 1,
-    "username": "johndoe",
-    "role": "pelanggan"
-  }
-}
-```
+# 🌐 Server Configuration
+PORT=3000
+NODE_ENV=development
+JWT_SECRET=rahasia_salon
+ALLOWED_ORIGINS=http://localhost:3000
 
----
+# 📸 Cloudinary Configuration
+CLOUDINARY_CLOUD_NAME=your_cloud_name_here
+CLOUDINARY_API_KEY=your_api_key_here
+CLOUDINARY_SECRET=your_api_secret_here
 
-## 2. User Management
+# 💳 Midtrans Configuration
+MIDTRANS_MERCHANT_ID=your_merchant_id_here
+MIDTRANS_SERVER_KEY=your_server_key_here
+MIDTRANS_CLIENT_KEY=your_client_key_here
 
-### Get All Users
-**Endpoint:**
-```
-GET /api/users
-```
-**Description:** Get a list of all users (admin only).
+# 📧 Email Configuration
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_app_password_here
 
-**Headers:**
-```
-Authorization: Bearer <token>
+# 🌍 Frontend URL
+FRONTEND_URL=http://localhost:3000
 ```
 
-**Response (200 OK):**
-```json
-[
-  {
-    "id": 1,
-    "username": "admin",
-    "email": "admin@example.com",
-    "role": "admin"
-  }
-]
+### 2. Setup Database dengan Docker
+
+Jalankan database MySQL menggunakan Docker Compose:
+
+```bash
+docker-compose up -d
 ```
 
-### Add User
-**Endpoint:**
-```
-POST /api/users
-```
-**Description:** Add a new user (admin only).
+Database akan otomatis dibuat dengan konfigurasi yang sesuai di port `3307`.
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+### 3. Setup Email (Gmail)
 
-**Request Body:**
-```json
-{
-  "fullname": "New User",
-  "email": "user@example.com",
-  "phone_number": "08129876543",
-  "username": "newuser",
-  "password": "securepass",
-  "address": "Jl. User No.2",
-  "role": "customer"
-}
-```
-**Response (201 Created):**
-```json
-{
-  "message": "User berhasil ditambahkan",
-  "userId": 2
-}
+Untuk menggunakan Gmail sebagai SMTP:
+
+1. Aktifkan **2-Factor Authentication** di akun Google Anda
+2. Generate **App Password** di [Google Account Settings](https://myaccount.google.com/apppasswords)
+3. Gunakan App Password sebagai nilai `EMAIL_PASS`
+
+## 🏃‍♂️ Menjalankan Aplikasi
+
+### Development Mode (Auto-reload)
+
+```bash
+bun run dev:bun
 ```
 
-### Update User
-**Endpoint:**
-```
-PUT /api/users/:id
-```
-**Description:** Update user information (admin only).
+### Production Mode
 
-**Headers:**
-```
-Authorization: Bearer <token>
+```bash
+bun run start:bun
 ```
 
-**Request Body:**
-```json
-{
-  "fullname": "Updated User",
-  "email": "updated@example.com",
-  "phone_number": "081234567890",
-  "username": "updateduser",
-  "address": "Jl. Baru No.10",
-  "role": "customer"
-}
+## ✅ Verifikasi Server
+
+Setelah berhasil dijalankan, Anda akan melihat output berikut:
+
 ```
-**Response (200 OK):**
-```json
-{
-  "message": "User berhasil diperbarui"
-}
+🚀 Server berjalan di http://localhost:3000
+✅ Connected to she_app database
+✅ Email service is ready
 ```
 
-### Delete User
-**Endpoint:**
-```
-DELETE /api/users/:id
-```
-**Description:** Delete a user by ID (admin only).
+## 🔧 Teknologi yang Digunakan
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+| Kategori | Teknologi |
+|----------|-----------|
+| **Runtime** | Bun.js |
+| **Database** | MySQL |
+| **Payment Gateway** | Midtrans |
+| **Image Storage** | Cloudinary |
+| **Email Service** | SMTP (Gmail) |
+| **Authentication** | JWT |
+| **Real-time** | Socket.IO |
 
-**Response (200 OK):**
-```json
-{
-  "message": "User berhasil dihapus"
-}
-```
+## 📝 Catatan Tambahan
+
+- File `.env` sudah termasuk dalam `.gitignore` untuk keamanan
+- Database MySQL berjalan menggunakan Docker di port **3307**
+- Frontend dan backend menggunakan port yang sama (**3000**)
+- Pastikan semua service eksternal (Midtrans, Cloudinary) telah dikonfigurasi dengan benar
+- Untuk production, gunakan environment variables yang sesuai
+
+### 🔧 Konfigurasi yang Perlu Dilengkapi
+
+Untuk menjalankan aplikasi secara penuh, Anda perlu mengisi nilai kosong berikut:
+
+1. **Cloudinary**: Daftar di [cloudinary.com](https://cloudinary.com) untuk mendapatkan credentials
+2. **Midtrans**: Daftar di [midtrans.com](https://midtrans.com) untuk payment gateway
+3. **Email**: Setup Gmail App Password untuk fitur email
+
+## 🤝 Kontribusi
+
+Jika Anda ingin berkontribusi pada proyek ini:
+
+1. Fork repository
+2. Buat branch untuk fitur baru (`git checkout -b feature/AmazingFeature`)
+3. Commit perubahan (`git commit -m 'Add some AmazingFeature'`)
+4. Push ke branch (`git push origin feature/AmazingFeature`)
+5. Buat Pull Request
 
 ---
 
-## 3. Admin Dashboard
-
-### Get Admin Dashboard
-**Endpoint:**
-```
-GET /api/admin/dashboard
-```
-**Description:** Get user list for admin dashboard.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response (200 OK):**
-```json
-{
-  "message": "Dashboard Admin - Daftar Pengguna",
-  "users": [
-    {
-      "id": 1,
-      "fullname": "Admin User",
-      "email": "admin@example.com",
-      "phone_number": "08123456789",
-      "username": "admin",
-      "address": "Jl. Admin No.1",
-      "role": "admin"
-    }
-  ]
-}
-```
-
-### Add User (Admin)
-**Endpoint:**
-```
-POST /api/admin/users
-```
-**Description:** Admin can add a new user.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**
-```json
-{
-  "fullname": "Jane Doe",
-  "email": "jane@example.com",
-  "phone_number": "08129876543",
-  "username": "janedoe",
-  "password": "password123",
-  "address": "Jl. Contoh No. 2",
-  "role": "pelanggan"
-}
-```
-**Response (201 Created):**
-```json
-{
-  "message": "User berhasil ditambahkan",
-  "userId": 2
-}
-```
-
-### Update User (Admin)
-**Endpoint:**
-```
-PUT /api/admin/users/:id
-```
-**Description:** Admin can update user information.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**
-```json
-{
-  "fullname": "Jane Doe Updated",
-  "email": "jane_updated@example.com",
-  "phone_number": "08129876543",
-  "username": "janedoe",
-  "address": "Jl. Contoh Baru No. 3",
-  "role": "pelanggan"
-}
-```
-**Response (200 OK):**
-```json
-{
-  "message": "User berhasil diperbarui"
-}
-```
-
-### Delete User (Admin)
-**Endpoint:**
-```
-DELETE /api/admin/users/:id
-```
-**Description:** Admin can delete a user by ID.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response (200 OK):**
-```json
-{
-  "message": "User berhasil dihapus"
-}
-```
-
----
-
-## 4. Services Management
-
-### Get All Services
-**Endpoint:**
-```
-GET /api/layanan
-```
-**Description:** Get a list of all salon services.
-
-**Response (200 OK):**
-```json
-[
-  {
-    "id": 1,
-    "name": "Haircut",
-    "description": "Potong rambut premium",
-    "price": 50000,
-    "duration": "30 menit"
-  }
-]
-```
-
-### Add Service
-**Endpoint:**
-```
-POST /api/layanan
-```
-**Description:** Add a new service (admin only).
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**
-```json
-{
-  "name": "Facial",
-  "description": "Perawatan wajah",
-  "price": 75000,
-  "duration": "45 menit"
-}
-```
-**Response (201 Created):**
-```json
-{
-  "message": "Layanan berhasil ditambahkan",
-  "service": {
-    "id": 2,
-    "name": "Facial",
-    "description": "Perawatan wajah",
-    "price": 75000,
-    "duration": "45 menit"
-  }
-}
-```
-
----
-
-## 5. Booking System
-
-### Create New Booking
-**Endpoint:**
-```
-POST /api/booking
-```
-**Description:** Create a new booking appointment.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**
-```json
-{
-  "layanan_id": [1, 2],
-  "tanggal": "2025-03-16",
-  "jam_mulai": "10:00:00"
-}
-```
-**Response (201 Created):**
-```json
-{
-  "message": "Booking berhasil dibuat",
-  "booking_id": 45,
-  "total_harga": 150000
-}
-```
-
-### Get User Bookings
-**Endpoint:**
-```
-GET /api/booking
-```
-**Description:** Get all bookings for current user.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response (200 OK):**
-```json
-{
-  "bookings": [
-    {
-      "id": 45,
-      "tanggal": "2025-03-16",
-      "jam_mulai": "10:00:00",
-      "status": "pending",
-      "total_harga": 150000,
-      "layanan": ["Potong Rambut", "Cuci Rambut"]
-    }
-  ]
-}
-```
-
-### Get Booking Details
-**Endpoint:**
-```
-GET /api/booking/:id
-```
-**Description:** Get details of a specific booking.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response (200 OK):**
-```json
-{
-  "id": 45,
-  "tanggal": "2025-03-16",
-  "jam_mulai": "10:00:00",
-  "status": "pending",
-  "total_harga": 150000,
-  "layanan": ["Potong Rambut", "Cuci Rambut"]
-}
-```
-
-### Delete Booking
-**Endpoint:**
-```
-DELETE /api/booking/:id
-```
-**Description:** Delete a specific booking.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response (200 OK):**
-```json
-{
-  "message": "Booking berhasil dihapus"
-}
-```
-
----
-
-## 6. Transaction Management
-
-### Create New Transaction
-**Endpoint:**
-```
-POST /api/transaksi
-```
-**Description:** Create a new transaction for a booking.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**
-```json
-{
-  "booking_id": 45,
-  "kategori_transaksi_id": 2
-  "is_dp": false/true
-}
-```
-**Response (201 Created):**
-```json
-{
-  "message": "Transaksi dibuat",
-  "transaksi_id": 123,
-  "status": "pending",
-  "snap_url": "https://midtrans.com/payment/123"
-}
-```
-
-### Get User Transactions
-**Endpoint:**
-```
-GET /api/transaksi
-```
-**Description:** Get all transactions for current user.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response (200 OK):**
-```json
-{
-  "transactions": [
-    {
-      "id": 123,
-      "booking_id": 45,
-      "total_harga": 150000,
-      "paid_amount": 0,
-      "status": "pending",
-      "metode_pembayaran": "Cashless"
-    }
-  ]
-}
-```
-
-### Payment Gateway Webhook
-**Endpoint:**
-```
-POST /api/transaksi/webhook
-```
-**Description:** Webhook for payment gateway callbacks (Midtrans).
-
-**Request Body (Example from Midtrans):**
-```json
-{
-  "order_id": "abcd1234",
-  "transaction_status": "settlement",
-  "gross_amount": 150000
-}
-```
-**Response (200 OK):**
-```json
-{
-  "message": "Transaksi berhasil diperbarui"
-}
-```
-
----
-
-## 7. Testimonials
-
-### Add Testimonial
-**Endpoint:**
-```
-POST /api/testimoni
-```
-**Description:** User submits a testimonial for a service.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**
-```json
-{
-  "service_id": 2,
-  "rating": 5,
-  "comment": "Layanan sangat memuaskan!"
-}
-```
-**Response (201 Created):**
-```json
-{
-  "message": "Testimoni berhasil ditambahkan",
-  "id": 10
-}
-```
-
-### Get All Testimonials
-**Endpoint:**
-```
-GET /api/testimoni
-```
-**Description:** Get all testimonials.
-
-**Response (200 OK):**
-```json
-[
-  {
-    "id": 1,
-    "username": "johndoe",
-    "service_name": "Haircut",
-    "rating": 5,
-    "comment": "Layanan sangat memuaskan!",
-    "created_at": "2025-03-11 10:30:00"
-  },
-  {
-    "id": 2,
-    "username": "janedoe",
-    "service_name": "Facial",
-    "rating": 4,
-    "comment": "Hasilnya bagus, tapi bisa lebih baik.",
-    "created_at": "2025-03-11 11:00:00"
-  }
-]
-```
-
-### Delete Testimonial
-**Endpoint:**
-```
-DELETE /api/testimoni/:id
-```
-**Description:** Delete a testimonial (admin only).
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response (200 OK):**
-```json
-{
-  "message": "Testimoni berhasil dihapus"
-}
-```
-
----
-
-## Authentication & Security
-- JWT token authentication is required for protected endpoints
-- Include token in request header: `Authorization: Bearer <token>`
-- User passwords are encrypted with bcrypt before storing in database
+**© 2025 She Salon Backend**
