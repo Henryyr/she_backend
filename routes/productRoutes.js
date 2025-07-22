@@ -9,7 +9,7 @@ router.get('/smoothing', authenticate, productController.getSmoothingProducts);
 router.get('/keratin', authenticate, productController.getKeratinProducts);
 
 // Endpoints untuk hair color
-router.get('/hair/products', authenticate, productController.getHairProducts);             
+router.get('/hair/products', authenticate, productController.getHairProducts);
 router.get('/hair/products/:id/colors', authenticate, productController.getHairColorsByProduct);
 router.get('/hair/colors', authenticate, productController.getHairColors);
 module.exports = router;

@@ -1,8 +1,8 @@
 module.exports = ({ fullname, resetUrl }) => {
-  const subject = "Reset Password Akun She Salon"
+  const subject = 'Reset Password Akun She Salon';
 
   const text = `
-Halo ${fullname || "Pelanggan Tersayang"},
+Halo ${fullname || 'Pelanggan Tersayang'},
 
 Kami menerima permintaan reset password untuk akun She Salon Anda.
 
@@ -21,7 +21,7 @@ WhatsApp: 0813-3856-3414
 
 Salam hangat,
 Tim She Salon 💕
-`
+`;
 
   const html = `
 <!DOCTYPE html>
@@ -50,7 +50,7 @@ Tim She Salon 💕
             <!-- Greeting -->
             <div style="text-align: center; margin-bottom: 30px;">
                 <h2 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 24px;">
-                    Halo, ${fullname || "Pelanggan Tersayang"}! 👋
+                    Halo, ${fullname || 'Pelanggan Tersayang'}! 👋
                 </h2>
                 <p style="color: #7f8c8d; margin: 0; font-size: 16px;">
                     Kami menerima permintaan reset password untuk akun She Salon Anda
@@ -134,7 +134,7 @@ Tim She Salon 💕
     </div>
 </body>
 </html>
-`
+`;
 
-  return { subject, text, html }
-}
+  return { subject, text, html };
+};

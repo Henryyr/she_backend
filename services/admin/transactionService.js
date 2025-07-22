@@ -2,7 +2,7 @@ const { pool } = require('../../db');
 const paginateQuery = require('../../helpers/paginateQuery');
 
 const getRecentTransactions = async (limit = 5) => {
-    const [transactions] = await pool.query(`
+  const [transactions] = await pool.query(`
         SELECT 
             t.id,
             u.fullname as name,
@@ -18,11 +18,11 @@ const getRecentTransactions = async (limit = 5) => {
         ORDER BY t.created_at DESC
         LIMIT ?
     `, [limit]);
-    return transactions;
+  return transactions;
 };
 
 const getAllTransactions = async (page = 1, limit = 10, status, startDate, endDate) => {
-    let sql = `
+  let sql = `
         SELECT 
             t.id,
             u.fullname as name,
@@ -44,57 +44,57 @@ const getAllTransactions = async (page = 1, limit = 10, status, startDate, endDa
         JOIN booking_layanan bl ON b.id = bl.booking_id
         JOIN layanan l ON bl.layanan_id = l.id
     `;
-    let whereClauses = [];
-    let params = [];
+  const whereClauses = [];
+  const params = [];
 
-    if (status) {
-        whereClauses.push('t.status = ?');
-        params.push(status);
-    }
-    if (startDate) {
-        whereClauses.push('DATE(t.created_at) >= ?');
-        params.push(startDate);
-    }
-    if (endDate) {
-        whereClauses.push('DATE(t.created_at) <= ?');
-        params.push(endDate);
-    }
+  if (status) {
+    whereClauses.push('t.status = ?');
+    params.push(status);
+  }
+  if (startDate) {
+    whereClauses.push('DATE(t.created_at) >= ?');
+    params.push(startDate);
+  }
+  if (endDate) {
+    whereClauses.push('DATE(t.created_at) <= ?');
+    params.push(endDate);
+  }
 
-    if (whereClauses.length > 0) {
-        sql += ' WHERE ' + whereClauses.join(' AND ');
-    }
+  if (whereClauses.length > 0) {
+    sql += ' WHERE ' + whereClauses.join(' AND ');
+  }
 
-    sql += `
+  sql += `
         GROUP BY t.id
         ORDER BY t.created_at DESC
     `;
 
-    let countSql = `SELECT COUNT(DISTINCT t.id) as total FROM transaksi t`;
-    let countWhereClauses = [];
-    let countParams = [];
+  let countSql = 'SELECT COUNT(DISTINCT t.id) as total FROM transaksi t';
+  const countWhereClauses = [];
+  const countParams = [];
 
-    if (status) {
-        countWhereClauses.push('t.status = ?');
-        countParams.push(status);
-    }
-    if (startDate) {
-        countWhereClauses.push('DATE(t.created_at) >= ?');
-        countParams.push(startDate);
-    }
-    if (endDate) {
-        countWhereClauses.push('DATE(t.created_at) <= ?');
-        countParams.push(endDate);
-    }
-    if (countWhereClauses.length > 0) {
-        countSql += ' WHERE ' + countWhereClauses.join(' AND ');
-    }
+  if (status) {
+    countWhereClauses.push('t.status = ?');
+    countParams.push(status);
+  }
+  if (startDate) {
+    countWhereClauses.push('DATE(t.created_at) >= ?');
+    countParams.push(startDate);
+  }
+  if (endDate) {
+    countWhereClauses.push('DATE(t.created_at) <= ?');
+    countParams.push(endDate);
+  }
+  if (countWhereClauses.length > 0) {
+    countSql += ' WHERE ' + countWhereClauses.join(' AND ');
+  }
 
-    const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
-    return { transactions: data, pagination };
+  const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
+  return { transactions: data, pagination };
 };
 
 const getTransactionsByUserId = async (userId, page = 1, limit = 10, status, startDate, endDate) => {
-    let sql = `
+  let sql = `
         SELECT 
             t.id,
             u.fullname as name,
@@ -117,47 +117,47 @@ const getTransactionsByUserId = async (userId, page = 1, limit = 10, status, sta
         JOIN layanan l ON bl.layanan_id = l.id
         WHERE t.user_id = ?
     `;
-    let params = [userId];
+  const params = [userId];
 
-    if (status) {
-        sql += ' AND t.status = ?';
-        params.push(status);
-    }
-    if (startDate) {
-        sql += ' AND DATE(t.created_at) >= ?';
-        params.push(startDate);
-    }
-    if (endDate) {
-        sql += ' AND DATE(t.created_at) <= ?';
-        params.push(endDate);
-    }
+  if (status) {
+    sql += ' AND t.status = ?';
+    params.push(status);
+  }
+  if (startDate) {
+    sql += ' AND DATE(t.created_at) >= ?';
+    params.push(startDate);
+  }
+  if (endDate) {
+    sql += ' AND DATE(t.created_at) <= ?';
+    params.push(endDate);
+  }
 
-    sql += `
+  sql += `
         GROUP BY t.id
         ORDER BY t.created_at DESC
     `;
 
-    let countSql = `SELECT COUNT(DISTINCT t.id) as total FROM transaksi t WHERE t.user_id = ?`;
-    let countParams = [userId];
-    if (status) {
-        countSql += ' AND t.status = ?';
-        countParams.push(status);
-    }
-    if (startDate) {
-        countSql += ' AND DATE(t.created_at) >= ?';
-        countParams.push(startDate);
-    }
-    if (endDate) {
-        countSql += ' AND DATE(t.created_at) <= ?';
-        countParams.push(endDate);
-    }
+  let countSql = 'SELECT COUNT(DISTINCT t.id) as total FROM transaksi t WHERE t.user_id = ?';
+  const countParams = [userId];
+  if (status) {
+    countSql += ' AND t.status = ?';
+    countParams.push(status);
+  }
+  if (startDate) {
+    countSql += ' AND DATE(t.created_at) >= ?';
+    countParams.push(startDate);
+  }
+  if (endDate) {
+    countSql += ' AND DATE(t.created_at) <= ?';
+    countParams.push(endDate);
+  }
 
-    const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
-    return { data, pagination };
+  const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
+  return { data, pagination };
 };
 
 module.exports = {
-    getRecentTransactions,
-    getAllTransactions,
-    getTransactionsByUserId
+  getRecentTransactions,
+  getAllTransactions,
+  getTransactionsByUserId
 };

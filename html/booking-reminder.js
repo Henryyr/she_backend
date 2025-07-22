@@ -1,11 +1,11 @@
 const subject = '✨ Pengingat Jadwal Anda di She Salon - Sampai Jumpa Sebentar Lagi!';
 
 const text = (bookingData) => {
-    const layananText = Array.isArray(bookingData.layanan)
-        ? bookingData.layanan.join(' + ')
-        : bookingData.layanan;
+  const layananText = Array.isArray(bookingData.layanan)
+    ? bookingData.layanan.join(' + ')
+    : bookingData.layanan;
 
-    return `
+  return `
 Halo ${bookingData.nama_customer || 'Pelanggan Tersayang'},
 
 Ini adalah pengingat ramah untuk jadwal Anda di She Salon yang akan segera dimulai. Kami sudah tidak sabar untuk menyambut Anda!
@@ -28,11 +28,11 @@ Tim She Salon 💕
 };
 
 const html = (bookingData) => {
-    const layananHtml = Array.isArray(bookingData.layanan)
-        ? bookingData.layanan.join('<br>')
-        : bookingData.layanan;
+  const layananHtml = Array.isArray(bookingData.layanan)
+    ? bookingData.layanan.join('<br>')
+    : bookingData.layanan;
 
-    return `
+  return `
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -119,5 +119,5 @@ const html = (bookingData) => {
 module.exports = {
   subject,
   text,
-  html,
+  html
 };

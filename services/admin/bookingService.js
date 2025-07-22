@@ -2,7 +2,7 @@ const { pool } = require('../../db');
 const paginateQuery = require('../../helpers/paginateQuery');
 
 const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) => {
-    let sql = `
+  let sql = `
     SELECT 
         b.id,
         u.fullname AS customer,
@@ -21,26 +21,26 @@ const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) 
     JOIN layanan l ON bl.layanan_id = l.id
     LEFT JOIN transaksi t ON t.booking_id = b.id
 `;
-    let whereClauses = [];
-    let params = [];
+  const whereClauses = [];
+  const params = [];
 
-    if (status) {
-        whereClauses.push('LOWER(TRIM(b.status)) = ?');
-        params.push(status.trim().toLowerCase());
-    }
-    if (startDate) {
-        whereClauses.push('DATE(b.tanggal) >= ?');
-        params.push(startDate);
-    }
-    if (endDate) {
-        whereClauses.push('DATE(b.tanggal) <= ?');
-        params.push(endDate);
-    }
-    if (whereClauses.length > 0) {
-        sql += ' WHERE ' + whereClauses.join(' AND ');
-    }
+  if (status) {
+    whereClauses.push('LOWER(TRIM(b.status)) = ?');
+    params.push(status.trim().toLowerCase());
+  }
+  if (startDate) {
+    whereClauses.push('DATE(b.tanggal) >= ?');
+    params.push(startDate);
+  }
+  if (endDate) {
+    whereClauses.push('DATE(b.tanggal) <= ?');
+    params.push(endDate);
+  }
+  if (whereClauses.length > 0) {
+    sql += ' WHERE ' + whereClauses.join(' AND ');
+  }
 
-    sql += `
+  sql += `
         GROUP BY 
             b.id, 
             u.fullname, 
@@ -51,48 +51,48 @@ const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) 
         ORDER BY b.created_at DESC
     `;
 
-    let countSql = `SELECT COUNT(DISTINCT b.id) as total FROM booking b`;
-    let countWhereClauses = [];
-    let countParams = [];
+  let countSql = 'SELECT COUNT(DISTINCT b.id) as total FROM booking b';
+  const countWhereClauses = [];
+  const countParams = [];
 
-    if (status) {
-        countWhereClauses.push('LOWER(TRIM(b.status)) = ?');
-        countParams.push(status.trim().toLowerCase());
-    }
-    if (startDate) {
-        countWhereClauses.push('DATE(b.tanggal) >= ?');
-        countParams.push(startDate);
-    }
-    if (endDate) {
-        countWhereClauses.push('DATE(b.tanggal) <= ?');
-        countParams.push(endDate);
-    }
-    if (countWhereClauses.length > 0) {
-        countSql += ' WHERE ' + countWhereClauses.join(' AND ');
-    }
+  if (status) {
+    countWhereClauses.push('LOWER(TRIM(b.status)) = ?');
+    countParams.push(status.trim().toLowerCase());
+  }
+  if (startDate) {
+    countWhereClauses.push('DATE(b.tanggal) >= ?');
+    countParams.push(startDate);
+  }
+  if (endDate) {
+    countWhereClauses.push('DATE(b.tanggal) <= ?');
+    countParams.push(endDate);
+  }
+  if (countWhereClauses.length > 0) {
+    countSql += ' WHERE ' + countWhereClauses.join(' AND ');
+  }
 
-    const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
+  const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
 
-    // Format output agar Paid bisa langsung dipakai di frontend
-    const bookings = data.map(row => ({
-        id: row.id,
-        customer: row.customer,
-        date: row.date,
-        time: row.time,
-        services: row.services,
-        status: row.status,
-        total: row.total_harga,
-        dp: row.dp_amount,
-        paid: row.paid_amount,        // <- ini tampilkan di frontend
-        sisa: row.sisa_bayar,
-        payment_status: row.payment_status
-    }));
+  // Format output agar Paid bisa langsung dipakai di frontend
+  const bookings = data.map(row => ({
+    id: row.id,
+    customer: row.customer,
+    date: row.date,
+    time: row.time,
+    services: row.services,
+    status: row.status,
+    total: row.total_harga,
+    dp: row.dp_amount,
+    paid: row.paid_amount, // <- ini tampilkan di frontend
+    sisa: row.sisa_bayar,
+    payment_status: row.payment_status
+  }));
 
-    return { bookings, pagination };
+  return { bookings, pagination };
 };
 
 const getBookingsByUserId = async (userId, page = 1, limit = 10, status, startDate, endDate) => {
-    let sql = `
+  let sql = `
         SELECT 
             b.id,
             u.fullname as customer,
@@ -107,48 +107,48 @@ const getBookingsByUserId = async (userId, page = 1, limit = 10, status, startDa
         JOIN layanan l ON bl.layanan_id = l.id
         WHERE b.user_id = ?
     `;
-    let params = [userId];
+  const params = [userId];
 
-    if (status) {
-        sql += ' AND b.status = ?';
-        params.push(status);
-    }
-    if (startDate) {
-        sql += ' AND DATE(b.tanggal) >= ?';
-        params.push(startDate);
-    }
-    if (endDate) {
-        sql += ' AND DATE(b.tanggal) <= ?';
-        params.push(endDate);
-    }
+  if (status) {
+    sql += ' AND b.status = ?';
+    params.push(status);
+  }
+  if (startDate) {
+    sql += ' AND DATE(b.tanggal) >= ?';
+    params.push(startDate);
+  }
+  if (endDate) {
+    sql += ' AND DATE(b.tanggal) <= ?';
+    params.push(endDate);
+  }
 
-    sql += `
+  sql += `
         GROUP BY b.id
         ORDER BY b.created_at DESC
     `;
 
-    let countSql = `SELECT COUNT(DISTINCT b.id) as total FROM booking b WHERE b.user_id = ?`;
-    let countParams = [userId];
-    if (status) {
-        countSql += ' AND b.status = ?';
-        countParams.push(status);
-    }
-    if (startDate) {
-        countSql += ' AND DATE(b.tanggal) >= ?';
-        countParams.push(startDate);
-    }
-    if (endDate) {
-        countSql += ' AND DATE(b.tanggal) <= ?';
-        countParams.push(endDate);
-    }
+  let countSql = 'SELECT COUNT(DISTINCT b.id) as total FROM booking b WHERE b.user_id = ?';
+  const countParams = [userId];
+  if (status) {
+    countSql += ' AND b.status = ?';
+    countParams.push(status);
+  }
+  if (startDate) {
+    countSql += ' AND DATE(b.tanggal) >= ?';
+    countParams.push(startDate);
+  }
+  if (endDate) {
+    countSql += ' AND DATE(b.tanggal) <= ?';
+    countParams.push(endDate);
+  }
 
-    const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
-    return { bookings: data, pagination };
+  const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
+  return { bookings: data, pagination };
 };
 
 const getBookingById = async (id) => {
-    try {
-        const [bookings] = await pool.query(`
+  try {
+    const [bookings] = await pool.query(`
             SELECT 
                 b.*,
                 u.fullname as customer_name,
@@ -168,14 +168,14 @@ const getBookingById = async (id) => {
             GROUP BY b.id
         `, [id]);
 
-        if (bookings.length === 0) {
-            return null;
-        }
+    if (bookings.length === 0) {
+      return null;
+    }
 
-        const booking = bookings[0];
+    const booking = bookings[0];
 
-        // Get product details if any
-        const [productDetails] = await pool.query(`
+    // Get product details if any
+    const [productDetails] = await pool.query(`
             SELECT 
                 'hair_color' as type,
                 hc.id as color_id,
@@ -190,36 +190,36 @@ const getBookingById = async (id) => {
             WHERE bc.booking_id = ?
         `, [id]);
 
-        if (productDetails.length > 0) {
-            booking.products = productDetails;
-        }
-
-        return booking;
-    } catch (error) {
-        console.error('Error fetching booking details:', error);
-        throw new Error(`Failed to retrieve booking: ${error.message}`);
+    if (productDetails.length > 0) {
+      booking.products = productDetails;
     }
+
+    return booking;
+  } catch (error) {
+    console.error('Error fetching booking details:', error);
+    throw new Error(`Failed to retrieve booking: ${error.message}`);
+  }
 };
 
 const updateBooking = async (id, data) => {
-    const connection = await pool.getConnection();
-    try {
-        await connection.beginTransaction();
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-        const { tanggal, jam_mulai, jam_selesai, status, special_request } = data;
-        
-        // First check if booking exists
-        const [booking] = await connection.query(
-            'SELECT * FROM booking WHERE id = ?',
-            [id]
-        );
+    const { tanggal, jam_mulai, jam_selesai, status, special_request } = data;
 
-        if (booking.length === 0) {
-            return null;
-        }
+    // First check if booking exists
+    const [booking] = await connection.query(
+      'SELECT * FROM booking WHERE id = ?',
+      [id]
+    );
 
-        // Update basic booking information
-        await connection.query(
+    if (booking.length === 0) {
+      return null;
+    }
+
+    // Update basic booking information
+    await connection.query(
             `UPDATE booking 
              SET tanggal = COALESCE(?, tanggal),
                  jam_mulai = COALESCE(?, jam_mulai),
@@ -229,90 +229,89 @@ const updateBooking = async (id, data) => {
                  updated_at = NOW()
              WHERE id = ?`,
             [tanggal, jam_mulai, jam_selesai, status, special_request, id]
+    );
+
+    // If service IDs have been provided, update them
+    if (data.service_ids && Array.isArray(data.service_ids)) {
+      // Delete existing service relations
+      await connection.query(
+        'DELETE FROM booking_layanan WHERE booking_id = ?',
+        [id]
+      );
+
+      // Insert new service relations
+      for (const serviceId of data.service_ids) {
+        await connection.query(
+          'INSERT INTO booking_layanan (booking_id, layanan_id) VALUES (?, ?)',
+          [id, serviceId]
         );
-
-        // If service IDs have been provided, update them
-        if (data.service_ids && Array.isArray(data.service_ids)) {
-            // Delete existing service relations
-            await connection.query(
-                'DELETE FROM booking_layanan WHERE booking_id = ?',
-                [id]
-            );
-
-            // Insert new service relations
-            for (const serviceId of data.service_ids) {
-                await connection.query(
-                    'INSERT INTO booking_layanan (booking_id, layanan_id) VALUES (?, ?)',
-                    [id, serviceId]
-                );
-            }
-        }
-
-        await connection.commit();
-
-        // Get the updated booking
-        const updatedBooking = await getBookingById(id);
-        return updatedBooking;
-
-    } catch (error) {
-        await connection.rollback();
-        console.error('Error updating booking:', error);
-        throw new Error(`Failed to update booking: ${error.message}`);
-    } finally {
-        connection.release();
+      }
     }
+
+    await connection.commit();
+
+    // Get the updated booking
+    const updatedBooking = await getBookingById(id);
+    return updatedBooking;
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error updating booking:', error);
+    throw new Error(`Failed to update booking: ${error.message}`);
+  } finally {
+    connection.release();
+  }
 };
 
 const deleteBooking = async (id) => {
-    const connection = await pool.getConnection();
-    try {
-        await connection.beginTransaction();
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-        // Check if booking exists
-        const [booking] = await connection.query(
-            'SELECT * FROM booking WHERE id = ?',
-            [id]
-        );
+    // Check if booking exists
+    const [booking] = await connection.query(
+      'SELECT * FROM booking WHERE id = ?',
+      [id]
+    );
 
-        if (booking.length === 0) {
-            return null;
-        }
-
-        // Delete related records first
-        await connection.query('DELETE FROM booking_layanan WHERE booking_id = ?', [id]);
-        await connection.query('DELETE FROM booking_colors WHERE booking_id = ?', [id]);
-        
-        // Delete the booking itself
-        await connection.query('DELETE FROM booking WHERE id = ?', [id]);
-
-        await connection.commit();
-        return true;
-    } catch (error) {
-        await connection.rollback();
-        console.error('Error deleting booking:', error);
-        throw new Error(`Failed to delete booking: ${error.message}`);
-    } finally {
-        connection.release();
+    if (booking.length === 0) {
+      return null;
     }
+
+    // Delete related records first
+    await connection.query('DELETE FROM booking_layanan WHERE booking_id = ?', [id]);
+    await connection.query('DELETE FROM booking_colors WHERE booking_id = ?', [id]);
+
+    // Delete the booking itself
+    await connection.query('DELETE FROM booking WHERE id = ?', [id]);
+
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error deleting booking:', error);
+    throw new Error(`Failed to delete booking: ${error.message}`);
+  } finally {
+    connection.release();
+  }
 };
 
 const updateBookingStatus = async (id, status) => {
-    const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
-    if (!validStatuses.includes(status)) {
-        throw new Error('Status tidak valid');
-    }
-    // Update booking status
-    const [result] = await pool.query(
-        'UPDATE booking SET status = ? WHERE id = ?',
-        [status, id]
-    );
-    if (result.affectedRows === 0) {
-        return null;
-    }
+  const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+  if (!validStatuses.includes(status)) {
+    throw new Error('Status tidak valid');
+  }
+  // Update booking status
+  const [result] = await pool.query(
+    'UPDATE booking SET status = ? WHERE id = ?',
+    [status, id]
+  );
+  if (result.affectedRows === 0) {
+    return null;
+  }
 
-    // Jika status completed, update juga status transaksi terkait
-    if (status === 'completed') {
-        await pool.query(
+  // Jika status completed, update juga status transaksi terkait
+  if (status === 'completed') {
+    await pool.query(
             `UPDATE transaksi 
              SET 
                 status = 'completed', 
@@ -320,17 +319,17 @@ const updateBookingStatus = async (id, status) => {
                 paid_amount = total_harga 
              WHERE booking_id = ?`,
             [id]
-        );
-    }
+    );
+  }
 
-    return { id, status };
+  return { id, status };
 };
 
 module.exports = {
-    getAllBookings,
-    getBookingsByUserId,
-    getBookingById,
-    updateBooking,
-    deleteBooking,
-    updateBookingStatus
+  getAllBookings,
+  getBookingsByUserId,
+  getBookingById,
+  updateBooking,
+  deleteBooking,
+  updateBookingStatus
 };
