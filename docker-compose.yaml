@@ -1,0 +1,23 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: she_app_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+    ports:
+      # Memetakan port 3307 di komputer Anda ke port 3306 di container
+      - "3307:3306"
+    volumes:
+      # Menyimpan data MySQL secara permanen
+      - mysql-data:/var/lib/mysql
+      # Menjalankan script SQL untuk inisialisasi saat pertama kali dibuat
+      - ./db_init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+volumes:
+  mysql-data:
