@@ -163,7 +163,8 @@ const createBooking = async (data) => {
         await connection.commit();
 
         // Siapkan data respons
-        const cancel_timer = Math.max(0, Math.floor((new Date(`${tanggal}T${jam_mulai}:00+08:00`).getTime() + 30 * 60000 - Date.now()) / 1000));
+        // FIX: Construct a valid ISO date string for calculation. The `jam_mulai` variable already contains seconds.
+        const cancel_timer = Math.max(0, Math.floor((new Date(`${tanggal}T${jam_mulai}+08:00`).getTime() + 30 * 60000 - Date.now()) / 1000));
         delete product_detail?.hair_color?.stok;
         delete product_detail?.smoothing?.stok;
         delete product_detail?.keratin?.stok;
@@ -275,21 +276,21 @@ const getBookingById = async (id) => {
         tanggalStr = tanggalStr.toISOString().split("T")[0];
       }
       let jamStr = booking[0].jam_mulai;
-      if (typeof jamStr === "string" && jamStr.length > 5) {
-        jamStr = jamStr.slice(0, 5);
+      // Ensure jamStr is in HH:mm:ss format for consistency
+      if (typeof jamStr === "string" && jamStr.length > 8) {
+        jamStr = jamStr.substring(0, 8);
       }
-      const nowWITA = new Date(
-        now.getTime() +
-          (8 - now.getTimezoneOffset() / 60) * 60 * 60 * 1000 -
-          now.getTimezoneOffset() * 60 * 1000
-      );
-      const startDateTime = new Date(`${tanggalStr}T${jamStr}:00+08:00`);
+      
+      const startDateTime = new Date(`${tanggalStr}T${jamStr}+08:00`);
       const batasCancel = new Date(startDateTime.getTime() + 30 * 60000);
+      
+      // We don't need a special WITA time, as both Date objects are based on UTC epoch
       cancel_timer = Math.max(
         0,
-        Math.floor((batasCancel.getTime() - nowWITA.getTime()) / 1000)
+        Math.floor((batasCancel.getTime() - now.getTime()) / 1000)
       );
     } catch (e) {
+      console.error("Error calculating cancel timer:", e);
       cancel_timer = null;
     }
 

@@ -3,54 +3,25 @@ const { sendEmail } = require('./emailService');
 const transactionReceiptTemplate = require('../../html/transactionReceipt');
 const { snap, validateMidtransNotification } = require('../../config/midtrans');
 const NodeCache = require('node-cache');
+const { addToQueue } = require('../../utils/queue');
 
 // Cache untuk menyimpan status transaksi final (settlement, expire, dll.)
 // stdTTL: 3600 detik = 1 jam
 const transactionCache = new NodeCache({ stdTTL: 3600 });
-
 const userCache = new NodeCache({ stdTTL: 60 });
 
-const prosesTugasSetelahPembayaran = async (transaksi, webhookData) => {
+const retryOperation = async (fn, operationName, retries = 3, delay = 1000) => {
     try {
-        const { order_id, gross_amount, settlement_time, transaction_time } = webhookData;
-        const isPelunasan = transaksi.pelunasan_order_id === order_id;
-
-        const emailSubject = isPelunasan
-            ? 'Pelunasan Berhasil - Booking Salon'
-            : 'Pembayaran DP Berhasil - Booking Salon';
-
-        const updatedPaidAmount = (parseFloat(transaksi.paid_amount) || 0) + parseFloat(gross_amount);
-        let newPaymentStatus = 'unpaid';
-        if (updatedPaidAmount >= parseFloat(transaksi.total_harga)) {
-            newPaymentStatus = 'paid';
-        } else if (updatedPaidAmount >= parseFloat(transaksi.dp_amount)) {
-            newPaymentStatus = 'DP';
-        }
-
-        const emailHtml = await transactionReceiptTemplate({
-            booking_number: transaksi.booking_number,
-            paymentStatus: newPaymentStatus,
-            layanan_nama: transaksi.layanan_nama,
-            tanggal: transaksi.tanggal,
-            jam_mulai: transaksi.jam_mulai,
-            jam_selesai: transaksi.jam_selesai,
-            gross_amount,
-            total_harga: transaksi.total_harga,
-            newPaidAmount: updatedPaidAmount,
-            payment_time: settlement_time || transaction_time || new Date()
-        });
-
-        await sendEmail(
-            transaksi.email,
-            emailSubject,
-            'Pembayaran Anda telah berhasil.',
-            emailHtml
-        );
-
-        console.log(`[Latar Belakang] Email konfirmasi pembayaran berhasil dikirim untuk pesanan ${order_id}`);
-
+        return await fn();
     } catch (error) {
-        console.error(`[Latar Belakang] Gagal mengirim email untuk pesanan ${webhookData.order_id}:`, error);
+        if (retries > 0) {
+            console.warn(`[Retry] Operasi '${operationName}' gagal. Mencoba lagi dalam ${delay}ms... (${retries} percobaan tersisa)`);
+            await new Promise(res => setTimeout(res, delay));
+            return retryOperation(fn, operationName, retries - 1, delay * 2); // Jeda digandakan
+        } else {
+            console.error(`[Retry] Operasi '${operationName}' gagal setelah semua percobaan.`);
+            throw error;
+        }
     }
 };
 
@@ -226,11 +197,20 @@ class TransaksiService {
                 dp_amount = Math.round(total_harga * 0.3);
                 amountToPay = dp_amount;
                 
-                snapResponse = await snap.createTransaction({
-                    transaction_details: { order_id, gross_amount: amountToPay },
-                    item_details: [{ id: booking_id, price: amountToPay, quantity: 1, name: 'Booking Salon (DP 30%)', brand: "Salon", category: "Perawatan" }],
-                    customer_details: { user_id }
-                });
+                const createMidtransTx = () => snap.createTransaction({
+    transaction_details: { order_id, gross_amount: amountToPay },
+    item_details: [{ id: booking_id, price: amountToPay, quantity: 1, name: 'Booking Salon (DP 30%)', brand: "Salon", category: "Perawatan" }],
+    customer_details: { user_id }
+});
+
+try {
+    console.log(`[TransaksiService] Mencoba membuat transaksi Midtrans untuk order_id: ${order_id}`);
+    snapResponse = await retryOperation(createMidtransTx, `Create Midtrans Transaction`);
+    console.log(`[TransaksiService] Berhasil membuat transaksi Midtrans untuk order_id: ${order_id}`);
+} catch (midtransError) {
+    console.error(`[TransaksiService] Gagal membuat transaksi Midtrans untuk order_id: ${order_id}`, midtransError);
+    throw { status: 503, message: "Gagal menghubungi payment gateway. Coba beberapa saat lagi." };
+}
             }
 
             // Transaksi DB sekarang hanya untuk menulis, jadi lebih cepat.
@@ -313,14 +293,17 @@ class TransaksiService {
                     [updatedPaidAmount, newPaymentStatus, transaksi.id]
                 );
 
-                // --- PERBAIKAN: COMMIT DULU, BARU KIRIM EMAIL ---
                 await conn.commit();
-                console.log('[TransaksiService] Webhook berhasil, data tersimpan di DB', { order_id });
+console.log(`[TransaksiService] Webhook berhasil, data tersimpan di DB untuk order_id: ${order_id}`);
+console.log(`[TransaksiService] Menambahkan tugas 'send-payment-receipt' ke antrian untuk order_id: ${order_id}`);
 
-                // Jalankan tugas setelah pembayaran di latar belakang (TANPA AWAIT)
-                prosesTugasSetelahPembayaran(transaksi, webhookData);
+addToQueue('send-payment-receipt', {
+    transaksi,
+    webhookData
+});
 
-                return { message: "Webhook berhasil diproses" };
+return { message: "Webhook berhasil diproses. Notifikasi email akan dikirim di latar belakang." };
+
             } else if (["expired", "cancel", "deny", "cancelled"].includes(transaction_status)) {
                 const newStatus = { expired: 'expired', cancel: 'cancelled', cancelled: 'cancelled', deny: 'failed' }[transaction_status] || 'failed';
                 await conn.query(`UPDATE transaksi SET status = ? WHERE id = ?`, [newStatus, transaksi.id]);
