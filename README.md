@@ -9,6 +9,7 @@ Backend API untuk aplikasi manajemen salon kecantikan dengan fitur booking, pemb
 - [Konfigurasi Environment](#konfigurasi-environment)
 - [Menjalankan Aplikasi](#menjalankan-aplikasi)
 - [Struktur Database](#struktur-database)
+- [API Documentation](#api-documentation)
 - [Teknologi yang Digunakan](#teknologi-yang-digunakan)
 
 ## 🛠️ Prasyarat
@@ -48,13 +49,13 @@ Buat file `.env` di root directory dan isi dengan konfigurasi berikut:
 DB_HOST=localhost
 DB_USER=root
 DB_PORT=3307
-DB_PASSWORD=your_very_own_db_password
+DB_PASSWORD=henry123
 DB_NAME=she_app
 
 # 🌐 Server Configuration
 PORT=3000
 NODE_ENV=development
-JWT_SECRET=your_very_own_jwt_token
+JWT_SECRET=rahasia_salon
 ALLOWED_ORIGINS=http://localhost:3000
 
 # 📸 Cloudinary Configuration
@@ -116,6 +117,18 @@ Setelah berhasil dijalankan, Anda akan melihat output berikut:
 ✅ Connected to she_app database
 ✅ Email service is ready
 ```
+
+## 📖 API Documentation
+
+Dokumentasi lengkap API endpoint tersedia di Postman Collection:
+
+**🔗 [She Salon API Collection](https://she-salon-api.postman.co/workspace/My-Workspace~e1515782-5d9b-472e-8315-582bd2107681/collection/44888388-78dfc5ba-6501-4830-90bc-2f07f7d53549?action=share&source=copy-link&creator=44888388)**
+
+Collection ini mencakup:
+- Semua endpoint yang tersedia
+- Request & response examples
+- Authentication setup
+- Environment variables
 
 ## 🔧 Teknologi yang Digunakan
 
