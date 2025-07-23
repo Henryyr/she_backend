@@ -30,7 +30,7 @@ const logout = async (req, res) => {
       await authService.blacklistToken(token, req.tokenExp);
     }
 
-    res.json({
+    res.clearCookie('token').json({
       message: 'Logout berhasil'
     });
   } catch (error) {
