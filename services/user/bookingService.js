@@ -198,12 +198,14 @@ const getAllBookings = async (page = 1, limit = 10, user_id) => {
       `
             SELECT /*+ INDEX(b idx_booking_created) */ b.*,
                 GROUP_CONCAT(l.nama ORDER BY l.id) as layanan_names,
-                GROUP_CONCAT(l.id) as layanan_ids
+                GROUP_CONCAT(l.id) as layanan_ids,
+                t.dp_amount, t.paid_amount, t.payment_status
             FROM booking b
             LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
             LEFT JOIN layanan l ON bl.layanan_id = l.id
+            LEFT JOIN transaksi t ON b.id = t.booking_id
             WHERE b.user_id = ?
-            GROUP BY b.id
+            GROUP BY b.id, t.id
             ORDER BY b.created_at DESC
             LIMIT ? OFFSET ?
         `,
@@ -217,12 +219,26 @@ const getAllBookings = async (page = 1, limit = 10, user_id) => {
 
     // Tambahkan layanan_id array ke setiap booking, hapus layanan_ids property
     const bookingsWithLayananId = bookings.map((b) => {
-      const { layanan_ids, ...rest } = b;
+      const { layanan_ids, dp_amount, paid_amount, payment_status, ...rest } = b;
+
+      let dpPaid = 0;
+      let remaining = parseFloat(rest.final_price);
+
+      if (payment_status === 'DP') {
+        dpPaid = parseFloat(dp_amount);
+        remaining = parseFloat(rest.final_price) - dpPaid;
+      } else if (payment_status === 'Paid') {
+        dpPaid = parseFloat(paid_amount);
+        remaining = 0;
+      }
+
       return {
         ...rest,
         layanan_id: layanan_ids
           ? layanan_ids.split(',').map((x) => Number(x))
-          : []
+          : [],
+        dp_paid: dpPaid.toFixed(2),
+        remaining: remaining.toFixed(2)
       };
     });
 
