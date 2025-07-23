@@ -14,6 +14,7 @@ const login = async (req, res) => {
   try {
     // Kirim req ke loginUser untuk brute force protection
     const { token, user } = await authService.loginUser(req.body, req);
+    console.log('JWT Token:', token);
     // Only send safe user fields
     res.json({ token, user });
   } catch (error) {
