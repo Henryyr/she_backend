@@ -261,14 +261,16 @@ const getBookingById = async (id) => {
   try {
     const [booking] = await connection.query(
       `SELECT 
-                b.*, 
-                GROUP_CONCAT(l.nama) as layanan_names,
-                GROUP_CONCAT(l.id) as layanan_ids
-             FROM booking b
-             LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
-             LEFT JOIN layanan l ON bl.layanan_id = l.id
-             WHERE b.id = ?
-             GROUP BY b.id`,
+        b.*, 
+        GROUP_CONCAT(l.nama) as layanan_names,
+        GROUP_CONCAT(l.id) as layanan_ids,
+        t.dp_amount, t.paid_amount, t.payment_status
+      FROM booking b
+      LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
+      LEFT JOIN layanan l ON bl.layanan_id = l.id
+      LEFT JOIN transaksi t ON b.id = t.booking_id
+      WHERE b.id = ?
+      GROUP BY b.id, t.id`,
       [id]
     );
 
@@ -285,36 +287,45 @@ const getBookingById = async (id) => {
       } else if (tanggalStr instanceof Date) {
         tanggalStr = tanggalStr.toISOString().split('T')[0];
       }
+
       let jamStr = booking[0].jam_mulai;
-      // Ensure jamStr is in HH:mm:ss format for consistency
       if (typeof jamStr === 'string' && jamStr.length > 8) {
         jamStr = jamStr.substring(0, 8);
       }
 
       const startDateTime = new Date(`${tanggalStr}T${jamStr}+08:00`);
       const batasCancel = new Date(startDateTime.getTime() + 30 * 60000);
-
-      // We don't need a special WITA time, as both Date objects are based on UTC epoch
-      cancel_timer = Math.max(
-        0,
-        Math.floor((batasCancel.getTime() - now.getTime()) / 1000)
-      );
+      cancel_timer = Math.max(0, Math.floor((batasCancel.getTime() - now.getTime()) / 1000));
     } catch (e) {
       console.error('Error calculating cancel timer:', e);
       cancel_timer = null;
     }
 
-    // Parse layanan_ids ke array number dan hapus layanan_ids dari response
+    // Parse layanan_ids ke array number
     let layanan_id = [];
     if (booking[0].layanan_ids) {
       layanan_id = booking[0].layanan_ids.split(',').map((x) => Number(x));
     }
-    const { layanan_ids, ...rest } = booking[0];
+
+    const { layanan_ids, dp_amount, paid_amount, payment_status, ...rest } = booking[0];
+
+    let dpPaid = 0;
+    let remaining = parseFloat(rest.final_price);
+
+    if (payment_status === 'DP') {
+      dpPaid = parseFloat(dp_amount);
+      remaining = parseFloat(rest.final_price) - dpPaid;
+    } else if (payment_status === 'Paid') {
+      dpPaid = parseFloat(paid_amount);
+      remaining = 0;
+    }
 
     return {
       ...rest,
       layanan_id,
-      cancel_timer
+      cancel_timer,
+      dp_paid: dpPaid.toFixed(2),
+      remaining: remaining.toFixed(2)
     };
   } catch (error) {
     throw new Error(`Error getting booking: ${error.message}`);
