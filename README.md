@@ -157,17 +157,3 @@ Untuk menjalankan aplikasi secara penuh, Anda perlu mengisi nilai kosong berikut
 1. **Cloudinary**: Daftar di [cloudinary.com](https://cloudinary.com) untuk mendapatkan credentials
 2. **Midtrans**: Daftar di [midtrans.com](https://midtrans.com) untuk payment gateway
 3. **Email**: Setup Gmail App Password untuk fitur email
-
-## 🤝 Kontribusi
-
-Jika Anda ingin berkontribusi pada proyek ini:
-
-1. Fork repository
-2. Buat branch untuk fitur baru (`git checkout -b feature/AmazingFeature`)
-3. Commit perubahan (`git commit -m 'Add some AmazingFeature'`)
-4. Push ke branch (`git push origin feature/AmazingFeature`)
-5. Buat Pull Request
-
----
-
-**© 2025 She Salon Backend**
