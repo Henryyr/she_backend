@@ -78,19 +78,25 @@ const createOfflineBooking = async (req, res) => {
 
     const result = await userBookingService.createBooking(bookingData);
 
+    // Langkah baru: Langsung tandai booking sebagai 'completed'
+    await bookingService.updateBookingStatus(result.booking_id, 'completed');
+
+    // Ambil data booking yang sudah diupdate
+    const updatedBooking = await bookingService.getBookingById(result.booking_id);
+
     // Emit Socket.IO event for offline booking
     const io = getIO();
     if (io) {
       try {
         const bookingNotification = {
-          id: result.booking_number || result.id,
-          customer: result.user?.fullname || result.user?.nama || 'Offline Customer',
-          date: result.tanggal,
-          start_time: result.jam_mulai,
-          end_time: result.jam_selesai,
-          services: result.layanan_names || result.layanan?.map(l => l.nama).join(', ') || 'N/A',
-          status: result.status || 'confirmed',
-          booking_number: result.booking_number
+          id: updatedBooking.booking_number || updatedBooking.id,
+          customer: updatedBooking.customer_name || 'Offline Customer',
+          date: updatedBooking.tanggal,
+          start_time: updatedBooking.jam_mulai,
+          end_time: updatedBooking.jam_selesai,
+          services: updatedBooking.services || 'N/A',
+          status: updatedBooking.status || 'completed',
+          booking_number: updatedBooking.booking_number
         };
 
         // Emit to admin room
@@ -111,8 +117,8 @@ const createOfflineBooking = async (req, res) => {
     }
 
     res.status(201).json({
-      message: 'Booking offline berhasil dibuat',
-      booking: result
+      message: 'Booking offline berhasil dibuat dan diselesaikan',
+      booking: updatedBooking
     });
   } catch (error) {
     res.status(500).json({
