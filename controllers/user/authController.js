@@ -91,6 +91,16 @@ const changePassword = async (req, res) => {
   }
 };
 
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await authService.updateProfile(userId, req.body);
+    res.json({ message: 'Profil berhasil diperbarui' });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -98,5 +108,6 @@ module.exports = {
   getProfile,
   forgotPassword,
   resetPassword,
-  changePassword
+  changePassword,
+  updateProfile
 };
