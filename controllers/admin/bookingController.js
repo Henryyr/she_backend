@@ -79,6 +79,7 @@ const createOfflineBooking = async (req, res) => {
     const result = await userBookingService.createBooking(bookingData);
 
     // Langkah baru: Langsung tandai booking sebagai 'completed'
+    console.log(`[AdminBookingController] Booking offline dibuat dengan id=${result.booking_id}, total_harga=${result.total_harga}`);
     await bookingService.updateBookingStatus(result.booking_id, 'completed');
 
     // Buat transaksi untuk booking offline yang sudah selesai
@@ -94,14 +95,19 @@ const createOfflineBooking = async (req, res) => {
 
       if (existingTransaction.length === 0) {
         // Buat transaksi baru dengan status paid untuk booking offline
-        await connection.query(
-          `INSERT INTO transaksi (booking_id, total_harga, dp_amount, paid_amount, payment_status, status) 
-           VALUES (?, ?, ?, ?, 'paid', 'completed')`,
-          [result.booking_id, result.total_harga, 0, result.total_harga]
+        console.log(`[AdminBookingController] Membuat transaksi untuk booking offline id=${result.booking_id}`);
+        const [insertResult] = await connection.query(
+          `INSERT INTO transaksi (booking_id, user_id, total_harga, dp_amount, paid_amount, payment_status, status) 
+           VALUES (?, ?, ?, ?, ?, 'paid', 'completed')`,
+          [result.booking_id, bookingData.user_id, result.total_harga, 0, result.total_harga]
         );
+        console.log(`[AdminBookingController] Transaksi berhasil dibuat dengan id=${insertResult.insertId}`);
+      } else {
+        console.log(`[AdminBookingController] Transaksi sudah ada untuk booking id=${result.booking_id}`);
       }
 
       await connection.commit();
+      console.log(`[AdminBookingController] Transaksi untuk booking offline berhasil disimpan`);
     } catch (transactionError) {
       await connection.rollback();
       console.error('Error creating transaction for offline booking:', transactionError);

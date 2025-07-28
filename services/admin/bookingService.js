@@ -307,15 +307,51 @@ const updateBookingStatus = async (id, status) => {
 
     // Jika status completed, update juga status transaksi terkait
     if (status === 'completed') {
-      await connection.query(
-            `UPDATE transaksi 
-             SET 
-                status = 'completed', 
-                payment_status = 'paid',
-                paid_amount = total_harga 
-             WHERE booking_id = ?`,
-            [id]
+      // Cek apakah transaksi sudah ada
+      const [existingTransaction] = await connection.query(
+        'SELECT id FROM transaksi WHERE booking_id = ?',
+        [id]
       );
+
+      if (existingTransaction.length === 0) {
+        // Ambil total_harga dari booking
+        const [bookingData] = await connection.query(
+          'SELECT total_harga FROM booking WHERE id = ?',
+          [id]
+        );
+        
+        if (bookingData.length > 0) {
+          const total_harga = bookingData[0].total_harga;
+          // Ambil user_id dari booking
+          const [userData] = await connection.query(
+            'SELECT user_id FROM booking WHERE id = ?',
+            [id]
+          );
+          
+          if (userData.length > 0) {
+            const user_id = userData[0].user_id;
+            // Buat transaksi baru jika belum ada
+            console.log(`[AdminBookingService] Membuat transaksi baru untuk booking completed id=${id}, total_harga=${total_harga}, user_id=${user_id}`);
+            await connection.query(
+              `INSERT INTO transaksi (booking_id, user_id, total_harga, dp_amount, paid_amount, payment_status, status) 
+               VALUES (?, ?, ?, ?, ?, 'paid', 'completed')`,
+              [id, user_id, total_harga, 0, total_harga]
+            );
+          }
+        }
+      } else {
+        // Update transaksi yang sudah ada
+        console.log(`[AdminBookingService] Update transaksi existing untuk booking completed id=${id}`);
+        await connection.query(
+          `UPDATE transaksi 
+           SET 
+              status = 'completed', 
+              payment_status = 'paid',
+              paid_amount = total_harga 
+           WHERE booking_id = ?`,
+          [id]
+        );
+      }
     }
 
     await connection.commit();
