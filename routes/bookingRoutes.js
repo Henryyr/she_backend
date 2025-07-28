@@ -19,6 +19,7 @@ router.get('/', authenticate, bookingController.getAllBookings);
 router.post('/available-slots', authenticate, bookingController.postAvailableSlots);
 router.get('/:id', authenticate, bookingController.getBookingById);
 router.put('/:id/cancel', authenticate, bookingController.cancelBooking);
+router.get('/available-days', authenticate, bookingController.getAvailableDays);
 
 // Error handler harus paling bawah
 router.use(errorHandler);

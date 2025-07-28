@@ -161,7 +161,6 @@ const createBooking = async (data) => {
       await connection.commit();
 
       // Siapkan data respons
-      // FIX: Construct a valid ISO date string for calculation. The `jam_mulai` variable already contains seconds.
       const cancel_timer = Math.max(0, Math.floor((new Date(`${tanggal}T${jam_mulai}+08:00`).getTime() + 30 * 60000 - Date.now()) / 1000));
       delete product_detail?.hair_color?.stok;
       delete product_detail?.smoothing?.stok;
@@ -184,7 +183,7 @@ const createBooking = async (data) => {
       };
     } catch (err) {
       await connection.rollback();
-      throw err; // Lemparkan error agar ditangani di blok catch luar
+      throw err;
     }
   } finally {
     connection.release();
@@ -465,10 +464,25 @@ const postAvailableSlots = async (tanggal, estimasi_waktu = 60) => {
   };
 };
 
+const checkUserDailyBooking = async (userId, tanggal) => {
+  const connection = await pool.getConnection();
+  try {
+    const [existingBooking] = await connection.query(
+      `SELECT id FROM booking
+       WHERE user_id = ? AND tanggal = ? AND status NOT IN ('cancelled', 'completed')`,
+      [userId, tanggal]
+    );
+    return existingBooking.length > 0;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   createBooking,
   getAllBookings,
   getBookingById,
   cancelBooking,
-  postAvailableSlots
+  postAvailableSlots,
+  checkUserDailyBooking
 };
