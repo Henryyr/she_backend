@@ -1,298 +1,376 @@
-const bookingService = require('../../services/admin/bookingService');
-const dashboardService = require('../../services/admin/dashboardService');
-const userBookingService = require('../../services/user/bookingService');
-const { pool } = require('../../db'); // Impor pool untuk transaksi manual
-const { getIO } = require('../../socketInstance');
+const { pool } = require('../../db');
+const paginateQuery = require('../../helpers/paginateQuery');
 
-const getAllBookings = async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const status = req.query.status ? req.query.status.trim().toLowerCase() : undefined;
-    const startDate = req.query.startDate;
-    const endDate = req.query.endDate;
-    const bookings = await bookingService.getAllBookings(page, limit, status, startDate, endDate);
+const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) => {
+  let sql = `
+    SELECT 
+        b.id,
+        u.fullname AS customer,
+        DATE_FORMAT(b.tanggal, '%d %b %Y') AS date,
+        CONCAT(TIME_FORMAT(b.jam_mulai, '%H:%i'), ' - ', TIME_FORMAT(b.jam_selesai, '%H:%i')) AS time,
+        GROUP_CONCAT(l.nama SEPARATOR ', ') AS services,
+        b.status,
+        COALESCE(MAX(t.total_harga), b.total_harga) AS total_harga,
+        COALESCE(MAX(t.dp_amount), 0) AS dp_amount,
+        COALESCE(MAX(t.paid_amount), 0) AS paid_amount,
+        (COALESCE(MAX(t.total_harga), b.total_harga) - IFNULL(MAX(t.paid_amount), 0)) AS sisa_bayar,
+        MAX(t.payment_status) AS payment_status
+    FROM booking b
+    JOIN users u ON b.user_id = u.id
+    JOIN booking_layanan bl ON b.id = bl.booking_id
+    JOIN layanan l ON bl.layanan_id = l.id
+    LEFT JOIN transaksi t ON t.booking_id = b.id
+`;
+  const whereClauses = [];
+  const params = [];
 
-    bookings.pagination.hasNextPage = page < bookings.pagination.totalPages;
-    bookings.pagination.hasPrevPage = page > 1;
-    bookings.pagination.nextPage = bookings.pagination.hasNextPage ? page + 1 : null;
-    bookings.pagination.prevPage = bookings.pagination.hasPrevPage ? page - 1 : null;
-
-    res.json(bookings);
-  } catch (error) {
-    res.status(500).json({ message: 'Terjadi kesalahan', error: error.message });
+  if (status) {
+    whereClauses.push('LOWER(TRIM(b.status)) = ?');
+    params.push(status.trim().toLowerCase());
   }
+  if (startDate) {
+    whereClauses.push('DATE(b.tanggal) >= ?');
+    params.push(startDate);
+  }
+  if (endDate) {
+    whereClauses.push('DATE(b.tanggal) <= ?');
+    params.push(endDate);
+  }
+  if (whereClauses.length > 0) {
+    sql += ' WHERE ' + whereClauses.join(' AND ');
+  }
+
+  sql += `
+        GROUP BY 
+            b.id, 
+            u.fullname, 
+            b.tanggal, 
+            b.jam_mulai, 
+            b.jam_selesai, 
+            b.status
+        ORDER BY b.created_at DESC
+    `;
+
+  let countSql = 'SELECT COUNT(DISTINCT b.id) as total FROM booking b';
+  const countWhereClauses = [];
+  const countParams = [];
+
+  if (status) {
+    countWhereClauses.push('LOWER(TRIM(b.status)) = ?');
+    countParams.push(status.trim().toLowerCase());
+  }
+  if (startDate) {
+    countWhereClauses.push('DATE(b.tanggal) >= ?');
+    countParams.push(startDate);
+  }
+  if (endDate) {
+    countWhereClauses.push('DATE(b.tanggal) <= ?');
+    countParams.push(endDate);
+  }
+  if (countWhereClauses.length > 0) {
+    countSql += ' WHERE ' + countWhereClauses.join(' AND ');
+  }
+
+  const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
+
+  // Format output agar Paid bisa langsung dipakai di frontend
+  const bookings = data.map(row => ({
+    id: row.id,
+    customer: row.customer,
+    date: row.date,
+    time: row.time,
+    services: row.services,
+    status: row.status,
+    total: row.total_harga,
+    dp: row.dp_amount,
+    paid: row.paid_amount, // <- ini tampilkan di frontend
+    sisa: row.sisa_bayar,
+    payment_status: row.payment_status
+  }));
+
+  return { bookings, pagination };
 };
 
-const getBookingsByUserId = async (req, res) => {
-  try {
-    const userId = req.params.userId;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const status = req.query.status ? req.query.status.trim().toLowerCase() : undefined;
-    const startDate = req.query.startDate;
-    const endDate = req.query.endDate;
-    const bookings = await bookingService.getBookingsByUserId(userId, page, limit, status, startDate, endDate);
+const getBookingsByUserId = async (userId, page = 1, limit = 10, status, startDate, endDate) => {
+  let sql = `
+        SELECT 
+            b.id,
+            u.fullname as customer,
+            DATE_FORMAT(b.tanggal, '%d %b %Y') as date,
+            TIME_FORMAT(b.jam_mulai, '%H:%i') as start_time,
+            TIME_FORMAT(b.jam_selesai, '%H:%i') as end_time,
+            GROUP_CONCAT(l.nama SEPARATOR ', ') as services,
+            b.status
+        FROM booking b
+        JOIN users u ON b.user_id = u.id
+        JOIN booking_layanan bl ON b.id = bl.booking_id
+        JOIN layanan l ON bl.layanan_id = l.id
+        WHERE b.user_id = ?
+    `;
+  const params = [userId];
 
-    bookings.pagination.hasNextPage = page < bookings.pagination.totalPages;
-    bookings.pagination.hasPrevPage = page > 1;
-    bookings.pagination.nextPage = bookings.pagination.hasNextPage ? page + 1 : null;
-    bookings.pagination.prevPage = bookings.pagination.hasPrevPage ? page - 1 : null;
-
-    res.json(bookings);
-  } catch (error) {
-    res.status(500).json({ message: 'Terjadi kesalahan', error: error.message });
+  if (status) {
+    sql += ' AND b.status = ?';
+    params.push(status);
   }
+  if (startDate) {
+    sql += ' AND DATE(b.tanggal) >= ?';
+    params.push(startDate);
+  }
+  if (endDate) {
+    sql += ' AND DATE(b.tanggal) <= ?';
+    params.push(endDate);
+  }
+
+  sql += `
+        GROUP BY b.id
+        ORDER BY b.created_at DESC
+    `;
+
+  let countSql = 'SELECT COUNT(DISTINCT b.id) as total FROM booking b WHERE b.user_id = ?';
+  const countParams = [userId];
+  if (status) {
+    countSql += ' AND b.status = ?';
+    countParams.push(status);
+  }
+  if (startDate) {
+    countSql += ' AND DATE(b.tanggal) >= ?';
+    countParams.push(startDate);
+  }
+  if (endDate) {
+    countSql += ' AND DATE(b.tanggal) <= ?';
+    countParams.push(endDate);
+  }
+
+  const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
+  return { bookings: data, pagination };
 };
 
-const getBookingById = async (req, res) => {
+const getBookingById = async (id) => {
   try {
-    const booking = await bookingService.getBookingById(req.params.id);
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking tidak ditemukan' });
+    const [bookings] = await pool.query(`
+            SELECT 
+                b.*,
+                u.fullname as customer_name,
+                u.phone_number as customer_phone,
+                u.email as customer_email,
+                GROUP_CONCAT(DISTINCT l.nama SEPARATOR ', ') as services,
+                GROUP_CONCAT(DISTINCT l.id) as service_ids
+            FROM booking b
+            JOIN users u ON b.user_id = u.id
+            JOIN booking_layanan bl ON b.id = bl.booking_id
+            JOIN layanan l ON bl.layanan_id = l.id
+            LEFT JOIN booking_colors bc ON b.id = bc.booking_id
+            LEFT JOIN hair_colors hc ON bc.color_id = hc.id
+            LEFT JOIN hair_products hp ON hc.product_id = hp.id
+            LEFT JOIN product_brands pb ON hp.brand_id = pb.id
+            WHERE b.id = ?
+            GROUP BY b.id
+        `, [id]);
+
+    if (bookings.length === 0) {
+      return null;
     }
-    res.json(booking);
+
+    const booking = bookings[0];
+
+    // Get product details if any
+    const [productDetails] = await pool.query(`
+            SELECT 
+                'hair_color' as type,
+                hc.id as color_id,
+                hc.nama as color_name,
+                pb.nama as brand_name,
+                hp.harga_dasar,
+                hc.tambahan_harga
+            FROM booking_colors bc
+            JOIN hair_colors hc ON bc.color_id = hc.id
+            JOIN hair_products hp ON hc.product_id = hp.id
+            JOIN product_brands pb ON hp.brand_id = pb.id
+            WHERE bc.booking_id = ?
+        `, [id]);
+
+    if (productDetails.length > 0) {
+      booking.products = productDetails;
+    }
+
+    return booking;
   } catch (error) {
-    res.status(500).json({
-      message: 'Error retrieving booking',
-      error: error.message
-    });
+    console.error('Error fetching booking details:', error);
+    throw new Error(`Failed to retrieve booking: ${error.message}`);
   }
 };
 
-const createOfflineBooking = async (req, res) => {
-  const connection = await pool.getConnection(); // Dapatkan koneksi untuk transaksi
+const updateBooking = async (id, data) => {
+  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction(); // Mulai transaksi
+    await connection.beginTransaction();
 
-    if (!req.body.user_id) {
-      throw new Error('User ID diperlukan untuk booking offline');
-    }
+    const { tanggal, jam_mulai, jam_selesai, status, special_request } = data;
 
-    const bookingData = {
-      user_id: req.body.user_id,
-      layanan_id: req.body.layanan_id,
-      tanggal: req.body.tanggal,
-      jam_mulai: req.body.jam_mulai,
-      hair_color: req.body.hair_color,
-      smoothing_product: req.body.smoothing_product,
-      keratin_product: req.body.keratin_product,
-      special_request: req.body.special_request || null
-    };
-
-    // Panggil service untuk membuat booking.
-    const result = await userBookingService.createBooking(bookingData);
-    
-    // Langsung buat entri transaksi untuk pembayaran tunai yang sudah lunas.
-    await connection.query(
-      `INSERT INTO transaksi (user_id, booking_id, kategori_transaksi_id, total_harga, paid_amount, dp_amount, status, payment_status, booking_number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        bookingData.user_id,
-        result.booking_id,
-        1, // ID untuk Cash
-        result.total_harga,
-        result.total_harga,
-        0, // Tanpa DP
-        'completed', // Langsung completed
-        'Paid', // Langsung Paid
-        result.booking_number
-      ]
+    // First check if booking exists
+    const [booking] = await connection.query(
+      'SELECT * FROM booking WHERE id = ?',
+      [id]
     );
 
-    // Perbarui status booking menjadi 'completed'.
-    await bookingService.updateBookingStatus(result.booking_id, 'completed');
+    if (booking.length === 0) {
+      return null;
+    }
 
-    // Ambil data booking yang sudah diupdate
-    const updatedBooking = await bookingService.getBookingById(result.booking_id);
+    // Update basic booking information
+    await connection.query(
+            `UPDATE booking 
+             SET tanggal = COALESCE(?, tanggal),
+                 jam_mulai = COALESCE(?, jam_mulai),
+                 jam_selesai = COALESCE(?, jam_selesai),
+                 status = COALESCE(?, status),
+                 special_request = COALESCE(?, special_request),
+                 updated_at = NOW()
+             WHERE id = ?`,
+            [tanggal, jam_mulai, jam_selesai, status, special_request, id]
+    );
 
-    await connection.commit(); // Commit transaksi
+    // If service IDs have been provided, update them
+    if (data.service_ids && Array.isArray(data.service_ids)) {
+      // Delete existing service relations
+      await connection.query(
+        'DELETE FROM booking_layanan WHERE booking_id = ?',
+        [id]
+      );
 
-    // Emit Socket.IO event for offline booking
-    const io = getIO();
-    if (io) {
-      try {
-        const bookingNotification = {
-          id: updatedBooking.booking_number || updatedBooking.id,
-          customer: updatedBooking.customer_name || 'Offline Customer',
-          date: updatedBooking.tanggal,
-          start_time: updatedBooking.jam_mulai,
-          end_time: updatedBooking.jam_selesai,
-          services: updatedBooking.services || 'N/A',
-          status: updatedBooking.status || 'completed',
-          booking_number: updatedBooking.booking_number
-        };
-
-        // Emit to admin room
-        io.to('admin-room').emit('new-booking', {
-          booking: bookingNotification,
-          message: `New offline booking created for ${bookingNotification.customer}`,
-          timestamp: new Date().toISOString(),
-          isOfflineBooking: true
-        });
-
-        console.log('✅ New offline booking event emitted to admin room');
-
-        // Update dashboard stats
-        await dashboardService.updateDashboardStats(io);
-      } catch (emitErr) {
-        console.error('Socket emit error:', emitErr);
+      // Insert new service relations
+      for (const serviceId of data.service_ids) {
+        await connection.query(
+          'INSERT INTO booking_layanan (booking_id, layanan_id) VALUES (?, ?)',
+          [id, serviceId]
+        );
       }
     }
 
-    res.status(201).json({
-      message: 'Booking offline berhasil dibuat dan diselesaikan',
-      booking: updatedBooking
-    });
+    await connection.commit();
+
+    // Get the updated booking
+    const updatedBooking = await getBookingById(id);
+    return updatedBooking;
   } catch (error) {
-    await connection.rollback(); // Rollback jika ada error
-    res.status(500).json({
-      message: 'Error creating offline booking',
-      error: error.message
-    });
+    await connection.rollback();
+    console.error('Error updating booking:', error);
+    throw new Error(`Failed to update booking: ${error.message}`);
   } finally {
     connection.release();
   }
 };
 
-const updateBooking = async (req, res) => {
-  try {
-    const updatedBooking = await bookingService.updateBooking(req.params.id, req.body);
-    if (!updatedBooking) {
-      return res.status(404).json({ message: 'Booking tidak ditemukan' });
-    }
-    res.json({ message: 'Booking berhasil diperbarui', booking: updatedBooking });
-  } catch (error) {
-    res.status(500).json({
-      message: 'Error updating booking',
-      error: error.message
-    });
+const updateBookingStatus = async (id, status) => {
+  const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+  if (!validStatuses.includes(status)) {
+    throw new Error('Status tidak valid');
   }
-};
 
-const deleteBooking = async (req, res) => {
+  const connection = await pool.getConnection();
   try {
-    const result = await bookingService.deleteBooking(req.params.id);
-    if (!result) {
-      return res.status(404).json({ message: 'Booking tidak ditemukan' });
-    }
-    res.json({ message: 'Booking berhasil dihapus' });
-  } catch (error) {
-    res.status(500).json({
-      message: 'Error deleting booking',
-      error: error.message
-    });
-  }
-};
+    await connection.beginTransaction();
 
-const confirmBooking = async (req, res) => {
-  try {
-    const result = await bookingService.updateBookingStatus(req.params.id, 'confirmed');
-    if (!result) {
-      return res.status(404).json({ message: 'Booking tidak ditemukan' });
+    // Get current booking status
+    const [currentBooking] = await connection.query(
+      'SELECT status FROM booking WHERE id = ?',
+      [id]
+    );
+
+    if (currentBooking.length === 0) {
+      return null;
     }
 
-    // Emit Socket.IO event for booking confirmation
-    const io = getIO();
-    if (io) {
+    const currentStatus = currentBooking[0].status;
+
+    // Update booking status
+    const [result] = await connection.query(
+      'UPDATE booking SET status = ? WHERE id = ?',
+      [status, id]
+    );
+    if (result.affectedRows === 0) {
+      return null;
+    }
+
+    // Jika status berubah menjadi cancelled, restore stok
+    if (status === 'cancelled' && currentStatus !== 'cancelled') {
       try {
-        io.to('admin-room').emit('booking-status-updated', {
-          booking_id: parseInt(req.params.id),
-          status: 'confirmed',
-          message: `Booking #${req.params.id} has been confirmed`,
-          timestamp: new Date().toISOString()
-        });
-
-        console.log(`✅ Booking confirmation event emitted: ${req.params.id} -> confirmed`);
-
-        // Update dashboard stats
-        await dashboardService.updateDashboardStats(io);
-      } catch (emitErr) {
-        console.error('Socket emit error:', emitErr);
+        console.log(`[AdminBookingService] Restore stok untuk booking yang dibatalkan id=${id}`);
+        const stockService = require('./stockService');
+        await stockService.restoreStockByBookingId(id, connection);
+      } catch (restoreError) {
+        console.error(`[AdminBookingService] Gagal restore stok untuk booking_id=${id}:`, restoreError);
+        // Jangan throw error, karena booking sudah dibatalkan
       }
     }
 
-    res.json({ message: 'Booking berhasil dikonfirmasi' });
+    // Jika status completed, update juga status transaksi terkait
+    if (status === 'completed') {
+      await connection.query(
+            `UPDATE transaksi 
+             SET 
+                status = 'completed', 
+                payment_status = 'paid',
+                paid_amount = total_harga 
+             WHERE booking_id = ?`,
+            [id]
+      );
+    }
+
+    await connection.commit();
+    return { id, status };
   } catch (error) {
-    res.status(500).json({ message: 'Error confirming booking', error: error.message });
+    await connection.rollback();
+    console.error('Error updating booking status:', error);
+    throw new Error(`Failed to update booking status: ${error.message}`);
+  } finally {
+    connection.release();
   }
 };
 
-const completeBooking = async (req, res) => {
+const deleteBooking = async (id) => {
+  const connection = await pool.getConnection();
   try {
-    const result = await bookingService.updateBookingStatus(req.params.id, 'completed');
-    if (!result) {
-      return res.status(404).json({ message: 'Booking tidak ditemukan' });
+    await connection.beginTransaction();
+
+    // Check if booking exists
+    const [booking] = await connection.query(
+      'SELECT * FROM booking WHERE id = ?',
+      [id]
+    );
+
+    if (booking.length === 0) {
+      return null;
     }
 
-    // Emit Socket.IO event for booking completion
-    const io = getIO();
-    if (io) {
-      try {
-        io.to('admin-room').emit('booking-status-updated', {
-          booking_id: parseInt(req.params.id),
-          status: 'completed',
-          message: `Booking #${req.params.id} has been completed`,
-          timestamp: new Date().toISOString()
-        });
-
-        console.log(`✅ Booking completion event emitted: ${req.params.id} -> completed`);
-
-        // Update dashboard stats
-        await dashboardService.updateDashboardStats(io);
-      } catch (emitErr) {
-        console.error('Socket emit error:', emitErr);
-      }
+    // Restore stok sebelum menghapus booking
+    try {
+      console.log(`[AdminBookingService] Restore stok untuk booking yang dihapus id=${id}`);
+      const stockService = require('./stockService');
+      await stockService.restoreStockByBookingId(id, connection);
+    } catch (restoreError) {
+      console.error(`[AdminBookingService] Gagal restore stok untuk booking_id=${id}:`, restoreError);
+      // Jangan throw error, karena booking akan dihapus
     }
 
-    res.json({ message: 'Booking berhasil diselesaikan' });
+    // Delete related records first
+    await connection.query('DELETE FROM booking_layanan WHERE booking_id = ?', [id]);
+    await connection.query('DELETE FROM booking_colors WHERE booking_id = ?', [id]);
+    await connection.query('DELETE FROM booking_smoothing WHERE booking_id = ?', [id]);
+    await connection.query('DELETE FROM booking_keratin WHERE booking_id = ?', [id]);
+
+    // Delete the booking itself
+    await connection.query('DELETE FROM booking WHERE id = ?', [id]);
+
+    await connection.commit();
+    return true;
   } catch (error) {
-    res.status(500).json({ message: 'Error completing booking', error: error.message });
-  }
-};
-
-const cancelBooking = async (req, res) => {
-  try {
-    const result = await bookingService.updateBookingStatus(req.params.id, 'cancelled');
-    if (!result) {
-      return res.status(404).json({ message: 'Booking tidak ditemukan' });
-    }
-
-    // Emit Socket.IO event for booking cancellation by admin
-    const io = getIO();
-    if (io) {
-      try {
-        io.to('admin-room').emit('booking-status-updated', {
-          booking_id: parseInt(req.params.id),
-          status: 'cancelled',
-          message: `Booking #${req.params.id} has been cancelled by admin`,
-          timestamp: new Date().toISOString()
-        });
-
-        console.log(`✅ Booking cancellation event emitted: ${req.params.id} -> cancelled`);
-
-        // Update dashboard stats
-        await dashboardService.updateDashboardStats(io);
-      } catch (emitErr) {
-        console.error('Socket emit error:', emitErr);
-      }
-    }
-
-    res.json({ message: 'Booking berhasil dibatalkan' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error cancelling booking', error: error.message });
-  }
-};
-
-const emitDashboardUpdate = async (io) => {
-  try {
-    const dashboardData = await dashboardService.getDashboardStats();
-    io.emit('dashboard:update', {
-      title: 'Dashboard She Salon',
-      ...dashboardData
-    });
-  } catch (err) {
-    // log error
+    await connection.rollback();
+    console.error('Error deleting booking:', error);
+    throw new Error(`Failed to delete booking: ${error.message}`);
+  } finally {
+    connection.release();
   }
 };
 
@@ -302,9 +380,5 @@ module.exports = {
   getBookingById,
   updateBooking,
   deleteBooking,
-  emitDashboardUpdate,
-  confirmBooking,
-  completeBooking,
-  cancelBooking,
-  createOfflineBooking
+  updateBookingStatus
 };

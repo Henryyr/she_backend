@@ -131,6 +131,8 @@ const createBooking = async (data) => {
     // Transaksi menjadi lebih singkat dan cepat.
     // =================================================================
     await connection.beginTransaction();
+    let booking_id = null;
+
     try {
       const bookingNumber = await bookingHelper.generateBookingNumber();
       const total_estimasi = layananWithCategory.reduce((sum, l) => sum + l.estimasi_waktu, 0);
@@ -142,20 +144,28 @@ const createBooking = async (data) => {
         'INSERT INTO booking (user_id, tanggal, jam_mulai, jam_selesai, status, booking_number, total_harga, special_request, voucher_id, discount, final_price) VALUES (?, ?, ?, ?, \'pending\', ?, ?, ?, ?, ?, ?)',
         [user_id, tanggal, jam_mulai, jam_selesai_string, bookingNumber, total_harga, data.special_request || null, voucher_id, discount, final_price]
       );
-      const booking_id = insertResult.insertId;
+      booking_id = insertResult.insertId;
 
       const bookingLayananValues = layanan_ids.map(id => [booking_id, id]);
       await connection.query('INSERT INTO booking_layanan (booking_id, layanan_id) VALUES ?', [bookingLayananValues]);
 
+      // Simpan data produk yang digunakan untuk restore stok jika diperlukan
+      const usedProducts = [];
+
       if (hair_color) {
         await connection.query('INSERT INTO booking_colors (booking_id, color_id, brand_id, harga_saat_booking) VALUES (?, ?, ?, ?)', [booking_id, hair_color.color_id, hair_color.brand_id, product_detail.hair_color.tambahan_harga]);
         await stockService.reduceHairColorStock(hair_color.color_id, 1, connection);
+        usedProducts.push({ type: 'hair_color', color_id: hair_color.color_id, brand_id: hair_color.brand_id });
       }
       if (smoothing_product) {
+        await connection.query('INSERT INTO booking_smoothing (booking_id, smoothing_id, brand_id, harga_saat_booking) VALUES (?, ?, ?, ?)', [booking_id, smoothing_product.product_id, smoothing_product.brand_id, product_detail.smoothing.harga]);
         await stockService.reduceSmoothingStock(smoothing_product.product_id, smoothing_product.brand_id, 1, connection);
+        usedProducts.push({ type: 'smoothing', product_id: smoothing_product.product_id, brand_id: smoothing_product.brand_id });
       }
       if (keratin_product) {
+        await connection.query('INSERT INTO booking_keratin (booking_id, keratin_id, brand_id, harga_saat_booking) VALUES (?, ?, ?, ?)', [booking_id, keratin_product.product_id, keratin_product.brand_id, product_detail.keratin.harga]);
         await stockService.reduceKeratinStock(keratin_product.product_id, keratin_product.brand_id, 1, connection);
+        usedProducts.push({ type: 'keratin', product_id: keratin_product.product_id, brand_id: keratin_product.brand_id });
       }
 
       await connection.commit();
@@ -183,6 +193,17 @@ const createBooking = async (data) => {
       };
     } catch (err) {
       await connection.rollback();
+
+      // Restore stok jika terjadi error setelah booking dibuat
+      if (booking_id) {
+        try {
+          console.log(`[BookingService] Error terjadi, restore stok untuk booking_id=${booking_id}`);
+          await stockService.restoreStockByBookingId(booking_id);
+        } catch (restoreError) {
+          console.error(`[BookingService] Gagal restore stok untuk booking_id=${booking_id}:`, restoreError);
+        }
+      }
+
       throw err;
     }
   } finally {
@@ -340,7 +361,7 @@ const cancelBooking = async (id, user_id) => {
 
     // FIX: First get the booking to check if it exists and get voucher_id
     const [existingBooking] = await connection.query(
-      'SELECT id, voucher_id, user_id FROM booking WHERE id = ?',
+      'SELECT id, voucher_id, user_id, status FROM booking WHERE id = ?',
       [id]
     );
 
@@ -351,6 +372,15 @@ const cancelBooking = async (id, user_id) => {
     // Verify user ownership
     if (existingBooking[0].user_id !== user_id) {
       throw new Error('Akses ditolak - bukan pemilik booking');
+    }
+
+    // Check if booking is already cancelled or completed
+    if (existingBooking[0].status === 'cancelled') {
+      throw new Error('Booking sudah dibatalkan sebelumnya');
+    }
+
+    if (existingBooking[0].status === 'completed') {
+      throw new Error('Booking yang sudah selesai tidak dapat dibatalkan');
     }
 
     // Update status booking
@@ -369,6 +399,15 @@ const cancelBooking = async (id, user_id) => {
         'DELETE FROM voucher_usages WHERE user_id = ? AND voucher_id = ?',
         [user_id, existingBooking[0].voucher_id]
       );
+    }
+
+    // Restore stok yang digunakan dalam booking ini
+    try {
+      console.log(`[BookingService] Restore stok untuk booking yang dibatalkan id=${id}`);
+      await stockService.restoreStockByBookingId(id, connection);
+    } catch (restoreError) {
+      console.error(`[BookingService] Gagal restore stok untuk booking_id=${id}:`, restoreError);
+      // Jangan throw error, karena booking sudah dibatalkan
     }
 
     await connection.commit();

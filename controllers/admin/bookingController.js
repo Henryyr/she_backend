@@ -81,6 +81,35 @@ const createOfflineBooking = async (req, res) => {
     // Langkah baru: Langsung tandai booking sebagai 'completed'
     await bookingService.updateBookingStatus(result.booking_id, 'completed');
 
+    // Buat transaksi untuk booking offline yang sudah selesai
+    const connection = await require('../../db').pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Cek apakah sudah ada transaksi untuk booking ini
+      const [existingTransaction] = await connection.query(
+        'SELECT id FROM transaksi WHERE booking_id = ?',
+        [result.booking_id]
+      );
+
+      if (existingTransaction.length === 0) {
+        // Buat transaksi baru dengan status paid untuk booking offline
+        await connection.query(
+          `INSERT INTO transaksi (booking_id, total_harga, dp_amount, paid_amount, payment_status, status, payment_method) 
+           VALUES (?, ?, ?, ?, 'paid', 'completed', 'offline')`,
+          [result.booking_id, result.total_harga, 0, result.total_harga]
+        );
+      }
+
+      await connection.commit();
+    } catch (transactionError) {
+      await connection.rollback();
+      console.error('Error creating transaction for offline booking:', transactionError);
+      // Jangan throw error, karena booking sudah dibuat
+    } finally {
+      connection.release();
+    }
+
     // Ambil data booking yang sudah diupdate
     const updatedBooking = await bookingService.getBookingById(result.booking_id);
 
