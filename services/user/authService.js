@@ -203,6 +203,41 @@ const getProfile = async (userId) => {
   };
 };
 
+const updateProfile = async (userId, userData) => {
+  const fields = [];
+  const values = [];
+
+  // Daftar field yang diizinkan untuk diubah oleh pengguna
+  const allowedFields = ['fullname', 'phone_number', 'address'];
+
+  for (const [key, value] of Object.entries(userData)) {
+    if (value !== undefined && allowedFields.includes(key)) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+  }
+
+  // Jika tidak ada field yang diizinkan, tidak ada yang perlu diperbarui
+  if (fields.length === 0) {
+    throw { status: 400, message: 'Tidak ada data valid untuk diperbarui' };
+  }
+
+  values.push(userId);
+
+  const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
+
+  try {
+    const [result] = await pool.query(sql, values);
+    if (result.affectedRows === 0) {
+      throw { status: 404, message: 'User tidak ditemukan atau tidak ada perubahan' };
+    }
+    return true;
+  } catch (error) {
+    console.error('SQL Error in updateProfile:', error);
+    throw { status: 500, message: 'Gagal memperbarui profil pengguna', details: error.message };
+  }
+};
+
 const blacklistToken = async (token, expiresAt) => {
   // Only store tokens that expire within next 48 hours
   const maxAge = Date.now() + (48 * 60 * 60 * 1000);
@@ -323,5 +358,6 @@ module.exports = {
   cleanupExpiredTokens,
   requestPasswordReset,
   resetPassword,
-  changePassword
+  changePassword,
+  updateProfile
 };
