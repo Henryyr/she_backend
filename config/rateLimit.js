@@ -7,12 +7,12 @@ const RATE_LIMIT = {
       ? 60 * 60 * 1000 // 1 hour in production
       : 5 * 60 * 1000, // 5 minutes in development
     MAX_REQUESTS: process.env.NODE_ENV === 'production'
-      ? 30 // 3 requests/hour in production
-      : 20 // 20 requests/5min in development
+      ? 60 // Naikkan dari 30
+      : 20
   },
   API: {
     WINDOW_MS: 15 * 60 * 1000, // 15 minutes
-    MAX_REQUESTS: process.env.NODE_ENV === 'production' ? 3 : 50 // 50 requests in dev
+    MAX_REQUESTS: process.env.NODE_ENV === 'production' ? 20 : 50 // Naikkan dari 3
   }
 };
 
