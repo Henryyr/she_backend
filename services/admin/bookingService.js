@@ -330,13 +330,22 @@ const updateBookingStatus = async (id, status) => {
           
           if (userData.length > 0) {
             const user_id = userData[0].user_id;
-            // Buat transaksi baru jika belum ada
-            console.log(`[AdminBookingService] Membuat transaksi baru untuk booking completed id=${id}, total_harga=${total_harga}, user_id=${user_id}`);
-            await connection.query(
-              `INSERT INTO transaksi (booking_id, user_id, total_harga, dp_amount, paid_amount, payment_status, status) 
-               VALUES (?, ?, ?, ?, ?, 'paid', 'completed')`,
-              [id, user_id, total_harga, 0, total_harga]
+            // Ambil booking_number dari booking
+            const [bookingNumberData] = await connection.query(
+              'SELECT booking_number FROM booking WHERE id = ?',
+              [id]
             );
+            
+            if (bookingNumberData.length > 0) {
+              const booking_number = bookingNumberData[0].booking_number;
+              // Buat transaksi baru jika belum ada
+              console.log(`[AdminBookingService] Membuat transaksi baru untuk booking completed id=${id}, total_harga=${total_harga}, user_id=${user_id}, booking_number=${booking_number}`);
+              await connection.query(
+                `INSERT INTO transaksi (booking_id, user_id, kategori_transaksi_id, total_harga, dp_amount, paid_amount, payment_status, status, booking_number) 
+                 VALUES (?, ?, ?, ?, ?, ?, 'paid', 'completed', ?)`,
+                [id, user_id, 1, total_harga, 0, total_harga, booking_number]
+              );
+            }
           }
         }
       } else {

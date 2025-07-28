@@ -97,9 +97,9 @@ const createOfflineBooking = async (req, res) => {
         // Buat transaksi baru dengan status paid untuk booking offline
         console.log(`[AdminBookingController] Membuat transaksi untuk booking offline id=${result.booking_id}`);
         const [insertResult] = await connection.query(
-          `INSERT INTO transaksi (booking_id, user_id, total_harga, dp_amount, paid_amount, payment_status, status) 
-           VALUES (?, ?, ?, ?, ?, 'paid', 'completed')`,
-          [result.booking_id, bookingData.user_id, result.total_harga, 0, result.total_harga]
+          `INSERT INTO transaksi (booking_id, user_id, kategori_transaksi_id, total_harga, dp_amount, paid_amount, payment_status, status, booking_number) 
+           VALUES (?, ?, ?, ?, ?, ?, 'paid', 'completed', ?)`,
+          [result.booking_id, bookingData.user_id, 1, result.total_harga, 0, result.total_harga, result.booking_number]
         );
         console.log(`[AdminBookingController] Transaksi berhasil dibuat dengan id=${insertResult.insertId}`);
       } else {
