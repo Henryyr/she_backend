@@ -208,7 +208,7 @@ const updateProfile = async (userId, userData) => {
   const values = [];
 
   // Daftar field yang diizinkan untuk diubah oleh pengguna
-  const allowedFields = ['fullname', 'phone_number', 'address'];
+  const allowedFields = ['fullname', 'phone_number', 'address', 'username', 'email'];
 
   for (const [key, value] of Object.entries(userData)) {
     if (value !== undefined && allowedFields.includes(key)) {
@@ -234,6 +234,11 @@ const updateProfile = async (userId, userData) => {
     return true;
   } catch (error) {
     console.error('SQL Error in updateProfile:', error);
+    // Tambahkan penanganan error khusus untuk email atau username yang duplikat
+    if (error.code === 'ER_DUP_ENTRY') {
+      const duplicateKey = error.message.includes('email') ? 'Email' : 'Username';
+      throw { status: 409, message: `${duplicateKey} sudah digunakan oleh user lain.` };
+    }
     throw { status: 500, message: 'Gagal memperbarui profil pengguna', details: error.message };
   }
 };
