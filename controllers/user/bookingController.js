@@ -216,10 +216,37 @@ const cancelBooking = async (req, res) => {
   }
 };
 
+const getAvailableDays = async (req, res) => {
+  try {
+    const { tanggal } = req.query;
+    const userId = req.user.id;
+    if (!tanggal) {
+      return res.status(400).json({
+        error: 'Parameter tanggal diperlukan'
+      });
+    }
+
+    const hasBooking = await bookingService.checkUserDailyBooking(userId, tanggal);
+    res.json({
+      tanggal,
+      has_booking: hasBooking,
+      message: hasBooking
+        ? 'Anda sudah memiliki booking pada tanggal ini.'
+        : 'Anda belum memiliki booking pada tanggal ini.'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Gagal memeriksa ketersediaan hari',
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   createBooking,
   getAllBookings,
   getBookingById,
   postAvailableSlots,
-  cancelBooking
+  cancelBooking,
+  getAvailableDays
 };
