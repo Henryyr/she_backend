@@ -1,4 +1,5 @@
 const { pool } = require('../../db');
+const { cache } = require('../user/layananService'); // Impor cache
 
 const createLayanan = async (data) => {
   const { nama, harga, estimasi_waktu, kategori_id } = data;
@@ -6,6 +7,7 @@ const createLayanan = async (data) => {
     'INSERT INTO layanan (nama, harga, estimasi_waktu, kategori_id) VALUES (?, ?, ?, ?)',
     [nama, harga, estimasi_waktu, kategori_id]
   );
+  cache.del('daftar_layanan'); // Hapus cache
   return { id: result.insertId, ...data };
 };
 
@@ -23,7 +25,7 @@ const updateLayanan = async (id, data) => {
 
   // Jika tidak ada field yang dikirim untuk diupdate, jangan lakukan apa-apa
   if (fields.length === 0) {
-    return true; // atau false jika Anda ingin menandakan tidak ada perubahan
+    return true;
   }
 
   // Tambahkan ID ke akhir array values untuk klausa WHERE
@@ -32,11 +34,13 @@ const updateLayanan = async (id, data) => {
   const sql = `UPDATE layanan SET ${fields.join(', ')} WHERE id = ?`;
 
   const [result] = await pool.query(sql, values);
+  cache.del('daftar_layanan'); // Hapus cache
   return result.affectedRows > 0;
 };
 
 const deleteLayanan = async (id) => {
   const [result] = await pool.query('DELETE FROM layanan WHERE id = ?', [id]);
+  cache.del('daftar_layanan'); // Hapus cache
   return result.affectedRows > 0;
 };
 
