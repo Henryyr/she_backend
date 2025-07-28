@@ -95,8 +95,8 @@ const createOfflineBooking = async (req, res) => {
       if (existingTransaction.length === 0) {
         // Buat transaksi baru dengan status paid untuk booking offline
         await connection.query(
-          `INSERT INTO transaksi (booking_id, total_harga, dp_amount, paid_amount, payment_status, status, payment_method) 
-           VALUES (?, ?, ?, ?, 'paid', 'completed', 'offline')`,
+          `INSERT INTO transaksi (booking_id, total_harga, dp_amount, paid_amount, payment_status, status) 
+           VALUES (?, ?, ?, ?, 'paid', 'completed')`,
           [result.booking_id, result.total_harga, 0, result.total_harga]
         );
       }
