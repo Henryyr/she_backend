@@ -18,5 +18,7 @@ exports.getById = async (id) => {
   return results[0] || null;
 };
 
-// Tambahkan baris ini untuk mengekspor objek cache
-exports.cache = cache;
+// Fungsi baru untuk menghapus cache secara eksplisit
+exports.flushCache = () => {
+  cache.del('daftar_layanan');
+};
