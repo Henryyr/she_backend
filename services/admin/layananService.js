@@ -1,5 +1,5 @@
 const { pool } = require('../../db');
-const { cache } = require('../user/layananService'); // Import cache dari file yang benar
+const { flushCache } = require('../user/layananService'); // Import fungsi flushCache
 
 const createLayanan = async (data) => {
   const { nama, harga, estimasi_waktu, kategori_id } = data;
@@ -7,7 +7,7 @@ const createLayanan = async (data) => {
     'INSERT INTO layanan (nama, harga, estimasi_waktu, kategori_id) VALUES (?, ?, ?, ?)',
     [nama, harga, estimasi_waktu, kategori_id]
   );
-  cache.del('daftar_layanan'); // Hapus cache
+  flushCache(); // Panggil fungsi untuk menghapus cache
   return { id: result.insertId, ...data };
 };
 
@@ -31,13 +31,13 @@ const updateLayanan = async (id, data) => {
   const sql = `UPDATE layanan SET ${fields.join(', ')} WHERE id = ?`;
 
   const [result] = await pool.query(sql, values);
-  cache.del('daftar_layanan'); // Hapus cache
+  flushCache(); // Panggil fungsi untuk menghapus cache
   return result.affectedRows > 0;
 };
 
 const deleteLayanan = async (id) => {
   const [result] = await pool.query('DELETE FROM layanan WHERE id = ?', [id]);
-  cache.del('daftar_layanan'); // Hapus cache
+  flushCache(); // Panggil fungsi untuk menghapus cache
   return result.affectedRows > 0;
 };
 
