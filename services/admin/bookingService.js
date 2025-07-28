@@ -262,6 +262,73 @@ const updateBooking = async (id, data) => {
   }
 };
 
+const updateBookingStatus = async (id, status) => {
+  const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+  if (!validStatuses.includes(status)) {
+    throw new Error('Status tidak valid');
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Get current booking status
+    const [currentBooking] = await connection.query(
+      'SELECT status FROM booking WHERE id = ?',
+      [id]
+    );
+
+    if (currentBooking.length === 0) {
+      return null;
+    }
+
+    const currentStatus = currentBooking[0].status;
+
+    // Update booking status
+    const [result] = await connection.query(
+      'UPDATE booking SET status = ? WHERE id = ?',
+      [status, id]
+    );
+    if (result.affectedRows === 0) {
+      return null;
+    }
+
+    // Jika status berubah menjadi cancelled, restore stok
+    if (status === 'cancelled' && currentStatus !== 'cancelled') {
+      try {
+        console.log(`[AdminBookingService] Restore stok untuk booking yang dibatalkan id=${id}`);
+        const stockService = require('./stockService');
+        await stockService.restoreStockByBookingId(id, connection);
+      } catch (restoreError) {
+        console.error(`[AdminBookingService] Gagal restore stok untuk booking_id=${id}:`, restoreError);
+        // Jangan throw error, karena booking sudah dibatalkan
+      }
+    }
+
+    // Jika status completed, update juga status transaksi terkait
+    if (status === 'completed') {
+      await connection.query(
+            `UPDATE transaksi 
+             SET 
+                status = 'completed', 
+                payment_status = 'paid',
+                paid_amount = total_harga 
+             WHERE booking_id = ?`,
+            [id]
+      );
+    }
+
+    await connection.commit();
+    return { id, status };
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error updating booking status:', error);
+    throw new Error(`Failed to update booking status: ${error.message}`);
+  } finally {
+    connection.release();
+  }
+};
+
 const deleteBooking = async (id) => {
   const connection = await pool.getConnection();
   try {
@@ -277,9 +344,21 @@ const deleteBooking = async (id) => {
       return null;
     }
 
+    // Restore stok sebelum menghapus booking
+    try {
+      console.log(`[AdminBookingService] Restore stok untuk booking yang dihapus id=${id}`);
+      const stockService = require('./stockService');
+      await stockService.restoreStockByBookingId(id, connection);
+    } catch (restoreError) {
+      console.error(`[AdminBookingService] Gagal restore stok untuk booking_id=${id}:`, restoreError);
+      // Jangan throw error, karena booking akan dihapus
+    }
+
     // Delete related records first
     await connection.query('DELETE FROM booking_layanan WHERE booking_id = ?', [id]);
     await connection.query('DELETE FROM booking_colors WHERE booking_id = ?', [id]);
+    await connection.query('DELETE FROM booking_smoothing WHERE booking_id = ?', [id]);
+    await connection.query('DELETE FROM booking_keratin WHERE booking_id = ?', [id]);
 
     // Delete the booking itself
     await connection.query('DELETE FROM booking WHERE id = ?', [id]);
@@ -293,36 +372,6 @@ const deleteBooking = async (id) => {
   } finally {
     connection.release();
   }
-};
-
-const updateBookingStatus = async (id, status) => {
-  const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
-  if (!validStatuses.includes(status)) {
-    throw new Error('Status tidak valid');
-  }
-  // Update booking status
-  const [result] = await pool.query(
-    'UPDATE booking SET status = ? WHERE id = ?',
-    [status, id]
-  );
-  if (result.affectedRows === 0) {
-    return null;
-  }
-
-  // Jika status completed, update juga status transaksi terkait
-  if (status === 'completed') {
-    await pool.query(
-            `UPDATE transaksi 
-             SET 
-                status = 'completed', 
-                payment_status = 'paid',
-                paid_amount = total_harga 
-             WHERE booking_id = ?`,
-            [id]
-    );
-  }
-
-  return { id, status };
 };
 
 module.exports = {
