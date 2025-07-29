@@ -1,5 +1,6 @@
 const productService = require('../../services/admin/productService');
 const stockService = require('../../services/admin/stockService');
+const userProductService = require('../../services/user/productService'); // Import user product service for cache invalidation
 const { validateProductData, validateStock } = require('../../utils/productUtils');
 
 const getAllProducts = async (req, res) => {
@@ -86,6 +87,10 @@ const updateHairColorStock = async (req, res) => {
         'SELECT stok FROM hair_colors WHERE id = ?', [color_id]
       );
       await connection.commit();
+      
+      // Invalidate stock cache after successful update
+      await userProductService.invalidateProductCache('hair');
+      
       res.json({
         success: true,
         message: `Stok hair color "${before ? before.color_name : '-'}" (${color_id}) berhasil diupdate`,
@@ -136,6 +141,10 @@ const updateSmoothingStock = async (req, res) => {
         [product_id, brand_id]
       );
       await connection.commit();
+      
+      // Invalidate stock cache after successful update
+      await userProductService.invalidateProductCache('smoothing');
+      
       res.json({
         success: true,
         message: `Stok smoothing "${before ? before.product_name : '-'}" (${product_id}) brand "${before ? before.brand_name : '-'}" (${brand_id}) berhasil diupdate`,
@@ -186,6 +195,10 @@ const updateKeratinStock = async (req, res) => {
         [product_id, brand_id]
       );
       await connection.commit();
+      
+      // Invalidate stock cache after successful update
+      await userProductService.invalidateProductCache('keratin');
+      
       res.json({
         success: true,
         message: `Stok keratin "${before ? before.product_name : '-'}" (${product_id}) brand "${before ? before.brand_name : '-'}" (${brand_id}) berhasil diupdate`,
@@ -382,6 +395,23 @@ const getAdminAllProducts = async (req, res) => {
   }
 };
 
+const invalidateStockCache = async (req, res) => {
+  try {
+    await userProductService.invalidateStockCache();
+    res.json({
+      success: true,
+      message: 'Cache stok berhasil di-invalidate oleh admin'
+    });
+  } catch (err) {
+    console.error('Admin Controller Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal invalidate cache stok',
+      error: err.message
+    });
+  }
+};
+
 module.exports = {
   getAllProducts,
   createProduct,
@@ -390,6 +420,7 @@ module.exports = {
   updateHairColorStock,
   updateSmoothingStock,
   updateKeratinStock,
+  invalidateStockCache,
   getAdminHairProducts,
   getAdminSmoothingProducts,
   getAdminKeratinProducts,

@@ -1,5 +1,5 @@
 const { pool } = require('../../db');
-const { flushCache } = require('../user/layananService'); // Import fungsi flushCache
+const cacheManager = require('../../utils/cacheManager');
 
 const createLayanan = async (data) => {
   const { nama, harga, estimasi_waktu, kategori_id } = data;
@@ -7,7 +7,10 @@ const createLayanan = async (data) => {
     'INSERT INTO layanan (nama, harga, estimasi_waktu, kategori_id) VALUES (?, ?, ?, ?)',
     [nama, harga, estimasi_waktu, kategori_id]
   );
-  flushCache(); // Panggil fungsi untuk menghapus cache
+
+  // Hapus cache setelah membuat layanan baru
+  flushCache();
+
   return { id: result.insertId, ...data };
 };
 
@@ -31,14 +34,30 @@ const updateLayanan = async (id, data) => {
   const sql = `UPDATE layanan SET ${fields.join(', ')} WHERE id = ?`;
 
   const [result] = await pool.query(sql, values);
-  flushCache(); // Panggil fungsi untuk menghapus cache
+
+  // Hapus cache setelah update
+  flushCache(id);
+
   return result.affectedRows > 0;
 };
 
 const deleteLayanan = async (id) => {
   const [result] = await pool.query('DELETE FROM layanan WHERE id = ?', [id]);
-  flushCache(); // Panggil fungsi untuk menghapus cache
+
+  // Hapus cache setelah delete
+  flushCache(id);
+
   return result.affectedRows > 0;
+};
+
+// Fungsi untuk menghapus cache layanan
+const flushCache = (id = null) => {
+  if (id) {
+    cacheManager.del(`layanan_${id}`);
+  } else {
+    cacheManager.del('daftar_layanan');
+    cacheManager.delPattern('^layanan_');
+  }
 };
 
 module.exports = {

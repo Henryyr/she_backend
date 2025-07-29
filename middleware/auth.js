@@ -28,12 +28,8 @@ const authenticate = async (req, res, next) => {
 
     jwt.verify(token, SECRET_KEY, (err, user) => {
       if (err) {
-        let errorMessage = 'Token tidak valid';
-        if (err.message === 'jwt malformed') {
-          errorMessage = 'Format token tidak valid, silakan login kembali';
-        } else if (err.message === 'jwt expired') {
-          errorMessage = 'Sesi anda telah berakhir, silakan login kembali';
-        }
+        // Pesan error yang konsisten dan user-friendly
+        const errorMessage = 'Sesi Anda telah berakhir, silakan login kembali';
 
         // Rate limited logging
         const now = Date.now();

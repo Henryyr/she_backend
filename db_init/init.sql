@@ -442,6 +442,21 @@ CREATE TABLE `voucher_usages` (
   `used_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Tabel untuk brute force protection
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  attempt_key VARCHAR(255) NOT NULL UNIQUE,
+  username VARCHAR(100),
+  ip_address VARCHAR(45),
+  attempt_count INT DEFAULT 1,
+  blocked_until DATETIME NULL,
+  last_attempt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_attempt_key (attempt_key),
+  INDEX idx_blocked_until (blocked_until),
+  INDEX idx_last_attempt (last_attempt)
+);
+
 --
 -- Indexes for dumped tables
 --
@@ -773,72 +788,4 @@ ALTER TABLE `hair_colors`
 -- Constraints for table `hair_products`
 --
 ALTER TABLE `hair_products`
-  ADD CONSTRAINT `hair_products_ibfk_1` FOREIGN KEY (`brand_id`) REFERENCES `product_brands` (`id`);
-
---
--- Constraints for table `keratin_products`
---
-ALTER TABLE `keratin_products`
-  ADD CONSTRAINT `keratin_products_ibfk_1` FOREIGN KEY (`brand_id`) REFERENCES `product_brands` (`id`);
-
---
--- Constraints for table `layanan`
---
-ALTER TABLE `layanan`
-  ADD CONSTRAINT `layanan_ibfk_1` FOREIGN KEY (`kategori_id`) REFERENCES `kategori_layanan` (`id`) ON DELETE CASCADE;
-
---
--- Constraints for table `password_resets`
---
-ALTER TABLE `password_resets`
-  ADD CONSTRAINT `password_resets_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
-
---
--- Constraints for table `smoothing_products`
---
-ALTER TABLE `smoothing_products`
-  ADD CONSTRAINT `smoothing_products_ibfk_1` FOREIGN KEY (`brand_id`) REFERENCES `product_brands` (`id`);
-
---
--- Constraints for table `testimoni`
---
-ALTER TABLE `testimoni`
-  ADD CONSTRAINT `testimoni_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
-  ADD CONSTRAINT `testimoni_ibfk_3` FOREIGN KEY (`booking_id`) REFERENCES `booking` (`id`);
-
---
--- Constraints for table `testimoni_layanan`
---
-ALTER TABLE `testimoni_layanan`
-  ADD CONSTRAINT `testimoni_layanan_ibfk_1` FOREIGN KEY (`testimoni_id`) REFERENCES `testimoni` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `testimoni_layanan_ibfk_2` FOREIGN KEY (`layanan_id`) REFERENCES `layanan` (`id`) ON DELETE CASCADE;
-
---
--- Constraints for table `transaksi`
---
-ALTER TABLE `transaksi`
-  ADD CONSTRAINT `transaksi_ibfk_1` FOREIGN KEY (`booking_id`) REFERENCES `booking` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `transaksi_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `transaksi_ibfk_3` FOREIGN KEY (`kategori_transaksi_id`) REFERENCES `kategori_transaksi` (`id`) ON DELETE CASCADE;
-
---
--- Constraints for table `voucher_usages`
---
-ALTER TABLE `voucher_usages`
-  ADD CONSTRAINT `voucher_usages_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
-  ADD CONSTRAINT `voucher_usages_ibfk_2` FOREIGN KEY (`voucher_id`) REFERENCES `vouchers` (`id`) ON DELETE CASCADE;
-
-DELIMITER $$
---
--- Events
---
-CREATE DEFINER=`root`@`localhost` EVENT `cleanup_old_tokens` ON SCHEDULE EVERY 12 HOUR STARTS '2025-04-19 17:52:43' ON COMPLETION NOT PRESERVE ENABLE DO BEGIN
-    DELETE FROM blacklisted_tokens WHERE expires_at < NOW() - INTERVAL 48 HOUR;
-END$$
-
-DELIMITER ;
-COMMIT;
-
-/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
-/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
-/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+  ADD CONSTRAINT `hair_products_ibfk_1` FOREIGN KEY (`brand_id`) REFERENCES `

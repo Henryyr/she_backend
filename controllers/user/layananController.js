@@ -1,23 +1,45 @@
 const layananService = require('../../services/user/layananService');
 
-exports.getAllLayanan = async (req, res) => {
+const getAllLayanan = async (req, res) => {
   try {
     const layanan = await layananService.getAll();
-    res.json(layanan);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.json({
+      status: 'success',
+      data: layanan
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
   }
 };
 
-exports.getLayananById = async (req, res) => {
-  const { id } = req.params;
+const getLayananById = async (req, res) => {
   try {
+    const { id } = req.params;
     const layanan = await layananService.getById(id);
+
     if (!layanan) {
-      return res.status(404).json({ error: 'Layanan tidak ditemukan' });
+      return res.status(404).json({
+        status: 'error',
+        message: 'Layanan tidak ditemukan'
+      });
     }
-    res.json(layanan);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    res.json({
+      status: 'success',
+      data: layanan
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
   }
+};
+
+module.exports = {
+  getAllLayanan,
+  getLayananById
 };

@@ -43,6 +43,9 @@ router.post('/products/hair', adminController.updateHairColorStock);
 router.post('/products/smoothing', adminController.updateSmoothingStock);
 router.post('/products/keratin', adminController.updateKeratinStock);
 
+// Cache management (admin only)
+router.post('/products/invalidate-cache', adminController.invalidateStockCache);
+
 // Produk berdasarkan kategori (admin only)
 router.get('/products/hair', adminController.getAdminHairProducts);
 router.get('/products/smoothing', adminController.getAdminSmoothingProducts);

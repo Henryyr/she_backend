@@ -1,5 +1,6 @@
 const authService = require('../../services/user/authService');
 const emailService = require('../../services/user/emailService');
+const jwt = require('jsonwebtoken');
 
 const register = async (req, res) => {
   try {
@@ -27,8 +28,20 @@ const logout = async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
 
-    if (token && req.tokenExp) {
-      await authService.blacklistToken(token, req.tokenExp);
+    if (token) {
+      // Coba verifikasi token untuk mendapatkan expiry time
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        await authService.blacklistToken(token, decoded.exp * 1000);
+      } catch (jwtError) {
+        // Jika token expired, tetap blacklist dengan expiry time yang sudah lewat
+        if (jwtError.name === 'TokenExpiredError') {
+          await authService.blacklistToken(token, Date.now() - 1000); // 1 detik yang lalu
+        } else {
+          // Untuk error lain, gunakan waktu sekarang + 1 jam sebagai fallback
+          await authService.blacklistToken(token, Date.now() + 3600000);
+        }
+      }
     }
 
     res.clearCookie('token').json({
