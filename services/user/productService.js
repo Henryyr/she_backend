@@ -1,11 +1,5 @@
 const { pool } = require('../../db');
-const NodeCache = require('node-cache');
-
-// Cache configuration - shorter TTL for stock-related data
-const cache = new NodeCache({ 
-  stdTTL: 300, // 5 minutes for stock data
-  checkperiod: 60 // Check for expired keys every minute
-});
+const cacheManager = require('../../utils/cacheManager');
 
 // Cache keys for stock-related data
 const STOCK_CACHE_KEYS = {
@@ -19,7 +13,7 @@ const STOCK_CACHE_KEYS = {
 // Function to invalidate stock-related cache
 const invalidateStockCache = () => {
   Object.values(STOCK_CACHE_KEYS).forEach(key => {
-    cache.del(key);
+    cacheManager.del(key);
   });
   console.log('Stock cache invalidated');
 };
@@ -27,165 +21,157 @@ const invalidateStockCache = () => {
 // Function to invalidate specific product cache
 const invalidateProductCache = (productType, productId = null) => {
   if (productType === 'hair') {
-    cache.del(STOCK_CACHE_KEYS.HAIR_PRODUCTS);
-    cache.del(STOCK_CACHE_KEYS.ALL_PRODUCTS);
-    cache.del(STOCK_CACHE_KEYS.OUT_OF_STOCK);
+    cacheManager.del(STOCK_CACHE_KEYS.HAIR_PRODUCTS);
+    cacheManager.del(STOCK_CACHE_KEYS.ALL_PRODUCTS);
+    cacheManager.del(STOCK_CACHE_KEYS.OUT_OF_STOCK);
   } else if (productType === 'smoothing') {
-    cache.del(STOCK_CACHE_KEYS.SMOOTHING_PRODUCTS);
-    cache.del(STOCK_CACHE_KEYS.ALL_PRODUCTS);
-    cache.del(STOCK_CACHE_KEYS.OUT_OF_STOCK);
+    cacheManager.del(STOCK_CACHE_KEYS.SMOOTHING_PRODUCTS);
+    cacheManager.del(STOCK_CACHE_KEYS.ALL_PRODUCTS);
+    cacheManager.del(STOCK_CACHE_KEYS.OUT_OF_STOCK);
   } else if (productType === 'keratin') {
-    cache.del(STOCK_CACHE_KEYS.KERATIN_PRODUCTS);
-    cache.del(STOCK_CACHE_KEYS.ALL_PRODUCTS);
-    cache.del(STOCK_CACHE_KEYS.OUT_OF_STOCK);
+    cacheManager.del(STOCK_CACHE_KEYS.KERATIN_PRODUCTS);
+    cacheManager.del(STOCK_CACHE_KEYS.ALL_PRODUCTS);
+    cacheManager.del(STOCK_CACHE_KEYS.OUT_OF_STOCK);
   }
   console.log(`Cache invalidated for ${productType} products`);
 };
 
 const getAllProducts = async () => {
-  const cacheKey = STOCK_CACHE_KEYS.ALL_PRODUCTS;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  return await cacheManager.getOrSet(STOCK_CACHE_KEYS.ALL_PRODUCTS, async () => {
+    const connection = await pool;
+    try {
+      // Get hair products with stock status
+      const [hairProducts] = await connection.query(`
+        SELECT 
+          hp.id,
+          hp.nama as product_nama,
+          hp.jenis,
+          hp.deskripsi,
+          hp.harga_dasar,
+          pb.id as brand_id,
+          pb.nama as brand_nama,
+          COUNT(hc.id) as total_colors,
+          COUNT(CASE WHEN hc.stok > 0 THEN 1 END) as available_colors,
+          SUM(hc.stok) as total_stok
+        FROM hair_products hp
+        JOIN product_brands pb ON hp.brand_id = pb.id
+        LEFT JOIN hair_colors hc ON hc.product_id = hp.id
+        GROUP BY hp.id
+        ORDER BY pb.nama, hp.nama
+      `);
 
-  const connection = await pool;
-  try {
-    // Get hair products with stock status
-    const [hairProducts] = await connection.query(`
-      SELECT 
-        hp.id,
-        hp.nama as product_nama,
-        hp.jenis,
-        hp.deskripsi,
-        hp.harga_dasar,
-        pb.id as brand_id,
-        pb.nama as brand_nama,
-        COUNT(hc.id) as total_colors,
-        COUNT(CASE WHEN hc.stok > 0 THEN 1 END) as available_colors,
-        SUM(hc.stok) as total_stok
-      FROM hair_products hp
-      JOIN product_brands pb ON hp.brand_id = pb.id
-      LEFT JOIN hair_colors hc ON hc.product_id = hp.id
-      GROUP BY hp.id
-      ORDER BY pb.nama, hp.nama
-    `);
+      // Get smoothing products with stock status
+      const [smoothingProducts] = await connection.query(`
+        SELECT 
+          sp.id,
+          sp.nama as product_nama,
+          sp.jenis,
+          sp.harga,
+          pb.id as brand_id,
+          pb.nama as brand_nama,
+          sp.stok,
+          CASE 
+            WHEN sp.stok > 0 THEN 'available'
+            ELSE 'out_of_stock'
+          END as stock_status
+        FROM smoothing_products sp
+        JOIN product_brands pb ON sp.brand_id = pb.id
+        ORDER BY pb.nama, sp.nama
+      `);
 
-    // Get smoothing products with stock status
-    const [smoothingProducts] = await connection.query(`
-      SELECT 
-        sp.id,
-        sp.nama as product_nama,
-        sp.jenis,
-        sp.harga,
-        pb.id as brand_id,
-        pb.nama as brand_nama,
-        sp.stok,
-        CASE 
-          WHEN sp.stok > 0 THEN 'available'
-          ELSE 'out_of_stock'
-        END as stock_status
-      FROM smoothing_products sp
-      JOIN product_brands pb ON sp.brand_id = pb.id
-      ORDER BY pb.nama, sp.nama
-    `);
+      // Get keratin products with stock status
+      const [keratinProducts] = await connection.query(`
+        SELECT 
+          kp.id,
+          kp.nama as product_nama,
+          kp.jenis,
+          kp.harga,
+          pb.id as brand_id,
+          pb.nama as brand_nama,
+          kp.stok,
+          CASE 
+            WHEN kp.stok > 0 THEN 'available'
+            ELSE 'out_of_stock'
+          END as stock_status
+        FROM keratin_products kp
+        JOIN product_brands pb ON kp.brand_id = pb.id
+        ORDER BY pb.nama, kp.nama
+      `);
 
-    // Get keratin products with stock status
-    const [keratinProducts] = await connection.query(`
-      SELECT 
-        kp.id,
-        kp.nama as product_nama,
-        kp.jenis,
-        kp.harga,
-        pb.id as brand_id,
-        pb.nama as brand_nama,
-        kp.stok,
-        CASE 
-          WHEN kp.stok > 0 THEN 'available'
-          ELSE 'out_of_stock'
-        END as stock_status
-      FROM keratin_products kp
-      JOIN product_brands pb ON kp.brand_id = pb.id
-      ORDER BY pb.nama, kp.nama
-    `);
+      // Format hair products
+      const formattedHairProducts = hairProducts.map(product => ({
+        id: product.id,
+        type: 'hair',
+        nama: product.product_nama,
+        jenis: product.jenis,
+        deskripsi: product.deskripsi,
+        harga_dasar: parseInt(product.harga_dasar),
+        brand: {
+          id: product.brand_id,
+          nama: product.brand_nama
+        },
+        stock_info: {
+          total_colors: parseInt(product.total_colors),
+          available_colors: parseInt(product.available_colors),
+          total_stok: parseInt(product.total_stok || 0),
+          stock_status: product.available_colors > 0 ? 'available' : 'out_of_stock'
+        }
+      }));
 
-    // Format hair products
-    const formattedHairProducts = hairProducts.map(product => ({
-      id: product.id,
-      type: 'hair',
-      nama: product.product_nama,
-      jenis: product.jenis,
-      deskripsi: product.deskripsi,
-      harga_dasar: parseInt(product.harga_dasar),
-      brand: {
-        id: product.brand_id,
-        nama: product.brand_nama
-      },
-      stock_info: {
-        total_colors: parseInt(product.total_colors),
-        available_colors: parseInt(product.available_colors),
-        total_stok: parseInt(product.total_stok || 0),
-        stock_status: product.available_colors > 0 ? 'available' : 'out_of_stock'
-      }
-    }));
+      // Format smoothing products
+      const formattedSmoothingProducts = smoothingProducts.map(product => ({
+        id: product.id,
+        type: 'smoothing',
+        nama: product.product_nama,
+        jenis: product.jenis,
+        harga: parseInt(product.harga),
+        brand: {
+          id: product.brand_id,
+          nama: product.brand_nama
+        },
+        stock_info: {
+          stok: parseInt(product.stok),
+          stock_status: product.stock_status
+        }
+      }));
 
-    // Format smoothing products
-    const formattedSmoothingProducts = smoothingProducts.map(product => ({
-      id: product.id,
-      type: 'smoothing',
-      nama: product.product_nama,
-      jenis: product.jenis,
-      harga: parseInt(product.harga),
-      brand: {
-        id: product.brand_id,
-        nama: product.brand_nama
-      },
-      stock_info: {
-        stok: parseInt(product.stok),
-        stock_status: product.stock_status
-      }
-    }));
+      // Format keratin products
+      const formattedKeratinProducts = keratinProducts.map(product => ({
+        id: product.id,
+        type: 'keratin',
+        nama: product.product_nama,
+        jenis: product.jenis,
+        harga: parseInt(product.harga),
+        brand: {
+          id: product.brand_id,
+          nama: product.brand_nama
+        },
+        stock_info: {
+          stok: parseInt(product.stok),
+          stock_status: product.stock_status
+        }
+      }));
 
-    // Format keratin products
-    const formattedKeratinProducts = keratinProducts.map(product => ({
-      id: product.id,
-      type: 'keratin',
-      nama: product.product_nama,
-      jenis: product.jenis,
-      harga: parseInt(product.harga),
-      brand: {
-        id: product.brand_id,
-        nama: product.brand_nama
-      },
-      stock_info: {
-        stok: parseInt(product.stok),
-        stock_status: product.stock_status
-      }
-    }));
-
-    const result = {
-      hair_products: formattedHairProducts,
-      smoothing_products: formattedSmoothingProducts,
-      keratin_products: formattedKeratinProducts
-    };
-
-    cache.set(cacheKey, result);
-    return result;
-  } catch (err) {
-    console.error('Service Error:', err);
-    throw new Error('Gagal mengambil data produk: ' + err.message);
-  }
+      return {
+        hair_products: formattedHairProducts,
+        smoothing_products: formattedSmoothingProducts,
+        keratin_products: formattedKeratinProducts
+      };
+    } catch (err) {
+      console.error('Service Error:', err);
+      throw new Error('Gagal mengambil data produk: ' + err.message);
+    }
+  }, 300); // Cache 5 menit
 };
 
 const getHairProducts = async () => {
-  const cacheKey = STOCK_CACHE_KEYS.HAIR_PRODUCTS;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
-
-  const connection = await pool;
-  try {
-    // Increase group_concat_max_len to handle large JSON strings
-    await connection.query('SET SESSION group_concat_max_len = 1000000');
-    
-    const [products] = await connection.query(`
+  return await cacheManager.getOrSet(STOCK_CACHE_KEYS.HAIR_PRODUCTS, async () => {
+    const connection = await pool;
+    try {
+      // Increase group_concat_max_len to handle large JSON strings
+      await connection.query('SET SESSION group_concat_max_len = 1000000');
+      
+      const [products] = await connection.query(`
             SELECT 
                 hp.id,
                 hp.nama as product_nama,
@@ -211,43 +197,43 @@ const getHairProducts = async () => {
             ORDER BY pb.nama, hp.nama
         `);
 
-    const formattedProducts = products.map(product => {
-      let availableColors = [];
-      if (product.colors) {
-        try {
-          // Langsung parse tanpa validasi JSON helper
-          const jsonString = `[${product.colors}]`;
-          availableColors = JSON.parse(jsonString).map(color => ({
-            ...color,
-            harga_total: parseInt(product.harga_dasar) + parseInt(color.tambahan_harga)
-          }));
-        } catch (error) {
-          console.error(`Error parsing colors for product ID ${product.id}:`, error.message);
+      const formattedProducts = products.map(product => {
+        let availableColors = [];
+        if (product.colors) {
+          try {
+            // Langsung parse tanpa validasi JSON helper
+            const jsonString = `[${product.colors}]`;
+            availableColors = JSON.parse(jsonString).map(color => ({
+              ...color,
+              harga_total: parseInt(product.harga_dasar) + parseInt(color.tambahan_harga)
+            }));
+          } catch (error) {
+            console.error(`Error parsing colors for product ID ${product.id}:`, error.message);
+          }
         }
-      }
 
-      return {
-        product_id: product.id,
-        brand: {
-          id: product.brand_id,
-          nama: product.brand_nama
-        },
-        product: {
-          nama: product.product_nama,
-          jenis: product.jenis,
-          deskripsi: product.deskripsi,
-          harga_dasar: parseInt(product.harga_dasar)
-        },
-        available_colors: availableColors
-      };
-    });
+        return {
+          product_id: product.id,
+          brand: {
+            id: product.brand_id,
+            nama: product.brand_nama
+          },
+          product: {
+            nama: product.product_nama,
+            jenis: product.jenis,
+            deskripsi: product.deskripsi,
+            harga_dasar: parseInt(product.harga_dasar)
+          },
+          available_colors: availableColors
+        };
+      });
 
-    cache.set(cacheKey, formattedProducts);
-    return formattedProducts;
-  } catch (err) {
-    console.error('Service Error:', err);
-    throw new Error('Gagal mengambil data produk rambut: ' + err.message);
-  }
+      return formattedProducts;
+    } catch (err) {
+      console.error('Service Error:', err);
+      throw new Error('Gagal mengambil data produk rambut: ' + err.message);
+    }
+  }, 300); // Cache 5 menit
 };
 
 const getProductsByCategory = async (kategoriId) => {
@@ -291,45 +277,39 @@ const getHairColors = async () => {
 };
 
 const getSmoothingProducts = async () => {
-  const cacheKey = STOCK_CACHE_KEYS.SMOOTHING_PRODUCTS;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
-
-  const connection = await pool;
-  try {
-    const [products] = await connection.query(`
+  return await cacheManager.getOrSet(STOCK_CACHE_KEYS.SMOOTHING_PRODUCTS, async () => {
+    const connection = await pool;
+    try {
+      const [products] = await connection.query(`
             SELECT sp.*, pb.nama as brand_nama
             FROM smoothing_products sp
             JOIN product_brands pb ON sp.brand_id = pb.id
             WHERE sp.stok > 0
             ORDER BY pb.nama, sp.nama
         `);
-    cache.set(cacheKey, products); // Simpan ke cache
-    return products;
-  } catch (err) {
-    throw new Error('Gagal mengambil data smoothing: ' + err.message);
-  }
+      return products;
+    } catch (err) {
+      throw new Error('Gagal mengambil data smoothing: ' + err.message);
+    }
+  }, 300); // Cache 5 menit
 };
 
 const getKeratinProducts = async () => {
-  const cacheKey = STOCK_CACHE_KEYS.KERATIN_PRODUCTS;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
-
-  const connection = await pool;
-  try {
-    const [products] = await connection.query(`
+  return await cacheManager.getOrSet(STOCK_CACHE_KEYS.KERATIN_PRODUCTS, async () => {
+    const connection = await pool;
+    try {
+      const [products] = await connection.query(`
             SELECT kp.*, pb.nama as brand_nama
             FROM keratin_products kp
             JOIN product_brands pb ON kp.brand_id = pb.id
             WHERE kp.stok > 0
             ORDER BY pb.nama, kp.nama
         `);
-    cache.set(cacheKey, products); // Simpan ke cache
-    return products;
-  } catch (err) {
-    throw new Error('Gagal mengambil data keratin: ' + err.message);
-  }
+      return products;
+    } catch (err) {
+      throw new Error('Gagal mengambil data keratin: ' + err.message);
+    }
+  }, 300); // Cache 5 menit
 };
 
 const getHairColorsByProduct = async (productId) => {
@@ -355,70 +335,65 @@ const getHairColorsByProduct = async (productId) => {
 };
 
 const getOutOfStockProducts = async () => {
-  const cacheKey = STOCK_CACHE_KEYS.OUT_OF_STOCK;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  return await cacheManager.getOrSet(STOCK_CACHE_KEYS.OUT_OF_STOCK, async () => {
+    const connection = await pool;
+    try {
+      // Get hair products that are completely out of stock
+      const [hairProductsOutOfStock] = await connection.query(`
+        SELECT 
+          hp.id,
+          hp.nama as product_nama,
+          hp.jenis,
+          pb.nama as brand_nama,
+          'hair' as product_type
+        FROM hair_products hp
+        JOIN product_brands pb ON hp.brand_id = pb.id
+        WHERE NOT EXISTS (
+          SELECT 1 FROM hair_colors hc 
+          WHERE hc.product_id = hp.id AND hc.stok > 0
+        )
+        ORDER BY pb.nama, hp.nama
+      `);
 
-  const connection = await pool;
-  try {
-    // Get hair products that are completely out of stock
-    const [hairProductsOutOfStock] = await connection.query(`
-      SELECT 
-        hp.id,
-        hp.nama as product_nama,
-        hp.jenis,
-        pb.nama as brand_nama,
-        'hair' as product_type
-      FROM hair_products hp
-      JOIN product_brands pb ON hp.brand_id = pb.id
-      WHERE NOT EXISTS (
-        SELECT 1 FROM hair_colors hc 
-        WHERE hc.product_id = hp.id AND hc.stok > 0
-      )
-      ORDER BY pb.nama, hp.nama
-    `);
+      // Get smoothing products that are out of stock
+      const [smoothingProductsOutOfStock] = await connection.query(`
+        SELECT 
+          sp.id,
+          sp.nama as product_nama,
+          sp.jenis,
+          pb.nama as brand_nama,
+          'smoothing' as product_type
+        FROM smoothing_products sp
+        JOIN product_brands pb ON sp.brand_id = pb.id
+        WHERE sp.stok = 0
+        ORDER BY pb.nama, sp.nama
+      `);
 
-    // Get smoothing products that are out of stock
-    const [smoothingProductsOutOfStock] = await connection.query(`
-      SELECT 
-        sp.id,
-        sp.nama as product_nama,
-        sp.jenis,
-        pb.nama as brand_nama,
-        'smoothing' as product_type
-      FROM smoothing_products sp
-      JOIN product_brands pb ON sp.brand_id = pb.id
-      WHERE sp.stok = 0
-      ORDER BY pb.nama, sp.nama
-    `);
+      // Get keratin products that are out of stock
+      const [keratinProductsOutOfStock] = await connection.query(`
+        SELECT 
+          kp.id,
+          kp.nama as product_nama,
+          kp.jenis,
+          pb.nama as brand_nama,
+          'keratin' as product_type
+        FROM keratin_products kp
+        JOIN product_brands pb ON kp.brand_id = pb.id
+        WHERE kp.stok = 0
+        ORDER BY pb.nama, kp.nama
+      `);
 
-    // Get keratin products that are out of stock
-    const [keratinProductsOutOfStock] = await connection.query(`
-      SELECT 
-        kp.id,
-        kp.nama as product_nama,
-        kp.jenis,
-        pb.nama as brand_nama,
-        'keratin' as product_type
-      FROM keratin_products kp
-      JOIN product_brands pb ON kp.brand_id = pb.id
-      WHERE kp.stok = 0
-      ORDER BY pb.nama, kp.nama
-    `);
-
-    const result = {
-      hair_products: hairProductsOutOfStock,
-      smoothing_products: smoothingProductsOutOfStock,
-      keratin_products: keratinProductsOutOfStock,
-      total_out_of_stock: hairProductsOutOfStock.length + smoothingProductsOutOfStock.length + keratinProductsOutOfStock.length
-    };
-
-    cache.set(cacheKey, result);
-    return result;
-  } catch (err) {
-    console.error('Service Error:', err);
-    throw new Error('Gagal mengambil data produk yang habis: ' + err.message);
-  }
+      return {
+        hair_products: hairProductsOutOfStock,
+        smoothing_products: smoothingProductsOutOfStock,
+        keratin_products: keratinProductsOutOfStock,
+        total_out_of_stock: hairProductsOutOfStock.length + smoothingProductsOutOfStock.length + keratinProductsOutOfStock.length
+      };
+    } catch (err) {
+      console.error('Service Error:', err);
+      throw new Error('Gagal mengambil data produk yang habis: ' + err.message);
+    }
+  }, 300); // Cache 5 menit
 };
 
 const checkProductAvailability = async (productId, productType, colorId = null) => {
