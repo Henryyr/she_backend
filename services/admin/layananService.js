@@ -54,6 +54,8 @@ const deleteLayanan = async (id) => {
 const flushCache = (id = null) => {
   if (id) {
     cacheManager.del(`layanan_${id}`);
+    // Also clear the daftar_layanan cache when updating specific layanan
+    cacheManager.del('daftar_layanan');
   } else {
     cacheManager.del('daftar_layanan');
     cacheManager.delPattern('^layanan_');
