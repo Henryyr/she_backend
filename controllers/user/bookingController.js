@@ -218,21 +218,31 @@ const cancelBooking = async (req, res) => {
 
 const getAvailableDays = async (req, res) => {
   try {
-    const { tanggal } = req.query;
     const userId = req.user.id;
-    if (!tanggal) {
-      return res.status(400).json({
-        error: 'Parameter tanggal diperlukan'
+    
+    // Jika ada parameter tanggal, gunakan logika lama untuk backward compatibility
+    if (req.query.tanggal) {
+      const { tanggal } = req.query;
+      const hasBooking = await bookingService.checkUserDailyBooking(userId, tanggal);
+      return res.json({
+        tanggal,
+        has_booking: hasBooking,
+        message: hasBooking
+          ? 'Anda sudah memiliki booking pada tanggal ini.'
+          : 'Anda belum memiliki booking pada tanggal ini.'
       });
     }
-
-    const hasBooking = await bookingService.checkUserDailyBooking(userId, tanggal);
+    
+    // Jika tidak ada parameter tanggal, ambil semua tanggal yang sudah di-booking
+    const bookedDates = await bookingService.getUserBookedDates(userId);
+    
     res.json({
-      tanggal,
-      has_booking: hasBooking,
-      message: hasBooking
-        ? 'Anda sudah memiliki booking pada tanggal ini.'
-        : 'Anda belum memiliki booking pada tanggal ini.'
+      success: true,
+      message: bookedDates.length > 0 
+        ? `Anda memiliki ${bookedDates.length} hari dengan booking aktif.`
+        : 'Anda belum memiliki booking aktif.',
+      total_booked_days: bookedDates.length,
+      booked_dates: bookedDates
     });
   } catch (error) {
     res.status(500).json({

@@ -517,11 +517,39 @@ const checkUserDailyBooking = async (userId, tanggal) => {
   }
 };
 
+const getUserBookedDates = async (userId) => {
+  const connection = await pool.getConnection();
+  try {
+    const [bookedDates] = await connection.query(
+      `SELECT 
+        tanggal,
+        DATE_FORMAT(tanggal, '%Y-%m-%d') as formatted_date,
+        DATE_FORMAT(tanggal, '%d %M %Y') as display_date,
+        COUNT(*) as total_bookings
+       FROM booking
+       WHERE user_id = ? AND status NOT IN ('cancelled', 'completed')
+       GROUP BY tanggal
+       ORDER BY tanggal ASC`,
+      [userId]
+    );
+    
+    return bookedDates.map(date => ({
+      tanggal: date.tanggal,
+      formatted_date: date.formatted_date,
+      display_date: date.display_date,
+      total_bookings: date.total_bookings
+    }));
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   createBooking,
   getAllBookings,
   getBookingById,
   cancelBooking,
   postAvailableSlots,
-  checkUserDailyBooking
+  checkUserDailyBooking,
+  getUserBookedDates
 };
