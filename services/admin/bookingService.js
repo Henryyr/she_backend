@@ -76,16 +76,22 @@ const getAllBookings = async (page = 1, limit = 10, status, startDate, endDate) 
   // Format output agar Paid bisa langsung dipakai di frontend
   const bookings = data.map(row => ({
     id: row.id,
-    customer: row.customer,
-    date: row.date,
-    time: row.time,
+    customer: {
+      name: row.customer
+    },
+    schedule: {
+      date: row.date,
+      time: row.time
+    },
     services: row.services,
     status: row.status,
-    total: row.total_harga,
-    dp: row.dp_amount,
-    paid: row.paid_amount, // <- ini tampilkan di frontend
-    sisa: row.sisa_bayar,
-    payment_status: row.payment_status
+    payment: {
+      total: row.total_harga,
+      dp: row.dp_amount,
+      paid: row.paid_amount,
+      sisa: row.sisa_bayar,
+      status: row.payment_status
+    }
   }));
 
   return { bookings, pagination };
@@ -143,7 +149,22 @@ const getBookingsByUserId = async (userId, page = 1, limit = 10, status, startDa
   }
 
   const { data, pagination } = await paginateQuery(pool, sql, countSql, params, countParams, page, limit);
-  return { bookings: data, pagination };
+
+  const bookings = data.map(row => ({
+    id: row.id,
+    customer: {
+      name: row.customer
+    },
+    schedule: {
+      date: row.date,
+      start_time: row.start_time,
+      end_time: row.end_time
+    },
+    services: row.services,
+    status: row.status
+  }));
+
+  return { bookings, pagination };
 };
 
 const getBookingById = async (id) => {
@@ -319,7 +340,7 @@ const updateBookingStatus = async (id, status) => {
           'SELECT total_harga FROM booking WHERE id = ?',
           [id]
         );
-        
+
         if (bookingData.length > 0) {
           const total_harga = bookingData[0].total_harga;
           // Ambil user_id dari booking
@@ -327,7 +348,7 @@ const updateBookingStatus = async (id, status) => {
             'SELECT user_id FROM booking WHERE id = ?',
             [id]
           );
-          
+
           if (userData.length > 0) {
             const user_id = userData[0].user_id;
             // Ambil booking_number dari booking
@@ -335,7 +356,7 @@ const updateBookingStatus = async (id, status) => {
               'SELECT booking_number FROM booking WHERE id = ?',
               [id]
             );
-            
+
             if (bookingNumberData.length > 0) {
               const booking_number = bookingNumberData[0].booking_number;
               // Buat transaksi baru jika belum ada

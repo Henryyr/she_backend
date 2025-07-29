@@ -49,32 +49,34 @@ Buat file `.env` di root directory dan isi dengan konfigurasi berikut:
 DB_HOST=localhost
 DB_USER=root
 DB_PORT=3307
-DB_PASSWORD=henry123
+DB_PASSWORD=
 DB_NAME=she_app
 
 # 🌐 Server Configuration
 PORT=3000
 NODE_ENV=development
-JWT_SECRET=rahasia_salon
+JWT_SECRET=
 ALLOWED_ORIGINS=http://localhost:3000
 
 # 📸 Cloudinary Configuration
-CLOUDINARY_CLOUD_NAME=your_cloud_name_here
-CLOUDINARY_API_KEY=your_api_key_here
-CLOUDINARY_SECRET=your_api_secret_here
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_SECRET=
 
 # 💳 Midtrans Configuration
-MIDTRANS_MERCHANT_ID=your_merchant_id_here
-MIDTRANS_SERVER_KEY=your_server_key_here
-MIDTRANS_CLIENT_KEY=your_client_key_here
+MIDTRANS_MERCHANT_ID=
+MIDTRANS_SERVER_KEY=
+MIDTRANS_CLIENT_KEY=
 
 # 📧 Email Configuration
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASS=your_app_password_here
+EMAIL_USER=
+EMAIL_PASS=
 
 # 🌍 Frontend URL
 FRONTEND_URL=http://localhost:3000
 ```
+
+**⚠️ Penting:** Untuk variabel sensitif seperti password, API key, dan secret, jangan berikan nilai default. Biarkan kosong agar memaksa pengembang untuk mengisinya secara sadar.
 
 ### 2. Setup Database dengan Docker
 

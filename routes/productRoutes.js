@@ -4,6 +4,9 @@ const productController = require('../controllers/user/productController');
 const { authenticate } = require('../middleware/auth');
 
 router.get('/', authenticate, productController.getAllProducts);
+router.get('/out-of-stock', authenticate, productController.getOutOfStockProducts);
+router.get('/check-availability', authenticate, productController.checkProductAvailability);
+router.post('/invalidate-cache', authenticate, productController.invalidateStockCache);
 router.get('/category/:kategoriId', authenticate, productController.getProductsByCategory);
 router.get('/smoothing', authenticate, productController.getSmoothingProducts);
 router.get('/keratin', authenticate, productController.getKeratinProducts);

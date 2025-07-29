@@ -5,8 +5,7 @@ const https = require('https');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 
-// --- Brute force protection ---
-const loginAttempts = {};
+// --- Brute force protection dengan database ---
 const MAX_ATTEMPTS = 5;
 const BLOCK_TIME = 15 * 60 * 1000; // 15 menit
 
@@ -14,30 +13,81 @@ function getLoginKey (username, ip) {
   return `${username || ''}_${ip || ''}`;
 }
 
-function isBlocked (username, ip) {
+async function isBlocked (username, ip) {
   const key = getLoginKey(username, ip);
-  const attempt = loginAttempts[key];
-  if (!attempt) return false;
-  if (attempt.blockedUntil && Date.now() < attempt.blockedUntil) return true;
-  if (attempt.blockedUntil && Date.now() >= attempt.blockedUntil) {
-    delete loginAttempts[key];
+  const connection = await pool.getConnection();
+  try {
+    const [result] = await connection.query(
+      'SELECT blocked_until FROM login_attempts WHERE attempt_key = ?',
+      [key]
+    );
+
+    if (!result[0]) return false;
+
+    const blockedUntil = new Date(result[0].blocked_until).getTime();
+    if (Date.now() < blockedUntil) return true;
+
+    // Jika sudah tidak diblokir, hapus record lama
+    await connection.query('DELETE FROM login_attempts WHERE attempt_key = ?', [key]);
     return false;
+  } finally {
+    connection.release();
   }
-  return false;
 }
 
-function recordLoginAttempt (username, ip, success) {
+async function recordLoginAttempt (username, ip, success) {
   const key = getLoginKey(username, ip);
-  if (!loginAttempts[key]) {
-    loginAttempts[key] = { count: 0, blockedUntil: null };
+  const connection = await pool.getConnection();
+  try {
+    if (success) {
+      // Hapus record jika login berhasil
+      await connection.query('DELETE FROM login_attempts WHERE attempt_key = ?', [key]);
+      return;
+    }
+
+    // Ambil data percobaan login saat ini
+    const [result] = await connection.query(
+      'SELECT attempt_count FROM login_attempts WHERE attempt_key = ?',
+      [key]
+    );
+
+    let attemptCount = 1;
+    if (result[0]) {
+      attemptCount = result[0].attempt_count + 1;
+      await connection.query(
+        'UPDATE login_attempts SET attempt_count = ?, last_attempt = NOW() WHERE attempt_key = ?',
+        [attemptCount, key]
+      );
+    } else {
+      await connection.query(
+        'INSERT INTO login_attempts (attempt_key, username, ip_address, attempt_count, last_attempt) VALUES (?, ?, ?, ?, NOW())',
+        [key, username, ip, attemptCount]
+      );
+    }
+
+    // Jika mencapai batas maksimum, blokir
+    if (attemptCount >= MAX_ATTEMPTS) {
+      const blockedUntil = new Date(Date.now() + BLOCK_TIME);
+      await connection.query(
+        'UPDATE login_attempts SET blocked_until = ? WHERE attempt_key = ?',
+        [blockedUntil, key]
+      );
+    }
+  } finally {
+    connection.release();
   }
-  if (success) {
-    delete loginAttempts[key];
-    return;
-  }
-  loginAttempts[key].count += 1;
-  if (loginAttempts[key].count >= MAX_ATTEMPTS) {
-    loginAttempts[key].blockedUntil = Date.now() + BLOCK_TIME;
+}
+
+// Fungsi untuk membersihkan record lama (bisa dijalankan via cron job)
+async function cleanupOldLoginAttempts () {
+  const connection = await pool.getConnection();
+  try {
+    // Hapus record yang sudah tidak diblokir dan lebih dari 24 jam
+    await connection.query(
+      'DELETE FROM login_attempts WHERE (blocked_until IS NULL OR blocked_until < NOW()) AND last_attempt < DATE_SUB(NOW(), INTERVAL 24 HOUR)'
+    );
+  } finally {
+    connection.release();
   }
 }
 
@@ -131,7 +181,7 @@ const registerUser = async (userData) => {
 const loginUser = async ({ username, password }, req = {}) => {
   // Brute force protection
   const ip = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || '';
-  if (isBlocked(username, ip)) {
+  if (await isBlocked(username, ip)) {
     // Log IP dan lokasi saat brute force terdeteksi
     logIpLocation(ip);
     throw { status: 429, message: 'Terlalu banyak percobaan login. Silakan coba lagi nanti.' };
@@ -145,7 +195,7 @@ const loginUser = async ({ username, password }, req = {}) => {
   );
 
   if (users.length === 0) {
-    recordLoginAttempt(username, ip, false);
+    await recordLoginAttempt(username, ip, false);
     throw { status: 401, message: 'Username atau password salah' };
   }
 
@@ -153,11 +203,11 @@ const loginUser = async ({ username, password }, req = {}) => {
   const isValid = await Bun.password.verify(password, user.password);
 
   if (!isValid) {
-    recordLoginAttempt(username, ip, false);
+    await recordLoginAttempt(username, ip, false);
     throw { status: 401, message: 'Username atau password salah' };
   }
 
-  recordLoginAttempt(username, ip, true);
+  await recordLoginAttempt(username, ip, true);
 
   // Never return password hash
   const token = jwt.sign(
@@ -364,5 +414,6 @@ module.exports = {
   requestPasswordReset,
   resetPassword,
   changePassword,
-  updateProfile
+  updateProfile,
+  cleanupOldLoginAttempts // Expose the new function
 };

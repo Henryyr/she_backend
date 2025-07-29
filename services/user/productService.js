@@ -1,56 +1,174 @@
 const { pool } = require('../../db');
 const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 3600 }); // 1 hour cache
+
+// Cache configuration - shorter TTL for stock-related data
+const cache = new NodeCache({ 
+  stdTTL: 300, // 5 minutes for stock data
+  checkperiod: 60 // Check for expired keys every minute
+});
+
+// Cache keys for stock-related data
+const STOCK_CACHE_KEYS = {
+  ALL_PRODUCTS: 'all_products_with_stock',
+  OUT_OF_STOCK: 'out_of_stock_products',
+  HAIR_PRODUCTS: 'hair_products',
+  SMOOTHING_PRODUCTS: 'smoothing_products_public',
+  KERATIN_PRODUCTS: 'keratin_products_public'
+};
+
+// Function to invalidate stock-related cache
+const invalidateStockCache = () => {
+  Object.values(STOCK_CACHE_KEYS).forEach(key => {
+    cache.del(key);
+  });
+  console.log('Stock cache invalidated');
+};
+
+// Function to invalidate specific product cache
+const invalidateProductCache = (productType, productId = null) => {
+  if (productType === 'hair') {
+    cache.del(STOCK_CACHE_KEYS.HAIR_PRODUCTS);
+    cache.del(STOCK_CACHE_KEYS.ALL_PRODUCTS);
+    cache.del(STOCK_CACHE_KEYS.OUT_OF_STOCK);
+  } else if (productType === 'smoothing') {
+    cache.del(STOCK_CACHE_KEYS.SMOOTHING_PRODUCTS);
+    cache.del(STOCK_CACHE_KEYS.ALL_PRODUCTS);
+    cache.del(STOCK_CACHE_KEYS.OUT_OF_STOCK);
+  } else if (productType === 'keratin') {
+    cache.del(STOCK_CACHE_KEYS.KERATIN_PRODUCTS);
+    cache.del(STOCK_CACHE_KEYS.ALL_PRODUCTS);
+    cache.del(STOCK_CACHE_KEYS.OUT_OF_STOCK);
+  }
+  console.log(`Cache invalidated for ${productType} products`);
+};
 
 const getAllProducts = async () => {
-  const cacheKey = 'all_products';
+  const cacheKey = STOCK_CACHE_KEYS.ALL_PRODUCTS;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   const connection = await pool;
   try {
-    const [results] = await Promise.all([
-      connection.query(`
-                (SELECT 
-                    hp.id,
-                    'hair' as type,
-                    hp.nama,
-                    hp.jenis,
-                    hp.harga_dasar as harga,
-                    pb.nama as brand_nama
-                FROM hair_products hp
-                JOIN product_brands pb ON hp.brand_id = pb.id)
-                UNION ALL
-                (SELECT 
-                    sp.id,
-                    'smoothing' as type,
-                    sp.nama,
-                    sp.jenis,
-                    sp.harga,
-                    pb.nama as brand_nama
-                FROM smoothing_products sp
-                JOIN product_brands pb ON sp.brand_id = pb.id)
-                UNION ALL
-                (SELECT 
-                    kp.id,
-                    'keratin' as type,
-                    kp.nama,
-                    kp.jenis,
-                    kp.harga,
-                    pb.nama as brand_nama
-                FROM keratin_products kp
-                JOIN product_brands pb ON kp.brand_id = pb.id)
-            `)
-    ]);
+    // Get hair products with stock status
+    const [hairProducts] = await connection.query(`
+      SELECT 
+        hp.id,
+        hp.nama as product_nama,
+        hp.jenis,
+        hp.deskripsi,
+        hp.harga_dasar,
+        pb.id as brand_id,
+        pb.nama as brand_nama,
+        COUNT(hc.id) as total_colors,
+        COUNT(CASE WHEN hc.stok > 0 THEN 1 END) as available_colors,
+        SUM(hc.stok) as total_stok
+      FROM hair_products hp
+      JOIN product_brands pb ON hp.brand_id = pb.id
+      LEFT JOIN hair_colors hc ON hc.product_id = hp.id
+      GROUP BY hp.id
+      ORDER BY pb.nama, hp.nama
+    `);
 
-    const groupedResults = {
-      hair_products: results[0].filter(p => p.type === 'hair'),
-      smoothing_products: results[0].filter(p => p.type === 'smoothing'),
-      keratin_products: results[0].filter(p => p.type === 'keratin')
+    // Get smoothing products with stock status
+    const [smoothingProducts] = await connection.query(`
+      SELECT 
+        sp.id,
+        sp.nama as product_nama,
+        sp.jenis,
+        sp.harga,
+        pb.id as brand_id,
+        pb.nama as brand_nama,
+        sp.stok,
+        CASE 
+          WHEN sp.stok > 0 THEN 'available'
+          ELSE 'out_of_stock'
+        END as stock_status
+      FROM smoothing_products sp
+      JOIN product_brands pb ON sp.brand_id = pb.id
+      ORDER BY pb.nama, sp.nama
+    `);
+
+    // Get keratin products with stock status
+    const [keratinProducts] = await connection.query(`
+      SELECT 
+        kp.id,
+        kp.nama as product_nama,
+        kp.jenis,
+        kp.harga,
+        pb.id as brand_id,
+        pb.nama as brand_nama,
+        kp.stok,
+        CASE 
+          WHEN kp.stok > 0 THEN 'available'
+          ELSE 'out_of_stock'
+        END as stock_status
+      FROM keratin_products kp
+      JOIN product_brands pb ON kp.brand_id = pb.id
+      ORDER BY pb.nama, kp.nama
+    `);
+
+    // Format hair products
+    const formattedHairProducts = hairProducts.map(product => ({
+      id: product.id,
+      type: 'hair',
+      nama: product.product_nama,
+      jenis: product.jenis,
+      deskripsi: product.deskripsi,
+      harga_dasar: parseInt(product.harga_dasar),
+      brand: {
+        id: product.brand_id,
+        nama: product.brand_nama
+      },
+      stock_info: {
+        total_colors: parseInt(product.total_colors),
+        available_colors: parseInt(product.available_colors),
+        total_stok: parseInt(product.total_stok || 0),
+        stock_status: product.available_colors > 0 ? 'available' : 'out_of_stock'
+      }
+    }));
+
+    // Format smoothing products
+    const formattedSmoothingProducts = smoothingProducts.map(product => ({
+      id: product.id,
+      type: 'smoothing',
+      nama: product.product_nama,
+      jenis: product.jenis,
+      harga: parseInt(product.harga),
+      brand: {
+        id: product.brand_id,
+        nama: product.brand_nama
+      },
+      stock_info: {
+        stok: parseInt(product.stok),
+        stock_status: product.stock_status
+      }
+    }));
+
+    // Format keratin products
+    const formattedKeratinProducts = keratinProducts.map(product => ({
+      id: product.id,
+      type: 'keratin',
+      nama: product.product_nama,
+      jenis: product.jenis,
+      harga: parseInt(product.harga),
+      brand: {
+        id: product.brand_id,
+        nama: product.brand_nama
+      },
+      stock_info: {
+        stok: parseInt(product.stok),
+        stock_status: product.stock_status
+      }
+    }));
+
+    const result = {
+      hair_products: formattedHairProducts,
+      smoothing_products: formattedSmoothingProducts,
+      keratin_products: formattedKeratinProducts
     };
 
-    cache.set(cacheKey, groupedResults);
-    return groupedResults;
+    cache.set(cacheKey, result);
+    return result;
   } catch (err) {
     console.error('Service Error:', err);
     throw new Error('Gagal mengambil data produk: ' + err.message);
@@ -58,12 +176,15 @@ const getAllProducts = async () => {
 };
 
 const getHairProducts = async () => {
-  const cacheKey = 'hair_products';
+  const cacheKey = STOCK_CACHE_KEYS.HAIR_PRODUCTS;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   const connection = await pool;
   try {
+    // Increase group_concat_max_len to handle large JSON strings
+    await connection.query('SET SESSION group_concat_max_len = 1000000');
+    
     const [products] = await connection.query(`
             SELECT 
                 hp.id,
@@ -170,7 +291,7 @@ const getHairColors = async () => {
 };
 
 const getSmoothingProducts = async () => {
-  const cacheKey = 'smoothing_products_public';
+  const cacheKey = STOCK_CACHE_KEYS.SMOOTHING_PRODUCTS;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -191,7 +312,7 @@ const getSmoothingProducts = async () => {
 };
 
 const getKeratinProducts = async () => {
-  const cacheKey = 'keratin_products_public';
+  const cacheKey = STOCK_CACHE_KEYS.KERATIN_PRODUCTS;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -233,6 +354,154 @@ const getHairColorsByProduct = async (productId) => {
   }
 };
 
+const getOutOfStockProducts = async () => {
+  const cacheKey = STOCK_CACHE_KEYS.OUT_OF_STOCK;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const connection = await pool;
+  try {
+    // Get hair products that are completely out of stock
+    const [hairProductsOutOfStock] = await connection.query(`
+      SELECT 
+        hp.id,
+        hp.nama as product_nama,
+        hp.jenis,
+        pb.nama as brand_nama,
+        'hair' as product_type
+      FROM hair_products hp
+      JOIN product_brands pb ON hp.brand_id = pb.id
+      WHERE NOT EXISTS (
+        SELECT 1 FROM hair_colors hc 
+        WHERE hc.product_id = hp.id AND hc.stok > 0
+      )
+      ORDER BY pb.nama, hp.nama
+    `);
+
+    // Get smoothing products that are out of stock
+    const [smoothingProductsOutOfStock] = await connection.query(`
+      SELECT 
+        sp.id,
+        sp.nama as product_nama,
+        sp.jenis,
+        pb.nama as brand_nama,
+        'smoothing' as product_type
+      FROM smoothing_products sp
+      JOIN product_brands pb ON sp.brand_id = pb.id
+      WHERE sp.stok = 0
+      ORDER BY pb.nama, sp.nama
+    `);
+
+    // Get keratin products that are out of stock
+    const [keratinProductsOutOfStock] = await connection.query(`
+      SELECT 
+        kp.id,
+        kp.nama as product_nama,
+        kp.jenis,
+        pb.nama as brand_nama,
+        'keratin' as product_type
+      FROM keratin_products kp
+      JOIN product_brands pb ON kp.brand_id = pb.id
+      WHERE kp.stok = 0
+      ORDER BY pb.nama, kp.nama
+    `);
+
+    const result = {
+      hair_products: hairProductsOutOfStock,
+      smoothing_products: smoothingProductsOutOfStock,
+      keratin_products: keratinProductsOutOfStock,
+      total_out_of_stock: hairProductsOutOfStock.length + smoothingProductsOutOfStock.length + keratinProductsOutOfStock.length
+    };
+
+    cache.set(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.error('Service Error:', err);
+    throw new Error('Gagal mengambil data produk yang habis: ' + err.message);
+  }
+};
+
+const checkProductAvailability = async (productId, productType, colorId = null) => {
+  const connection = await pool;
+  try {
+    let isAvailable = false;
+    let stockInfo = {};
+
+    if (productType === 'hair') {
+      // For hair products, check if the specific color is available
+      if (colorId) {
+        const [colorResult] = await connection.query(`
+          SELECT hc.stok, hc.nama as color_name, hp.nama as product_name
+          FROM hair_colors hc
+          JOIN hair_products hp ON hc.product_id = hp.id
+          WHERE hc.id = ? AND hc.product_id = ?
+        `, [colorId, productId]);
+
+        if (colorResult.length > 0) {
+          isAvailable = colorResult[0].stok > 0;
+          stockInfo = {
+            stok: colorResult[0].stok,
+            color_name: colorResult[0].color_name,
+            product_name: colorResult[0].product_name
+          };
+        }
+      } else {
+        // Check if any color is available for this product
+        const [colorResult] = await connection.query(`
+          SELECT COUNT(*) as available_colors, SUM(stok) as total_stok
+          FROM hair_colors
+          WHERE product_id = ? AND stok > 0
+        `, [productId]);
+
+        isAvailable = colorResult[0].available_colors > 0;
+        stockInfo = {
+          available_colors: colorResult[0].available_colors,
+          total_stok: colorResult[0].total_stok
+        };
+      }
+    } else if (productType === 'smoothing') {
+      const [productResult] = await connection.query(`
+        SELECT stok, nama as product_name
+        FROM smoothing_products
+        WHERE id = ?
+      `, [productId]);
+
+      if (productResult.length > 0) {
+        isAvailable = productResult[0].stok > 0;
+        stockInfo = {
+          stok: productResult[0].stok,
+          product_name: productResult[0].product_name
+        };
+      }
+    } else if (productType === 'keratin') {
+      const [productResult] = await connection.query(`
+        SELECT stok, nama as product_name
+        FROM keratin_products
+        WHERE id = ?
+      `, [productId]);
+
+      if (productResult.length > 0) {
+        isAvailable = productResult[0].stok > 0;
+        stockInfo = {
+          stok: productResult[0].stok,
+          product_name: productResult[0].product_name
+        };
+      }
+    }
+
+    return {
+      is_available: isAvailable,
+      product_id: productId,
+      product_type: productType,
+      color_id: colorId,
+      stock_info: stockInfo
+    };
+  } catch (err) {
+    console.error('Service Error:', err);
+    throw new Error('Gagal mengecek ketersediaan produk: ' + err.message);
+  }
+};
+
 module.exports = {
   getAllProducts,
   getProductsByCategory,
@@ -240,5 +509,9 @@ module.exports = {
   getHairColors,
   getSmoothingProducts,
   getKeratinProducts,
-  getHairColorsByProduct
+  getHairColorsByProduct,
+  getOutOfStockProducts,
+  checkProductAvailability,
+  invalidateStockCache,
+  invalidateProductCache
 };

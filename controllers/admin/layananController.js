@@ -3,17 +3,31 @@ const userLayananService = require('../../services/user/layananService');
 
 const createLayanan = async (req, res) => {
   try {
-    const layanan = await layananService.createLayanan(req.body);
+    const { nama, harga, estimasi_waktu, kategori_id } = req.body;
+
+    if (!nama || !harga || !estimasi_waktu || !kategori_id) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Semua field wajib diisi'
+      });
+    }
+
+    const layanan = await layananService.createLayanan({
+      nama,
+      harga,
+      estimasi_waktu,
+      kategori_id
+    });
+
     res.status(201).json({
-      success: true,
-      message: 'Layanan berhasil ditambahkan',
+      status: 'success',
+      message: 'Layanan berhasil dibuat',
       data: layanan
     });
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
-      success: false,
-      message: 'Gagal menambahkan layanan',
-      error: err.message
+      status: 'error',
+      message: error.message
     });
   }
 };
@@ -21,60 +35,102 @@ const createLayanan = async (req, res) => {
 const getAllLayanan = async (req, res) => {
   try {
     const layanan = await userLayananService.getAll();
-    res.json({ success: true, data: layanan });
-  } catch (err) {
+    res.json({
+      status: 'success',
+      data: layanan
+    });
+  } catch (error) {
     res.status(500).json({
-      success: false,
-      message: 'Gagal mengambil data layanan',
-      error: err.message
+      status: 'error',
+      message: error.message
     });
   }
 };
 
 const getLayananById = async (req, res) => {
   try {
-    const layanan = await userLayananService.getById(req.params.id);
+    const { id } = req.params;
+    const layanan = await userLayananService.getById(id);
+
     if (!layanan) {
-      return res.status(404).json({ success: false, message: 'Layanan tidak ditemukan' });
+      return res.status(404).json({
+        status: 'error',
+        message: 'Layanan tidak ditemukan'
+      });
     }
-    res.json({ success: true, data: layanan });
-  } catch (err) {
+
+    res.json({
+      status: 'success',
+      data: layanan
+    });
+  } catch (error) {
     res.status(500).json({
-      success: false,
-      message: 'Gagal mengambil data layanan',
-      error: err.message
+      status: 'error',
+      message: error.message
     });
   }
 };
 
 const updateLayanan = async (req, res) => {
   try {
-    const updated = await layananService.updateLayanan(req.params.id, req.body);
-    if (!updated) {
-      return res.status(404).json({ success: false, message: 'Layanan tidak ditemukan' });
+    const { id } = req.params;
+    const { nama, harga, estimasi_waktu, kategori_id } = req.body;
+
+    const updateData = {};
+    if (nama !== undefined) updateData.nama = nama;
+    if (harga !== undefined) updateData.harga = harga;
+    if (estimasi_waktu !== undefined) updateData.estimasi_waktu = estimasi_waktu;
+    if (kategori_id !== undefined) updateData.kategori_id = kategori_id;
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Tidak ada data yang diupdate'
+      });
     }
-    res.json({ success: true, message: 'Layanan berhasil diperbarui' });
-  } catch (err) {
+
+    const success = await layananService.updateLayanan(id, updateData);
+
+    if (!success) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Layanan tidak ditemukan'
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Layanan berhasil diupdate'
+    });
+  } catch (error) {
     res.status(500).json({
-      success: false,
-      message: 'Gagal memperbarui layanan',
-      error: err.message
+      status: 'error',
+      message: error.message
     });
   }
 };
 
 const deleteLayanan = async (req, res) => {
   try {
-    const deleted = await layananService.deleteLayanan(req.params.id);
-    if (!deleted) {
-      return res.status(404).json({ success: false, message: 'Layanan tidak ditemukan' });
+    const { id } = req.params;
+
+    const success = await layananService.deleteLayanan(id);
+
+    if (!success) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Layanan tidak ditemukan'
+      });
     }
-    res.json({ success: true, message: 'Layanan berhasil dihapus' });
-  } catch (err) {
+
+    res.json({
+      status: 'success',
+      message: 'Layanan berhasil dihapus'
+    });
+  } catch (error) {
     res.status(500).json({
-      success: false,
-      message: 'Gagal menghapus layanan',
-      error: err.message
+      status: 'error',
+      message: error.message
     });
   }
 };

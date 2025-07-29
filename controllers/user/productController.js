@@ -80,6 +80,73 @@ const getHairColorsByProduct = async (req, res) => {
   }
 };
 
+const getOutOfStockProducts = async (req, res) => {
+  try {
+    const products = await productService.getOutOfStockProducts();
+    res.json({
+      success: true,
+      message: 'Data produk yang habis berhasil diambil',
+      data: products
+    });
+  } catch (err) {
+    console.error('Controller Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal mengambil data produk yang habis',
+      error: err.message
+    });
+  }
+};
+
+const checkProductAvailability = async (req, res) => {
+  try {
+    const { product_id, product_type, color_id } = req.query;
+    
+    if (!product_id || !product_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'product_id dan product_type harus disediakan'
+      });
+    }
+
+    const availability = await productService.checkProductAvailability(
+      parseInt(product_id), 
+      product_type, 
+      color_id ? parseInt(color_id) : null
+    );
+
+    res.json({
+      success: true,
+      message: 'Status ketersediaan produk berhasil dicek',
+      data: availability
+    });
+  } catch (err) {
+    console.error('Controller Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal mengecek ketersediaan produk',
+      error: err.message
+    });
+  }
+};
+
+const invalidateStockCache = async (req, res) => {
+  try {
+    await productService.invalidateStockCache();
+    res.json({
+      success: true,
+      message: 'Cache stok berhasil di-invalidate'
+    });
+  } catch (err) {
+    console.error('Controller Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal invalidate cache stok',
+      error: err.message
+    });
+  }
+};
+
 module.exports = {
   getAllProducts,
   getProductsByCategory,
@@ -87,5 +154,8 @@ module.exports = {
   getSmoothingProducts,
   getKeratinProducts,
   getHairProducts,
-  getHairColorsByProduct
+  getHairColorsByProduct,
+  getOutOfStockProducts,
+  checkProductAvailability,
+  invalidateStockCache
 };

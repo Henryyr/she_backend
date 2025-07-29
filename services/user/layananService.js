@@ -1,24 +1,30 @@
 const { pool } = require('../../db');
-const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 3600 }); // Cache 1 jam
+const cacheManager = require('../../utils/cacheManager');
 
 exports.getAll = async () => {
   const cacheKey = 'daftar_layanan';
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey);
-  }
 
-  const [results] = await pool.query('SELECT * FROM layanan');
-  cache.set(cacheKey, results);
-  return results;
+  return await cacheManager.getOrSet(cacheKey, async () => {
+    const [results] = await pool.query('SELECT * FROM layanan');
+    return results;
+  }, 3600); // Cache 1 jam
 };
 
 exports.getById = async (id) => {
-  const [results] = await pool.query('SELECT * FROM layanan WHERE id = ?', [id]);
-  return results[0] || null;
+  const cacheKey = `layanan_${id}`;
+
+  return await cacheManager.getOrSet(cacheKey, async () => {
+    const [results] = await pool.query('SELECT * FROM layanan WHERE id = ?', [id]);
+    return results[0] || null;
+  }, 1800); // Cache 30 menit
 };
 
-// Fungsi baru untuk menghapus cache secara eksplisit
-exports.flushCache = () => {
-  cache.del('daftar_layanan');
+// Fungsi untuk menghapus cache layanan
+exports.flushCache = (id = null) => {
+  if (id) {
+    cacheManager.del(`layanan_${id}`);
+  } else {
+    cacheManager.del('daftar_layanan');
+    cacheManager.delPattern('^layanan_');
+  }
 };
