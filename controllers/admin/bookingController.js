@@ -107,7 +107,7 @@ const createOfflineBooking = async (req, res) => {
       }
 
       await connection.commit();
-      console.log(`[AdminBookingController] Transaksi untuk booking offline berhasil disimpan`);
+      console.log('[AdminBookingController] Transaksi untuk booking offline berhasil disimpan');
     } catch (transactionError) {
       await connection.rollback();
       console.error('Error creating transaction for offline booking:', transactionError);

@@ -532,7 +532,7 @@ const getUserBookedDates = async (userId) => {
        ORDER BY tanggal ASC`,
       [userId]
     );
-    
+
     return bookedDates.map(date => ({
       tanggal: date.tanggal,
       formatted_date: date.formatted_date,

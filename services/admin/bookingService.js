@@ -319,7 +319,7 @@ const updateBookingStatus = async (id, status) => {
           'SELECT total_harga FROM booking WHERE id = ?',
           [id]
         );
-        
+
         if (bookingData.length > 0) {
           const total_harga = bookingData[0].total_harga;
           // Ambil user_id dari booking
@@ -327,7 +327,7 @@ const updateBookingStatus = async (id, status) => {
             'SELECT user_id FROM booking WHERE id = ?',
             [id]
           );
-          
+
           if (userData.length > 0) {
             const user_id = userData[0].user_id;
             // Ambil booking_number dari booking
@@ -335,7 +335,7 @@ const updateBookingStatus = async (id, status) => {
               'SELECT booking_number FROM booking WHERE id = ?',
               [id]
             );
-            
+
             if (bookingNumberData.length > 0) {
               const booking_number = bookingNumberData[0].booking_number;
               // Buat transaksi baru jika belum ada
