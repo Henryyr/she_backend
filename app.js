@@ -14,26 +14,27 @@ const app = express();
 // Middlewares
 app.set('trust proxy', 1);
 
-// Cache control middleware
-app.use((req, res, next) => {
-  if (process.env.NODE_ENV === 'development') {
-    res.set('Cache-Control', 'no-store');
-  } else {
-    if (req.method === 'GET') {
-      res.set('Cache-Control', 'public, max-age=300');
-    } else {
-      res.set('Cache-Control', 'no-store');
-    }
-  }
-  next();
-});
+// // Cache control middleware
+// app.use((req, res, next) => {
+//   if (process.env.NODE_ENV === 'development') {
+//     res.set('Cache-Control', 'no-store');
+//   } else {
+//     if (req.method === 'GET') {
+//       res.set('Cache-Control', 'public, max-age=300');
+//     } else {
+//       res.set('Cache-Control', 'no-store');
+//     }
+//   }
+//   next();
+// });
 
 // CORS
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? ['https://shesalon.store']
-  : (process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-      : ['http://localhost:3000']);
+const allowedOrigins =
+  process.env.NODE_ENV === 'production'
+    ? ['https://shesalon.store']
+    : process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
+      : ['http://localhost:3000'];
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -49,34 +50,38 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Helmet dengan konfigurasi keamanan yang diperkuat
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ['\'self\''],
-      scriptSrc: ['\'self\'', '\'unsafe-inline\''],
-      styleSrc: ['\'self\'', '\'unsafe-inline\''],
-      imgSrc: ['\'self\'', 'data:', 'https:'],
-      connectSrc: ['\'self\''],
-      fontSrc: ['\'self\'', 'https:'],
-      objectSrc: ['\'none\''],
-      mediaSrc: ['\'self\''],
-      frameSrc: ['\'none\'']
-    }
-  },
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true
-  },
-  noSniff: true,
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
-}));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ['\'self\''],
+        scriptSrc: ['\'self\'', '\'unsafe-inline\''],
+        styleSrc: ['\'self\'', '\'unsafe-inline\''],
+        imgSrc: ['\'self\'', 'data:', 'https:'],
+        connectSrc: ['\'self\''],
+        fontSrc: ['\'self\'', 'https:'],
+        objectSrc: ['\'none\''],
+        mediaSrc: ['\'self\''],
+        frameSrc: ['\'none\'']
+      }
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    },
+    noSniff: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+  })
+);
 
 // Validasi dan parsing JSON
-app.use(express.json({
-  limit: '10kb'
-}));
+app.use(
+  express.json({
+    limit: '10kb'
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // Logging
@@ -113,7 +118,8 @@ app.get('/', (req, res) => {
   res.status(200).json({
     api_name: packageJson.name,
     version: packageJson.version,
-    description: 'Welcome to the She Salon API. Please refer to the documentation for available endpoints.',
+    description:
+      'Welcome to the She Salon API. Please refer to the documentation for available endpoints.',
     documentation_url: 'https://github.com/Henryyr/she_backend',
     status: 'ok',
     timestamp: new Date().toISOString()

@@ -101,7 +101,7 @@ const getOutOfStockProducts = async (req, res) => {
 const checkProductAvailability = async (req, res) => {
   try {
     const { product_id, product_type, color_id } = req.query;
-    
+
     if (!product_id || !product_type) {
       return res.status(400).json({
         success: false,
@@ -110,8 +110,8 @@ const checkProductAvailability = async (req, res) => {
     }
 
     const availability = await productService.checkProductAvailability(
-      parseInt(product_id), 
-      product_type, 
+      parseInt(product_id),
+      product_type,
       color_id ? parseInt(color_id) : null
     );
 
