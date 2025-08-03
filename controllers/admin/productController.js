@@ -87,10 +87,10 @@ const updateHairColorStock = async (req, res) => {
         'SELECT stok FROM hair_colors WHERE id = ?', [color_id]
       );
       await connection.commit();
-      
+
       // Invalidate stock cache after successful update
       await userProductService.invalidateProductCache('hair');
-      
+
       res.json({
         success: true,
         message: `Stok hair color "${before ? before.color_name : '-'}" (${color_id}) berhasil diupdate`,
@@ -141,10 +141,10 @@ const updateSmoothingStock = async (req, res) => {
         [product_id, brand_id]
       );
       await connection.commit();
-      
+
       // Invalidate stock cache after successful update
       await userProductService.invalidateProductCache('smoothing');
-      
+
       res.json({
         success: true,
         message: `Stok smoothing "${before ? before.product_name : '-'}" (${product_id}) brand "${before ? before.brand_name : '-'}" (${brand_id}) berhasil diupdate`,
@@ -195,10 +195,10 @@ const updateKeratinStock = async (req, res) => {
         [product_id, brand_id]
       );
       await connection.commit();
-      
+
       // Invalidate stock cache after successful update
       await userProductService.invalidateProductCache('keratin');
-      
+
       res.json({
         success: true,
         message: `Stok keratin "${before ? before.product_name : '-'}" (${product_id}) brand "${before ? before.brand_name : '-'}" (${brand_id}) berhasil diupdate`,

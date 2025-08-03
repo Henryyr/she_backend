@@ -170,7 +170,7 @@ const getHairProducts = async () => {
     try {
       // Increase group_concat_max_len to handle large JSON strings
       await connection.query('SET SESSION group_concat_max_len = 1000000');
-      
+
       const [products] = await connection.query(`
             SELECT 
                 hp.id,
