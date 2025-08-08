@@ -3,6 +3,7 @@ const stockService = require('./stockService');
 const bookingHelper = require('../../helpers/bookingHelper');
 const pricingService = require('./pricingService');
 const validationService = require('./validationService');
+const transaksiService = require('./transaksiService');
 const moment = require('moment-timezone');
 
 const getProductDetails = (
@@ -348,7 +349,7 @@ const getAllBookings = async (page = 1, limit = 10, user_id) => {
 const getBookingById = async (id) => {
   const connection = await pool.getConnection();
   try {
-    const [booking] = await connection.query(
+    const [bookingResult] = await connection.query(
       `SELECT 
         b.*, 
         GROUP_CONCAT(l.nama) as layanan_names,
@@ -363,9 +364,75 @@ const getBookingById = async (id) => {
       [id]
     );
 
-    if (!booking[0]) {
+    if (bookingResult.length === 0) {
       throw new Error('Booking tidak ditemukan');
     }
+
+    let booking = bookingResult[0];
+
+    if (
+      booking.status === 'pending' &&
+      booking.midtrans_order_id &&
+      booking.transaction_status === 'pending'
+    ) {
+      try {
+        console.log(
+          `[Auto-cancel check] Memeriksa status midtrans untuk order_id: ${booking.midtrans_order_id}`
+        );
+        const midtransStatus = await transaksiService.fetchMidtransStatus(
+          booking.midtrans_order_id
+        );
+
+        if (midtransStatus.transaction_status === 'expire') {
+          console.log(
+            `[Auto-cancel] pembayaran untuk booking #${id} telah kadaluwarsa. membatalkan booking...`
+          );
+
+          await cancelBooking(id, booking.user_id_from_booking);
+
+          const [refetchedBooking] = await connection.query(
+            `SELECT b.*, 
+          GROUP_CONCAT(l.nama) as layanan_names,
+          GROUP_CONCAT(l.id) as layanan_ids
+          FROM booking b
+          LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
+          LEFT JOIN layanan l ON bl.layanan_id = l.id
+          WHERE b.id = ?
+          GROUP BY b.id`,
+            [id]
+          );
+
+          booking = {
+            ...booking,
+            ...refetchedBooking[0],
+            auto_cancelled_message:
+              'booking ini telah dibatalkan otomatis karena telah kadaluwarsa'
+          };
+        }
+      } catch (error) {
+        console.error(
+          `[Auto-Cancel Check] Gagal memeriksa status midtrans untuk booking #${id}:`,
+          error.message
+        );
+      }
+    }
+
+    const [fullBookingDetails] = await connection.query(
+      `SELECT
+      b.*,
+      GROUP_CONCAT(l.nama) as layanan_names,
+      GROUP_CONCAT(l.id) as layanan_ids
+      t.dp_amount, t.paid_amount, t.payment_status
+      FROM booking b
+      LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
+      LEFT JOIN layanan l ON bl.layanan_id = l.id
+      LEFT JOIN transaksi t ON b.id = t.booking_id
+      WHERE b.id = ?
+      GROUP BY b.id, t.id`,
+      [id]
+    );
+
+    booking = { ...booking, ...fullBookingDetails[0] };
 
     let cancel_timer = null;
     try {
