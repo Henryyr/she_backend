@@ -2,10 +2,16 @@ const bookingService = require('../../services/user/bookingService');
 const emailService = require('../../services/user/emailService');
 const { getIO } = require('../../socketInstance');
 const dashboardService = require('../../services/admin/dashboardService');
-const { validateBookingTime, validateUserDailyBooking } = require('../../helpers/bookingValidationHelper');
+const {
+  validateBookingTime,
+  validateUserDailyBooking
+} = require('../../helpers/bookingValidationHelper');
 
 const createBooking = async (req, res) => {
-  console.log('[BookingController] Masuk createBooking', { body: req.body, user: req.user });
+  console.log('[BookingController] Masuk createBooking', {
+    body: req.body,
+    user: req.user
+  });
   try {
     const cleanBody = JSON.parse(JSON.stringify(req.body));
     if (!cleanBody || Object.keys(cleanBody).length === 0) {
@@ -28,7 +34,11 @@ const createBooking = async (req, res) => {
     };
 
     try {
-      await validateBookingTime(bookingData.tanggal, bookingData.jam_mulai, req.user.id);
+      await validateBookingTime(
+        bookingData.tanggal,
+        bookingData.jam_mulai,
+        req.user.id
+      );
       await validateUserDailyBooking(bookingData.tanggal, req.user.id);
     } catch (validationError) {
       return res.status(409).json({
@@ -47,7 +57,9 @@ const createBooking = async (req, res) => {
     try {
       if (req.user.email) {
         await emailService.sendBookingInformation(req.user.email, result);
-        console.log(`[Latar Belakang] Email untuk booking #${result.booking_number} terkirim.`);
+        console.log(
+          `[Latar Belakang] Email untuk booking #${result.booking_number} terkirim.`
+        );
       }
     } catch (emailErr) {
       console.error('[Latar Belakang] Gagal mengirim email:', emailErr);
@@ -70,13 +82,18 @@ const createBooking = async (req, res) => {
           message: `New booking from ${bookingNotification.customer}`,
           timestamp: new Date().toISOString()
         });
-        console.log('[Latar Belakang] Event new-booking terkirim ke admin-room.');
+        console.log(
+          '[Latar Belakang] Event new-booking terkirim ke admin-room.'
+        );
 
         // Update dashboard stats di latar belakang
         await dashboardService.updateDashboardStats(io);
         console.log('[Latar Belakang] Statistik dashboard diperbarui.');
       } catch (backgroundErr) {
-        console.error('[Latar Belakang] Gagal menjalankan tugas socket/dashboard:', backgroundErr);
+        console.error(
+          '[Latar Belakang] Gagal menjalankan tugas socket/dashboard:',
+          backgroundErr
+        );
       }
     }
   } catch (error) {
@@ -97,7 +114,11 @@ const getAllBookings = async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   try {
-    const results = await bookingService.getAllBookings(page, limit, req.user.id);
+    const results = await bookingService.getAllBookings(
+      page,
+      limit,
+      req.user.id
+    );
     res.json(results);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -125,11 +146,17 @@ const postAvailableSlots = async (req, res) => {
     if (!tanggal) {
       return res.status(400).json({ error: 'Parameter tanggal diperlukan' });
     }
-    const duration = estimasi_waktu && !isNaN(Number(estimasi_waktu)) ? Number(estimasi_waktu) : 60;
+    const duration =
+      estimasi_waktu && !isNaN(Number(estimasi_waktu))
+        ? Number(estimasi_waktu)
+        : 60;
     const result = await bookingService.postAvailableSlots(tanggal, duration);
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: 'Gagal mengambil jadwal tersedia', message: error.message });
+    res.status(500).json({
+      error: 'Gagal mengambil jadwal tersedia',
+      message: error.message
+    });
   }
 };
 
@@ -141,7 +168,8 @@ const cancelBooking = async (req, res) => {
     if (!booking) {
       return res.status(404).json({
         error: 'Booking tidak ditemukan',
-        message: 'Data booking tidak ditemukan. Silakan cek kembali atau hubungi admin.'
+        message:
+          'Data booking tidak ditemukan. Silakan cek kembali atau hubungi admin.'
       });
     }
 
@@ -166,8 +194,14 @@ const cancelBooking = async (req, res) => {
       });
     }
 
-    const tanggalStr = typeof booking.tanggal === 'string' ? booking.tanggal.split('T')[0] : booking.tanggal;
-    const jamStr = booking.jam_mulai.length === 5 ? booking.jam_mulai : booking.jam_mulai.slice(0, 5);
+    const tanggalStr =
+      typeof booking.tanggal === 'string'
+        ? booking.tanggal.split('T')[0]
+        : booking.tanggal;
+    const jamStr =
+      booking.jam_mulai.length === 5
+        ? booking.jam_mulai
+        : booking.jam_mulai.slice(0, 5);
     const startDateTime = new Date(`${tanggalStr}T${jamStr}:00+08:00`);
     const now = new Date();
     const batasCancel = new Date(startDateTime.getTime() + 30 * 60000);
@@ -175,7 +209,8 @@ const cancelBooking = async (req, res) => {
     if (now > batasCancel) {
       return res.status(400).json({
         error: 'Batas pembatalan telah lewat',
-        message: 'Pembatalan hanya dapat dilakukan maksimal 30 menit setelah jam mulai booking.'
+        message:
+          'Pembatalan hanya dapat dilakukan maksimal 30 menit setelah jam mulai booking.'
       });
     }
 
@@ -190,7 +225,9 @@ const cancelBooking = async (req, res) => {
         io.to('admin-room').emit('booking-cancelled', {
           booking_id: id,
           customer: user.fullname || user.nama || 'Unknown Customer',
-          message: `Booking #${booking.booking_number || id} has been cancelled by customer`,
+          message: `Booking #${
+            booking.booking_number || id
+          } has been cancelled by customer`,
           timestamp: new Date().toISOString()
         });
 
@@ -223,7 +260,10 @@ const getAvailableDays = async (req, res) => {
     // Jika ada parameter tanggal, gunakan logika lama untuk backward compatibility
     if (req.query.tanggal) {
       const { tanggal } = req.query;
-      const hasBooking = await bookingService.checkUserDailyBooking(userId, tanggal);
+      const hasBooking = await bookingService.checkUserDailyBooking(
+        userId,
+        tanggal
+      );
       return res.json({
         tanggal,
         has_booking: hasBooking,
@@ -238,9 +278,10 @@ const getAvailableDays = async (req, res) => {
 
     res.json({
       success: true,
-      message: bookedDates.length > 0
-        ? `Anda memiliki ${bookedDates.length} hari dengan booking aktif.`
-        : 'Anda belum memiliki booking aktif.',
+      message:
+        bookedDates.length > 0
+          ? `Anda memiliki ${bookedDates.length} hari dengan booking aktif.`
+          : 'Anda belum memiliki booking aktif.',
       total_booked_days: bookedDates.length,
       booked_dates: bookedDates
     });
@@ -252,11 +293,29 @@ const getAvailableDays = async (req, res) => {
   }
 };
 
+const getRecommendedSlots = async (req, res) => {
+  try {
+    const { estimasi_waktu } = req.query;
+    const duration =
+      estimasi_waktu && !isNaN(Number(estimasi_waktu))
+        ? Number(estimasi_waktu)
+        : 60;
+    const result = await bookingService.getRecommendedSlots(duration);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Gagal mengambil rekomendasi jadwal',
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   createBooking,
   getAllBookings,
   getBookingById,
   postAvailableSlots,
   cancelBooking,
-  getAvailableDays
+  getAvailableDays,
+  getRecommendedSlots
 };
