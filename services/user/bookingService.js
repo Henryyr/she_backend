@@ -349,18 +349,23 @@ const getAllBookings = async (page = 1, limit = 10, user_id) => {
 const getBookingById = async (id) => {
   const connection = await pool.getConnection();
   try {
+    // Langkah 1: Jalankan satu query yang solid untuk mengambil semua data
     const [bookingResult] = await connection.query(
-      `SELECT 
-        b.*, 
-        GROUP_CONCAT(l.nama) as layanan_names,
-        GROUP_CONCAT(l.id) as layanan_ids,
-        t.dp_amount, t.paid_amount, t.payment_status
-      FROM booking b
-      LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
-      LEFT JOIN layanan l ON bl.layanan_id = l.id
-      LEFT JOIN transaksi t ON b.id = t.booking_id
-      WHERE b.id = ?
-      GROUP BY b.id, t.id`,
+      `SELECT
+          b.*,
+          MAX(t.status) as transaction_status,
+          MAX(t.midtrans_order_id) as midtrans_order_id,
+          GROUP_CONCAT(DISTINCT l.nama) as layanan_names,
+          GROUP_CONCAT(DISTINCT l.id) as layanan_ids,
+          MAX(t.dp_amount) as dp_amount,
+          MAX(t.paid_amount) as paid_amount,
+          MAX(t.payment_status) as payment_status
+       FROM booking b
+       LEFT JOIN transaksi t ON b.id = t.booking_id
+       LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
+       LEFT JOIN layanan l ON bl.layanan_id = l.id
+       WHERE b.id = ?
+       GROUP BY b.id`,
       [id]
     );
 
@@ -370,85 +375,50 @@ const getBookingById = async (id) => {
 
     let booking = bookingResult[0];
 
+    // Langkah 2: Logika auto-cancel (tidak berubah)
     if (
       booking.status === 'pending' &&
       booking.midtrans_order_id &&
       booking.transaction_status === 'pending'
     ) {
       try {
-        console.log(
-          `[Auto-cancel check] Memeriksa status midtrans untuk order_id: ${booking.midtrans_order_id}`
-        );
         const midtransStatus = await transaksiService.fetchMidtransStatus(
           booking.midtrans_order_id
         );
-
         if (midtransStatus.transaction_status === 'pending') {
           console.log(
-            `[Auto-cancel] pembayaran untuk booking #${id} telah kadaluwarsa. membatalkan booking...`
+            `[Auto-Cancel] Pembayaran untuk booking #${id} telah kedaluwarsa. Membatalkan...`
           );
-
-          await cancelBooking(id, booking.user_id_from_booking);
-
-          const [refetchedBooking] = await connection.query(
-            `SELECT b.*, 
-          GROUP_CONCAT(l.nama) as layanan_names,
-          GROUP_CONCAT(l.id) as layanan_ids
-          FROM booking b
-          LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
-          LEFT JOIN layanan l ON bl.layanan_id = l.id
-          WHERE b.id = ?
-          GROUP BY b.id`,
+          await cancelBooking(id, booking.user_id);
+          // Ambil ulang data yang sudah di-cancel
+          const [refetchedResult] = await connection.query(
+            'SELECT * FROM booking WHERE id = ?',
             [id]
           );
-
           booking = {
             ...booking,
-            ...refetchedBooking[0],
+            ...refetchedResult[0],
             auto_cancelled_message:
-              'booking ini telah dibatalkan otomatis karena telah kadaluwarsa'
+              'Booking ini dibatalkan secara otomatis karena pembayaran telah kedaluwarsa.'
           };
         }
       } catch (error) {
         console.error(
-          `[Auto-Cancel Check] Gagal memeriksa status midtrans untuk booking #${id}:`,
+          `[Auto-Cancel Check] Gagal memeriksa status Midtrans untuk booking #${id}:`,
           error.message
         );
       }
     }
 
-    const [fullBookingDetails] = await connection.query(
-      `SELECT
-      b.*,
-      GROUP_CONCAT(l.nama) as layanan_names,
-      GROUP_CONCAT(l.id) as layanan_ids
-      t.dp_amount, t.paid_amount, t.payment_status
-      FROM booking b
-      LEFT JOIN booking_layanan bl ON b.id = bl.booking_id
-      LEFT JOIN layanan l ON bl.layanan_id = l.id
-      LEFT JOIN transaksi t ON b.id = t.booking_id
-      WHERE b.id = ?
-      GROUP BY b.id, t.id`,
-      [id]
-    );
-
-    booking = { ...booking, ...fullBookingDetails[0] };
-
+    // Langkah 3: Format data untuk response (tidak berubah)
     let cancel_timer = null;
     try {
       const now = new Date();
-      let tanggalStr = booking[0].tanggal;
-      if (typeof tanggalStr === 'string' && tanggalStr.includes('T')) {
-        tanggalStr = tanggalStr.split('T')[0];
-      } else if (tanggalStr instanceof Date) {
-        tanggalStr = tanggalStr.toISOString().split('T')[0];
-      }
-
-      let jamStr = booking[0].jam_mulai;
-      if (typeof jamStr === 'string' && jamStr.length > 8) {
-        jamStr = jamStr.substring(0, 8);
-      }
-
+      const tanggalStr =
+        booking.tanggal instanceof Date
+          ? booking.tanggal.toISOString().split('T')[0]
+          : booking.tanggal.split('T')[0];
+      const jamStr = booking.jam_mulai.substring(0, 8);
       const startDateTime = new Date(`${tanggalStr}T${jamStr}+08:00`);
       const batasCancel = new Date(startDateTime.getTime() + 30 * 60000);
       cancel_timer = Math.max(
@@ -460,18 +430,13 @@ const getBookingById = async (id) => {
       cancel_timer = null;
     }
 
-    // Parse layanan_ids ke array number
-    let layanan_id = [];
-    if (booking[0].layanan_ids) {
-      layanan_id = booking[0].layanan_ids.split(',').map((x) => Number(x));
-    }
-
+    const layanan_id = booking.layanan_ids
+      ? booking.layanan_ids.split(',').map(Number)
+      : [];
     const { layanan_ids, dp_amount, paid_amount, payment_status, ...rest } =
-      booking[0];
-
+      booking;
     let dpPaid = 0;
     let remaining = parseFloat(rest.final_price);
-
     if (payment_status === 'DP') {
       dpPaid = parseFloat(dp_amount);
       remaining = parseFloat(rest.final_price) - dpPaid;
