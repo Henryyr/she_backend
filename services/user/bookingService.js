@@ -518,10 +518,14 @@ const postAvailableSlots = async (tanggal, estimasi_waktu = 60) => {
   ];
 
   const [bookings] = await pool.query(
-    `SELECT jam_mulai, jam_selesai FROM booking 
-         WHERE tanggal = ? AND status NOT IN ('canceled', 'completed')`,
+    'SELECT jam_mulai, jam_selesai FROM booking WHERE tanggal = ? AND status NOT IN (\'canceled\', \'completed\')',
     [tanggal]
   );
+
+  // Perbaikan: Tambahkan logika untuk memeriksa waktu saat ini
+  const now = moment().tz('Asia/Makassar');
+  const searchDate = moment.tz(tanggal, 'YYYY-MM-DD', 'Asia/Makassar');
+  const isToday = searchDate.isSame(now, 'day');
 
   function toMinutes (timeStr) {
     const [h, m] = timeStr.split(':').map(Number);
@@ -534,15 +538,23 @@ const postAvailableSlots = async (tanggal, estimasi_waktu = 60) => {
   const bookedSlots = [];
 
   for (const time of operatingHours) {
+    // Perbaikan: Lewati slot jika tanggalnya hari ini dan jamnya sudah lewat
+    if (
+      isToday &&
+      now.isAfter(
+        moment.tz(`${tanggal} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Makassar')
+      )
+    ) {
+      bookedSlots.push(time);
+      continue;
+    }
+
     const startMinutes = toMinutes(time);
     const endMinutes = startMinutes + estimasi_waktu;
-
-    // Cari booking berikutnya setelah slot ini
     const nextBooking = bookings.find(
       (b) => toMinutes(b.jam_mulai) > startMinutes
     );
 
-    // Slot available jika TIDAK overlap dengan booking manapun
     let canBook = true;
     for (const b of bookings) {
       const bStart = toMinutes(
@@ -557,7 +569,6 @@ const postAvailableSlots = async (tanggal, estimasi_waktu = 60) => {
       }
     }
 
-    // Jika ada booking berikutnya, layanan tidak boleh melewati jam booking berikutnya
     if (canBook && nextBooking) {
       const nextStart = toMinutes(
         nextBooking.jam_mulai.length === 5
@@ -589,8 +600,7 @@ const checkUserDailyBooking = async (userId, tanggal) => {
   const connection = await pool.getConnection();
   try {
     const [existingBooking] = await connection.query(
-      `SELECT id FROM booking
-       WHERE user_id = ? AND tanggal = ? AND status NOT IN ('cancelled', 'completed')`,
+      'SELECT id FROM booking WHERE user_id = ? AND tanggal = ? AND status NOT IN (\'cancelled\', \'completed\')',
       [userId, tanggal]
     );
     return existingBooking.length > 0;
@@ -628,7 +638,7 @@ const getUserBookedDates = async (userId) => {
 
 const getRecommendedSlots = async (estimasi_waktu = 60) => {
   let attempts = 0;
-  const maxAttempts = 7; // Mencari untuk 7 hari ke depan
+  const maxAttempts = 7;
   const recommendedSlots = [];
   const searchDate = moment().tz('Asia/Makassar');
 
@@ -650,6 +660,7 @@ const getRecommendedSlots = async (estimasi_waktu = 60) => {
       });
     }
 
+    // Pindah ke hari berikutnya, bahkan jika hari ini ada slot
     searchDate.add(1, 'days');
     attempts++;
   }
@@ -663,7 +674,6 @@ const getRecommendedSlots = async (estimasi_waktu = 60) => {
     searched_days: attempts
   };
 };
-
 module.exports = {
   createBooking,
   getAllBookings,
