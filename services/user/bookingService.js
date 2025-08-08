@@ -383,7 +383,7 @@ const getBookingById = async (id) => {
           booking.midtrans_order_id
         );
 
-        if (midtransStatus.transaction_status === 'expire') {
+        if (midtransStatus.transaction_status === 'pending') {
           console.log(
             `[Auto-cancel] pembayaran untuk booking #${id} telah kadaluwarsa. membatalkan booking...`
           );
